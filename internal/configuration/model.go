@@ -161,9 +161,10 @@ type NodeSpecific struct {
 }
 
 type ObservedOnly struct {
-	ProductVersion string      `json:"productVersion"`
-	TLS            TLSStatus   `json:"tls"`
-	DHCPLeases     []DHCPLease `json:"dhcpLeases,omitempty"`
+	ProductVersion          string      `json:"productVersion"`
+	ProtectionDisabledUntil string      `json:"protectionDisabledUntil,omitempty"`
+	TLS                     TLSStatus   `json:"tls"`
+	DHCPLeases              []DHCPLease `json:"dhcpLeases,omitempty"`
 }
 
 type DHCPConfig struct {

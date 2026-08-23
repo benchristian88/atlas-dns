@@ -36,8 +36,9 @@ HA → HA Operations owns the single notification-channel subsystem.
 - **Disable/Enable webhook** pauses/resumes new notifications without discarding
   configuration.
 - **Test webhook** sends one bounded synthetic event directly, follows no
-  redirects, reports a safe result, and is audited. It does not enqueue a fleet
-  alert or reveal the destination.
+  redirects, reports a safe result, is audited, and adds a clearly labelled
+  Test delivery row to Operational History. It does not alter HA state, notify
+  other channels, or reveal the destination.
 - **Delete webhook** requires exact-name confirmation. HA events remain intact;
   delivery rows retain their safe channel-name snapshot even after their channel
   reference is cleared.
@@ -45,6 +46,14 @@ HA → HA Operations owns the single notification-channel subsystem.
 Destinations must use HTTPS and cannot contain userinfo or fragments. API/UI
 responses expose only scheme and host; path and query token components remain
 encrypted and hidden. Avoid putting secrets in channel names.
+
+Operational History shows one separate delivery row per webhook destination.
+`Delivered` means the endpoint returned 2xx. `Failed` is terminal after the
+existing five-attempt retry policy, `Pending` includes queued or retrying work,
+and `Suppressed` means an expected maintenance DNS failure was deliberately not
+sent. Previous/Next reads are server-paginated at 50 rows. New channels receive
+future state transitions only; toggle the underlying condition healthy and
+degraded again in a safe test environment when validating a real alert.
 
 ## Revision and deployment lifecycle
 

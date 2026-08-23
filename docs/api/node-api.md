@@ -2,7 +2,8 @@
 
 ## Query Log reads
 
-For the explicitly reviewed v0.107.52–v0.107.78 range, Atlas DNS Controller reads
+For AdGuard Home v0.107.52 and later patches in the v0.107 API generation,
+Atlas DNS Controller reads
 `GET /control/querylog` with `limit` (maximum 500), empty `search`,
 `response_status=all`, and the previous response's `oldest` value as
 `older_than`. Results are newest-first. Offset exists in portions of the
@@ -37,10 +38,12 @@ The adapter uses HTTP Basic authentication, requires a bounded request timeout, 
 
 ```go
 type NodeProbeResult struct {
-    Version       string
-    Compatibility Compatibility
-    Running       bool
-    LatencyMS     int
+    Version                      string
+    Compatibility                Compatibility
+    Running                      bool
+    ProtectionEnabled            bool
+    ProtectionDisabledDurationMS int64
+    LatencyMS                    int
 }
 ```
 
@@ -58,27 +61,42 @@ There is no option that skips TLS certificate or hostname verification. Node req
 
 ## Compatibility
 
-The supported status/configuration range is defined by the compatibility matrix
-and explicit contract fixtures. Older versions are unsupported; newer,
-malformed, or unversioned contracts are unknown/incompatible until reviewed.
+The minimum managed version is v0.107.52. v0.107.78 and v0.107.79 are the
+latest explicitly release-tested patches. A newer patch in the same v0.107 API
+generation is provisionally compatible: Atlas runs the same typed endpoint and
+semantic checks, and enables only capabilities that validate. A different,
+malformed, or unversioned API generation is unknown rather than unsupported.
 
 The adapter also reads `GET /control/dns_info` and
-`GET /control/filtering/status`. Contract fixtures cover v0.107.52 and
-v0.107.61. DNS and filtering are the only schema-v1 supported feature areas;
+`GET /control/filtering/status`. Contract fixtures cover v0.107.52,
+v0.107.61, v0.107.78, and v0.107.79. DNS and filtering are the only schema-v1 supported feature areas;
 unsupported areas are visible rather than silently discarded.
 
 ## Configuration contract
 
-Configuration compatibility begins at v0.107.52, but that version remains on frozen schema v1. Schema v2 supports v0.107.53 through the current stable v0.107.78 contract. The adapter reads status, DNS, filtering, persistent clients, rewrites, blocked services, safety/Safe Search, query-log policy, statistics policy, TLS status, and optional DHCP status. Feature flags record each successfully observed area; missing required features block preview before mutation.
+Configuration compatibility begins at v0.107.52, but that version remains on frozen schema v1. Schema v2 supports v0.107.53 and later patches in the v0.107 API generation. The adapter reads status, DNS, filtering, persistent clients, rewrites, blocked services, safety/Safe Search, query-log policy, statistics policy, TLS status, and optional DHCP status. Feature flags record each successfully observed area; missing required features block preview before mutation.
 
 | AdGuard Home version | Configuration schema | Managed boundary |
 |---|---:|---|
 | Earlier than v0.107.52 | Unsupported | Status remains observable, but inventory/deployment is blocked |
 | v0.107.52 | 1 | Historical DNS/filtering contract only |
-| v0.107.53–v0.107.78 | 2 | Patch-level cache, timeout, filter-interval, rewrite, and ignored-list capabilities are explicit |
-| Newer v0.107 or v0.108 contracts | Unknown | Inventory/deployment blocked until fixtures and compatibility rules are updated |
+| v0.107.53–v0.107.79 | 2 | Supported; v0.107.78 and v0.107.79 are explicitly release-tested |
+| Newer v0.107 patch | 2 | Provisionally compatible after complete typed observation; a failed required contract blocks writes |
+| Other API generation | Unknown | Inventory/deployment blocked pending explicit review |
 
-The committed compatibility boundary is contract-tested at v0.107.52/v0.107.53, with the existing v0.107.61 fixtures, and against the v0.107.78 OpenAPI additions. A node can report DHCP unavailable (including platforms where AdGuard Home returns its documented not-implemented status); the capability remains false and DHCP cannot enter that node's desired override.
+The committed compatibility boundary is contract-tested at v0.107.52/v0.107.53,
+v0.107.61, v0.107.78, and v0.107.79, including additive-field fixtures and a
+hypothetical newer compatible v0.107 patch. A node can report DHCP unavailable
+(including platforms where AdGuard Home returns its documented not-implemented
+status); the capability remains false and DHCP cannot enter that node's desired
+override.
+
+`GET /control/status` is decoded with the runtime field
+`protection_disabled_duration`; `GET /control/dns_info` separately uses
+`protection_disabled_until`. Official v0.107.78 and v0.107.79 source emit the
+same runtime names; the v0.107.79 changelog corrected OpenAPI documentation.
+Atlas validates non-negative, non-contradictory pause state and keeps the pause
+deadline observed-only while preserving effective protection as managed state.
 
 The writer uses the documented `/control/dns_config`, `/control/filtering/*`, `/control/clients/*`, `/control/rewrite/*`, `/control/blocked_services/update`, safety enable/disable, `/control/safesearch/settings`, `/control/querylog/config/update`, `/control/stats/config/update`, and `/control/dhcp/*` endpoints. Query-log/statistics updates use `PUT`; existing collections are reconciled rather than blindly duplicated. `/control/filtering/refresh` is exposed as a separate audited operation.
 
@@ -91,7 +109,7 @@ optional group ID. It does not retain rules or icon data, and it never uses
 deprecated `/blocked_services/services`, `/list`, or `/set` endpoints.
 
 Two node-specific safety reads support DHCP workflows. Interface discovery
-uses `GET /control/dhcp/interfaces`. The v0.107.78 response is an object keyed
+uses `GET /control/dhcp/interfaces`. The v0.107.78 and v0.107.79 response is an object keyed
 by interface name whose values contain `name`, `hardware_address`,
 `ipv4_addresses`, `ipv6_addresses`, `gateway_ip`, and pipe-delimited `flags`.
 The adapter returns only those safe values and derives availability in the
@@ -109,8 +127,8 @@ does not treat it as a configuration mutation.
 ## Statistics contract
 
 The adapter reads `GET /control/stats/config` and
-`GET /control/stats?recent={milliseconds}` only for the explicitly tested
-v0.107.72–v0.107.78 exact-range contract. It requests whole-hour fixed ranges
+`GET /control/stats?recent={milliseconds}` for v0.107.72 and later patches in
+the v0.107 API generation. v0.107.78 and v0.107.79 are explicitly tested. It requests whole-hour fixed ranges
 for 24 hours, 7 days, and 30 days only when they do not exceed that node's
 configured interval. Earlier configuration-compatible versions retain their
 configuration capabilities but report `statistics_exact_range: false` and are
@@ -134,6 +152,11 @@ The adapter distinguishes:
 - `NODE_UNREACHABLE` for bounded network and timeout failures;
 - `NODE_TLS_FAILED` for certificate, hostname, or TLS handshake failures;
 - `NODE_AUTHENTICATION_FAILED` for HTTP 401 or 403;
-- `NODE_INVALID_RESPONSE` for other status codes, oversized bodies, or malformed payloads.
+- `CAPABILITY_ERROR` for a proven missing/not-implemented capability endpoint;
+- `NODE_INVALID_RESPONSE` for other status codes, oversized bodies, malformed
+  payloads, or missing/contradictory required semantics.
 
-Messages are safe for API responses and never include the supplied credentials or node response body.
+Safe diagnostics include node ID, reported AdGuard version, method, endpoint,
+HTTP status/content type, and decode/semantic detail; request handling adds the
+controller request ID. Messages never include credentials or a node response
+body.

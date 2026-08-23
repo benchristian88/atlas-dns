@@ -20,6 +20,13 @@ import (
 
 const maxResponseBytes = 1 << 20
 
+const (
+	minimumSupportedMajor = 0
+	minimumSupportedMinor = 107
+	minimumSupportedPatch = 52
+	latestTestedPatch     = 79
+)
+
 type Probe struct {
 	timeout time.Duration
 }
@@ -29,14 +36,20 @@ func NewProbe(timeout time.Duration) *Probe {
 }
 
 type statusResponse struct {
-	Version      string   `json:"version"`
-	Running      *bool    `json:"running"`
-	DNSAddresses []string `json:"dns_addresses"`
-	DNSPort      int      `json:"dns_port"`
+	Version                      string   `json:"version"`
+	Running                      *bool    `json:"running"`
+	DNSAddresses                 []string `json:"dns_addresses"`
+	DNSPort                      int      `json:"dns_port"`
+	ProtectionEnabled            *bool    `json:"protection_enabled"`
+	ProtectionDisabledDurationMS *int64   `json:"protection_disabled_duration"`
 }
 
 func (p *Probe) Status(ctx context.Context, request domain.NodeProbeRequest) (domain.NodeProbeResult, error) {
-	endpoint, err := statusEndpoint(request.BaseURL)
+	baseURL, err := domain.NormaliseNodeURL(request.BaseURL, request.CertificatePolicy)
+	if err != nil {
+		return domain.NodeProbeResult{}, err
+	}
+	endpoint, err := statusEndpoint(baseURL)
 	if err != nil {
 		return domain.NodeProbeResult{}, domain.Validation("baseUrl", "is not a valid node URL")
 	}
@@ -70,7 +83,7 @@ func (p *Probe) Status(ctx context.Context, request domain.NodeProbeRequest) (do
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return domain.NodeProbeResult{}, domain.NewError(domain.ErrorNodeAuth, "the node rejected the supplied credentials")
 	default:
-		return domain.NodeProbeResult{}, domain.NewError(domain.ErrorNodeResponse, "the node returned an unexpected status response")
+		return domain.NodeProbeResult{}, nodeAPIError(domain.ErrorNodeResponse, http.MethodGet, "/control/status", response.StatusCode, response.Header.Get("Content-Type"), "returned an unexpected HTTP status", nil)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil {
@@ -81,18 +94,41 @@ func (p *Probe) Status(ctx context.Context, request domain.NodeProbeRequest) (do
 	}
 	var status statusResponse
 	if err := json.Unmarshal(body, &status); err != nil {
-		return domain.NodeProbeResult{}, domain.NewError(domain.ErrorNodeResponse, "the node returned an invalid status document")
+		return domain.NodeProbeResult{}, nodeAPIError(domain.ErrorNodeResponse, http.MethodGet, "/control/status", response.StatusCode, response.Header.Get("Content-Type"), "returned invalid JSON", err)
 	}
 	status.Version = strings.TrimSpace(status.Version)
-	if status.Version == "" || len(status.Version) > 128 || status.Running == nil {
-		return domain.NodeProbeResult{}, domain.NewError(domain.ErrorNodeResponse, "the node returned an invalid status document")
+	if status.Version == "" || len(status.Version) > 128 || status.Running == nil ||
+		status.ProtectionEnabled == nil || status.ProtectionDisabledDurationMS == nil ||
+		*status.ProtectionDisabledDurationMS < 0 || (*status.ProtectionEnabled && *status.ProtectionDisabledDurationMS > 0) {
+		return domain.NodeProbeResult{}, nodeAPIError(domain.ErrorNodeResponse, http.MethodGet, "/control/status", response.StatusCode, response.Header.Get("Content-Type"), "omitted or contradicted required status semantics", nil)
 	}
 	return domain.NodeProbeResult{
-		Version:       status.Version,
-		Compatibility: VersionCompatibility(status.Version),
-		Running:       *status.Running,
-		LatencyMS:     latency,
+		Version:                      status.Version,
+		Compatibility:                VersionCompatibility(status.Version),
+		Running:                      *status.Running,
+		ProtectionEnabled:            *status.ProtectionEnabled,
+		ProtectionDisabledDurationMS: *status.ProtectionDisabledDurationMS,
+		LatencyMS:                    latency,
 	}, nil
+}
+
+func nodeAPIError(kind domain.ErrorKind, method, path string, status int, contentType, problem string, cause error) *domain.Error {
+	contentType = strings.TrimSpace(contentType)
+	if len(contentType) > 128 {
+		contentType = contentType[:128]
+	}
+	detail := fmt.Sprintf("AdGuard Home node %s %s %s", method, path, problem)
+	if status > 0 {
+		detail += fmt.Sprintf(" (HTTP %d", status)
+		if contentType != "" {
+			detail += ", content type " + strconv.Quote(contentType)
+		}
+		detail += ")"
+	}
+	if cause != nil {
+		detail += ": " + cause.Error()
+	}
+	return &domain.Error{Kind: kind, Message: detail, Cause: cause}
 }
 
 func (p *Probe) transport(policy domain.CertificatePolicy, customCAPEM string) (*http.Transport, error) {
@@ -122,7 +158,8 @@ func (p *Probe) transport(policy domain.CertificatePolicy, customCAPEM string) (
 
 func statusEndpoint(baseURL string) (string, error) {
 	parsed, err := url.Parse(baseURL)
-	if err != nil || parsed.Host == "" {
+	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return "", errors.New("invalid base URL")
 	}
 	parsed.Path = strings.TrimRight(parsed.Path, "/") + "/control/status"
@@ -150,20 +187,7 @@ func classifyNetworkError(err error) error {
 }
 
 func VersionCompatibility(version string) domain.Compatibility {
-	value := strings.TrimPrefix(strings.TrimSpace(version), "v")
-	parts := strings.Split(value, ".")
-	if len(parts) < 2 {
-		return domain.CompatibilityUnknown
-	}
-	major, errMajor := strconv.Atoi(parts[0])
-	minor, errMinor := strconv.Atoi(parts[1])
-	if errMajor != nil || errMinor != nil || major < 0 || minor < 0 {
-		return domain.CompatibilityUnknown
-	}
-	if major > 0 || minor >= 107 {
-		return domain.CompatibilitySupported
-	}
-	return domain.CompatibilityUnsupported
+	return ConfigurationCompatibility(version)
 }
 
 func ConfigurationCompatibility(version string) domain.Compatibility {
@@ -171,13 +195,28 @@ func ConfigurationCompatibility(version string) domain.Compatibility {
 	if !ok {
 		return domain.CompatibilityUnknown
 	}
-	if major == 0 && minor == 107 && patch >= 52 && patch <= 78 {
+	if major == minimumSupportedMajor && minor == minimumSupportedMinor && patch >= minimumSupportedPatch {
 		return domain.CompatibilitySupported
 	}
-	if major == 0 && (minor < 107 || (minor == 107 && patch < 52)) {
+	if major == minimumSupportedMajor && (minor < minimumSupportedMinor || (minor == minimumSupportedMinor && patch < minimumSupportedPatch)) {
 		return domain.CompatibilityUnsupported
 	}
 	return domain.CompatibilityUnknown
+}
+
+// IsProvisionallyCompatible reports versions in the supported API generation
+// that are newer than Atlas's latest explicitly contract-tested patch.  Such
+// nodes must still pass normal typed endpoint and semantic validation.
+func IsProvisionallyCompatible(version string) bool {
+	major, minor, patch, ok := configurationVersion(version)
+	return ok && major == minimumSupportedMajor && minor == minimumSupportedMinor && patch > latestTestedPatch
+}
+
+// IsAdGuard107Generation reports whether version belongs to the API generation
+// Atlas can reason about using its explicit patch capability boundaries.
+func IsAdGuard107Generation(version string) bool {
+	major, minor, _, ok := configurationVersion(version)
+	return ok && major == minimumSupportedMajor && minor == minimumSupportedMinor
 }
 
 func configurationVersion(version string) (major, minor, patch int, ok bool) {
@@ -213,5 +252,5 @@ func SupportsRecentStatistics(version string) bool {
 
 func supportsConfigurationPatch(version string, minimum int) bool {
 	major, minor, patch, ok := configurationVersion(version)
-	return ok && major == 0 && minor == 107 && patch >= minimum && patch <= 78
+	return ok && major == minimumSupportedMajor && minor == minimumSupportedMinor && patch >= minimum
 }

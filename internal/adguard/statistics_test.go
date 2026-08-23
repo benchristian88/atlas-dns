@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -13,12 +15,39 @@ func TestSupportsRecentStatisticsBoundaries(t *testing.T) {
 		"v0.107.71": false,
 		"v0.107.72": true,
 		"v0.107.78": true,
-		"v0.107.79": false,
+		"v0.107.79": true,
+		"v0.107.80": true,
+		"v0.108.0":  false,
 		"invalid":   false,
 	} {
 		if got := SupportsRecentStatistics(version); got != want {
 			t.Errorf("SupportsRecentStatistics(%q) = %v, want %v", version, got, want)
 		}
+	}
+}
+
+func TestReadStatisticsCompatibilityFixtures(t *testing.T) {
+	for _, version := range []string{"v0.107.78", "v0.107.79"} {
+		version := version
+		t.Run(version, func(t *testing.T) {
+			body, err := os.ReadFile(filepath.Join("testdata", version, "stats.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+				if request.URL.Path != "/control/stats" || request.URL.Query().Get("recent") != "86400000" {
+					http.NotFound(response, request)
+					return
+				}
+				response.Header().Set("Content-Type", "application/json")
+				_, _ = response.Write(body)
+			}))
+			defer server.Close()
+			snapshot, err := NewConfigurationReader(NewProbe(time.Second)).ReadStatistics(context.Background(), probeRequest(server.URL), 24*time.Hour)
+			if err != nil || snapshot.DNSQueries < 1 || len(snapshot.DNSQueriesSeries) != 1 {
+				t.Fatalf("ReadStatistics(%s) snapshot=%+v error=%v", version, snapshot, err)
+			}
+		})
 	}
 }
 

@@ -41,9 +41,9 @@ func (s *adGuardState) handler(response http.ResponseWriter, request *http.Reque
 	response.Header().Set("Content-Type", "application/json")
 	switch request.URL.Path {
 	case "/control/status":
-		_, _ = io.WriteString(response, `{"version":"v0.107.65","running":true,"dns_addresses":["0.0.0.0"],"dns_port":53}`)
+		_, _ = io.WriteString(response, validAdGuardStatusResponse("v0.107.65"))
 	case "/control/dns_info":
-		_ = json.NewEncoder(response).Encode(map[string]any{"upstream_dns": s.upstreamDNS, "bootstrap_dns": []string{}, "fallback_dns": []string{}, "local_ptr_upstreams": []string{}, "cache_enabled": true, "cache_size": 4_194_304, "upstream_timeout": 10})
+		_ = json.NewEncoder(response).Encode(map[string]any{"upstream_dns": s.upstreamDNS, "bootstrap_dns": []string{}, "fallback_dns": []string{}, "local_ptr_upstreams": []string{}, "protection_enabled": true, "protection_disabled_until": nil, "cache_enabled": true, "cache_size": 4_194_304, "upstream_timeout": 10})
 	case "/control/filtering/status":
 		_ = json.NewEncoder(response).Encode(map[string]any{"enabled": true, "interval": 24, "filters": []any{}, "whitelist_filters": []any{}, "user_rules": s.userRules})
 	case "/control/clients":

@@ -220,7 +220,7 @@ PUT  /api/v1/clusters/{clusterId}/configuration-draft
 POST /api/v1/clusters/{clusterId}/configuration-draft/validate
 ```
 
-Observation performs bounded, authenticated GET requests and stores either an immutable canonical schema-v1/v2 snapshot or an immutable failed attempt with a safe error code. v0.107.52 remains schema v1; v0.107.53–v0.107.78 use schema v2, while newer unverified contracts report unknown compatibility. Inventory returns the latest attempt for each node, current capability profiles, current schema version, and the optional cluster draft. The `draft` member is omitted when no draft exists. Comparison returns `equal` plus differences grouped by section, field, and `shared_managed`, `node_specific_managed`, `observed_only`, or `unsupported` scope.
+Observation performs bounded, authenticated GET requests and stores either an immutable canonical schema-v1/v2 snapshot or an immutable failed attempt with a safe error code. v0.107.52 remains schema v1; v0.107.53 and later patches in the v0.107 API generation use schema v2. v0.107.78 and v0.107.79 are explicitly tested; newer v0.107 patches are provisionally compatible only after the typed endpoints Atlas uses validate. Other API generations report unknown compatibility. Inventory returns the latest attempt for each node, current capability profiles, current schema version, and the optional cluster draft. The `draft` member is omitted when no draft exists. Comparison returns `equal` plus differences grouped by section, field, and `shared_managed`, `node_specific_managed`, `observed_only`, or `unsupported` scope.
 
 Import accepts `snapshotId`, `expectedVersion`, and `confirmed: true`. It rejects failed snapshots, cross-cluster snapshots, missing confirmation, and stale draft versions. The transaction updates the draft and writes `configuration.draft_imported`. It never publishes or deploys configuration.
 
@@ -423,7 +423,7 @@ return node credentials or webhook destinations.
 
 ```text
 GET  /api/v1/clusters/{clusterId}/ha-status
-GET  /api/v1/clusters/{clusterId}/ha-history?nodeId={nodeId}&limit=100
+GET  /api/v1/clusters/{clusterId}/ha-history?nodeId={nodeId}&limit=50&cursor={cursor}
 GET  /api/v1/clusters/{clusterId}/certificates
 GET  /api/v1/clusters/{clusterId}/versions
 GET  /api/v1/clusters/{clusterId}/upgrades
@@ -457,6 +457,15 @@ only safe success/status/error data. Delete requires
 channel foreign key rather than cascading history; `channelName` remains as the
 safe historical snapshot. Create, update, enable/disable, test, and delete are
 administrator-only, CSRF-protected, and audited.
+
+HA history is ordered by `(occurredAt DESC, id DESC)` and accepts `limit=1..100`
+(default 50), optional cluster-owned `nodeId`, and the same opaque versioned
+base64url keyset-cursor convention as Query Log. The response contains `items`,
+optional `nextCursor`, and `hasMore`. Items have `kind=event|notification`;
+notification items add safe channel name, delivered/failed/suppressed/pending
+state, attempt count, optional HTTP status/sanitized reason, completion time,
+and Test identity. Synthetic Test parent events are not duplicated as ordinary
+HA transition rows. No destination URL or response body is returned.
 
 Lifecycle settings use optimistic `recordVersion` and configure DNS host/port,
 query name/type, expected RCODE, UDP/TCP, and installation type. An empty host

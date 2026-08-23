@@ -48,6 +48,12 @@ the node remains non-current until a scheduled collection succeeds. A partial
 node attempt counts toward coverage but propagates `degraded` to the collection
 and overall controller summary.
 
+`Unsupported` requires evidence: a version below the capability floor or an
+endpoint that returns its documented not-found/not-implemented response.
+Unknown API generations and reachability, authentication, TLS, timeout, or
+response-validation failures remain unknown/failed. A newer compatible v0.107
+patch is not made unsupported solely by its version number.
+
 ## Worker and retry behavior
 
 Workers are context-cancellable, run one pass at a time, and isolate nodes

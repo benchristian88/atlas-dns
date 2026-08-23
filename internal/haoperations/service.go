@@ -2,6 +2,8 @@ package haoperations
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -26,6 +28,7 @@ type Repository interface {
 	LatestDNSProbes(context.Context, string) ([]DNSProbeResult, error)
 	SaveDNSProbe(context.Context, DNSProbeResult, *Event) error
 	ListHAEvents(context.Context, string, string, int) ([]Event, error)
+	ListHAHistory(context.Context, HistoryQuery) ([]HistoryItem, error)
 	RecordHAEvent(context.Context, Event) error
 	RecordHAEventAndAudit(context.Context, Event, domain.AuditEvent) error
 	LatestSuccessfulSnapshots(context.Context, string) ([]inventory.Snapshot, error)
@@ -844,11 +847,75 @@ func (s *Service) CompleteUpgrade(ctx context.Context, actor domain.Actor, upgra
 	return upgrade, validationErr
 }
 
-func (s *Service) History(ctx context.Context, clusterID, nodeID string, limit int) ([]Event, error) {
-	if limit < 1 || limit > 200 {
-		limit = 100
+type historyCursorPayload struct {
+	Version int    `json:"v"`
+	At      string `json:"at"`
+	ID      string `json:"id"`
+}
+
+func (s *Service) History(ctx context.Context, request HistoryRequest) (HistoryPage, error) {
+	if !domain.ValidID(request.ClusterID) {
+		return HistoryPage{}, domain.Validation("clusterId", "must be a valid UUID")
 	}
-	return s.repository.ListHAEvents(ctx, clusterID, nodeID, limit)
+	if request.NodeID != "" && !domain.ValidID(request.NodeID) {
+		return HistoryPage{}, domain.Validation("nodeId", "must be a valid UUID")
+	}
+	if request.Limit < 1 || request.Limit > 100 {
+		return HistoryPage{}, domain.Validation("limit", "must be between 1 and 100")
+	}
+	if _, err := s.repository.ClusterByID(ctx, request.ClusterID); err != nil {
+		return HistoryPage{}, err
+	}
+	if request.NodeID != "" {
+		node, err := s.repository.NodeByID(ctx, request.NodeID)
+		if err != nil {
+			return HistoryPage{}, err
+		}
+		if node.ClusterID != request.ClusterID {
+			return HistoryPage{}, domain.NewError(domain.ErrorNotFound, "node was not found in the cluster")
+		}
+	}
+	query := HistoryQuery{ClusterID: request.ClusterID, NodeID: request.NodeID, Limit: request.Limit + 1}
+	if request.Cursor != "" {
+		at, id, err := decodeHistoryCursor(request.Cursor)
+		if err != nil {
+			return HistoryPage{}, domain.Validation("cursor", "is invalid or unsupported")
+		}
+		query.BeforeAt, query.BeforeID = &at, id
+	}
+	items, err := s.repository.ListHAHistory(ctx, query)
+	if err != nil {
+		return HistoryPage{}, err
+	}
+	page := HistoryPage{Items: items}
+	if len(page.Items) > request.Limit {
+		page.Items = page.Items[:request.Limit]
+		last := page.Items[len(page.Items)-1]
+		page.NextCursor = encodeHistoryCursor(last.OccurredAt, last.ID)
+		page.HasMore = true
+	}
+	return page, nil
+}
+
+func encodeHistoryCursor(at time.Time, id string) string {
+	body, _ := json.Marshal(historyCursorPayload{Version: 1, At: at.UTC().Format(time.RFC3339Nano), ID: id})
+	return base64.RawURLEncoding.EncodeToString(body)
+}
+
+func decodeHistoryCursor(value string) (time.Time, string, error) {
+	body, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return time.Time{}, "", fmt.Errorf("decode cursor")
+	}
+	var payload historyCursorPayload
+	if err := json.Unmarshal(body, &payload); err != nil || payload.Version != 1 || !domain.ValidID(payload.ID) {
+		return time.Time{}, "", fmt.Errorf("decode cursor")
+	}
+	at, err := time.Parse(time.RFC3339Nano, payload.At)
+	if err != nil {
+		return time.Time{}, "", fmt.Errorf("decode cursor")
+	}
+	return at.UTC(), payload.ID, nil
 }
 func (s *Service) Upgrades(ctx context.Context, clusterID string, limit int) ([]Upgrade, error) {
 	if limit < 1 || limit > 200 {

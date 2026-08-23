@@ -131,8 +131,9 @@ who intentionally build locally use `compose.dev.yaml`.
 
 ## Supported baseline
 
-- AdGuard Home v0.107.52 through v0.107.78, subject to explicit version
-  capabilities.
+- AdGuard Home v0.107.52 and later patches in the v0.107 API generation,
+  subject to explicit capabilities. v0.107.78 and v0.107.79 are release-tested;
+  newer v0.107 patches are provisionally compatible after contract validation.
 - PostgreSQL 17.
 - Debian 13 with systemd.
 - Docker Engine with Compose v2 and Portainer Stack deployment.
@@ -140,8 +141,8 @@ who intentionally build locally use `compose.dev.yaml`.
 - Current Chromium baseline; current Firefox and Safari/iOS as documented in the
   [compatibility matrix](docs/operations/compatibility-matrix.md).
 
-Unknown AdGuard Home contracts remain observable but managed writes are blocked
-until reviewed.
+Other AdGuard Home API generations remain unknown and managed writes are
+blocked until reviewed.
 
 ## Security and recovery
 
@@ -156,9 +157,9 @@ passphrase. Restore is offline into a new empty database. See [backup and restor
 ## Upgrades and support
 
 Release 1.0.0 is the stable database baseline for supported 1.x upgrades. The
-1.0.1 patch is schema-neutral. Database
-migrations are ordered, checksum-verified, append-only, and forward-only unless
-a release explicitly documents otherwise. 
+1.0.1 patch is schema-neutral; 1.0.2 appends the notification-history migration.
+Database migrations are ordered, checksum-verified, append-only, and
+forward-only unless a release explicitly documents otherwise.
 
 Community support is best-effort with no SLA. Read the
 [support and deprecation policy](docs/product/support-and-deprecation-policy.md),

@@ -92,7 +92,7 @@ func TestRelease01OperatorWorkflow(t *testing.T) {
 			return
 		}
 		response.Header().Set("Content-Type", "application/json")
-		_, _ = response.Write([]byte(`{"version":"v0.107.65","running":true}`))
+		_, _ = response.Write([]byte(validAdGuardStatusResponse("v0.107.65")))
 	})
 	nodeAURL, nodeBURL := testNodeURLs(t, aghHandler)
 	nodePayload := fmt.Sprintf(`{

@@ -76,10 +76,12 @@ func TestReadAllowlistsUsesAllowlistSemanticsWithoutBlocklistContamination(t *te
 }
 
 func TestValidateListenerStatusRejectsIncompleteIdentity(t *testing.T) {
+	protectionEnabled := true
+	disabledDuration := int64(0)
 	for name, status := range map[string]statusResponse{
 		"missing":         {},
-		"invalid port":    {DNSAddresses: []string{"0.0.0.0"}, DNSPort: 0},
-		"invalid address": {DNSAddresses: []string{"not-an-address"}, DNSPort: 53},
+		"invalid port":    {DNSAddresses: []string{"0.0.0.0"}, DNSPort: 0, ProtectionEnabled: &protectionEnabled, ProtectionDisabledDurationMS: &disabledDuration},
+		"invalid address": {DNSAddresses: []string{"not-an-address"}, DNSPort: 53, ProtectionEnabled: &protectionEnabled, ProtectionDisabledDurationMS: &disabledDuration},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := validateListenerStatus(status); err == nil {
@@ -87,7 +89,7 @@ func TestValidateListenerStatusRejectsIncompleteIdentity(t *testing.T) {
 			}
 		})
 	}
-	if err := validateListenerStatus(statusResponse{DNSAddresses: []string{"0.0.0.0", "::"}, DNSPort: 53}); err != nil {
+	if err := validateListenerStatus(statusResponse{DNSAddresses: []string{"0.0.0.0", "::"}, DNSPort: 53, ProtectionEnabled: &protectionEnabled, ProtectionDisabledDurationMS: &disabledDuration}); err != nil {
 		t.Fatalf("valid listener status rejected: %v", err)
 	}
 }
@@ -201,9 +203,9 @@ func TestReadConfigurationKeepsV010752OnFrozenSchemaV1(t *testing.T) {
 		response.Header().Set("Content-Type", "application/json")
 		switch request.URL.Path {
 		case "/control/status":
-			_, _ = response.Write([]byte(`{"version":"v0.107.52","running":true,"dns_addresses":["0.0.0.0"],"dns_port":53}`))
+			_, _ = response.Write([]byte(`{"version":"v0.107.52","running":true,"dns_addresses":["0.0.0.0"],"dns_port":53,"protection_enabled":true,"protection_disabled_duration":0}`))
 		case "/control/dns_info":
-			_, _ = response.Write([]byte(`{"upstream_dns":["1.1.1.1"]}`))
+			_, _ = response.Write([]byte(`{"upstream_dns":["1.1.1.1"],"protection_enabled":true,"protection_disabled_until":null}`))
 		case "/control/filtering/status":
 			_, _ = response.Write([]byte(`{"enabled":true,"interval":24,"filters":[],"user_rules":[]}`))
 		default:
@@ -221,10 +223,10 @@ func TestReadConfigurationKeepsV010752OnFrozenSchemaV1(t *testing.T) {
 	}
 }
 
-func TestReadConfigurationV2MapsBroaderInventoryWithoutTLSSecrets(t *testing.T) {
+func TestReadConfigurationV2SupportsTestedMixedAndProvisionallyCompatiblePatches(t *testing.T) {
 	responses := map[string]string{
-		"/control/status":               `{"version":"v0.107.78","running":true,"dns_addresses":["0.0.0.0"],"dns_port":53}`,
-		"/control/dns_info":             `{"upstream_dns":["1.1.1.1"],"protection_enabled":true,"cache_size":4096,"cache_enabled":false,"upstream_timeout":12,"upstream_mode":"parallel"}`,
+		"/control/status":               `{"version":"v0.107.78","running":true,"dns_addresses":["0.0.0.0"],"dns_port":53,"protection_enabled":true,"protection_disabled_duration":0}`,
+		"/control/dns_info":             `{"upstream_dns":["1.1.1.1"],"protection_enabled":true,"protection_disabled_until":null,"cache_size":4096,"cache_enabled":false,"upstream_timeout":12,"upstream_mode":"parallel"}`,
 		"/control/filtering/status":     `{"enabled":true,"interval":24,"filters":[],"whitelist_filters":[{"enabled":true,"url":"https://allow.test/list.txt","name":"allow"}],"user_rules":["||ads.test^"]}`,
 		"/control/clients":              `{"clients":[{"name":"printer","ids":["192.0.2.10"],"use_global_settings":true,"safe_search":{"enabled":false},"blocked_services_schedule":{"time_zone":"Local"}}]}`,
 		"/control/rewrite/list":         `[{"domain":"router.test","answer":"192.0.2.1","enabled":false}]`,
@@ -249,19 +251,68 @@ func TestReadConfigurationV2MapsBroaderInventoryWithoutTLSSecrets(t *testing.T) 
 	}))
 	defer server.Close()
 	adapter := NewConfigurationReader(NewProbe(2 * time.Second))
-	document, profile, err := adapter.ReadConfiguration(context.Background(), probeRequest(server.URL), "v0.107.78")
-	if err != nil {
-		t.Fatal(err)
+	for _, version := range []string{"v0.107.78", "v0.107.79", "v0.107.80"} {
+		responses["/control/status"] = strings.Replace(`{"version":"v0.107.78","running":true,"dns_addresses":["0.0.0.0"],"dns_port":53,"protection_enabled":true,"protection_disabled_duration":0,"future_additive_field":true}`, "v0.107.78", version, 1)
+		document, profile, err := adapter.ReadConfiguration(context.Background(), probeRequest(server.URL), version)
+		if err != nil {
+			t.Fatalf("ReadConfiguration(%s) error = %v", version, err)
+		}
+		if document.SchemaVersion != configuration.SchemaVersion || !profile.Features["dhcp"] || !profile.Features["filter_interval_arbitrary"] || len(document.Shared.Clients) != 1 || len(document.Shared.Rewrites) != 1 || document.Shared.RewritesEnabled || document.Shared.Rewrites[0].Enabled || document.Shared.DNS.CacheEnabled || document.Shared.DNS.UpstreamTimeout != 12 || document.Shared.QueryLog.IgnoredEnabled || document.NodeSpecific.DHCP == nil || !document.ObservedOnly.TLS.ValidPair {
+			t.Fatalf("broader inventory for %s was incomplete: document=%#v profile=%#v", version, document, profile)
+		}
+		if provisional := len(profile.Warnings) > 0 && strings.Contains(strings.Join(profile.Warnings, " "), "provisionally compatible"); provisional != (version == "v0.107.80") {
+			t.Fatalf("provisional warning for %s = %v; warnings=%#v", version, provisional, profile.Warnings)
+		}
+		body, _, err := configuration.Marshal(document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(body), "SECRET") {
+			t.Fatalf("TLS secret entered canonical inventory: %s", body)
+		}
 	}
-	if document.SchemaVersion != configuration.SchemaVersion || !profile.Features["dhcp"] || !profile.Features["filter_interval_arbitrary"] || len(document.Shared.Clients) != 1 || len(document.Shared.Rewrites) != 1 || document.Shared.RewritesEnabled || document.Shared.Rewrites[0].Enabled || document.Shared.DNS.CacheEnabled || document.Shared.DNS.UpstreamTimeout != 12 || document.Shared.QueryLog.IgnoredEnabled || document.NodeSpecific.DHCP == nil || !document.ObservedOnly.TLS.ValidPair {
-		t.Fatalf("broader inventory was incomplete: document=%#v profile=%#v", document, profile)
+}
+
+func TestCompatibilityFixturesNormalizeProtectionSemanticsAndAdditiveFields(t *testing.T) {
+	for _, version := range []string{"v0.107.78", "v0.107.79"} {
+		var status statusResponse
+		readFixture(t, filepath.Join("testdata", version, "status.json"), &status)
+		if err := validateListenerStatus(status); err != nil {
+			t.Fatalf("%s status fixture: %v", version, err)
+		}
+		var dns dnsInfoResponse
+		readFixture(t, filepath.Join("testdata", version, "dns_info.json"), &dns)
+		if err := validateDNSProtection(dns); err != nil {
+			t.Fatalf("%s DNS fixture: %v", version, err)
+		}
+		document := configurationDocument(version, status, dns, filterStatusResponse{})
+		if version == "v0.107.78" && (!document.Shared.DNS.ProtectionEnabled || document.ObservedOnly.ProtectionDisabledUntil != "") {
+			t.Fatalf("unexpected .78 protection state: %#v", document)
+		}
+		if version == "v0.107.79" && (document.Shared.DNS.ProtectionEnabled || document.ObservedOnly.ProtectionDisabledUntil != "2026-08-19T00:01:00Z") {
+			t.Fatalf("unexpected .79 paused protection state: %#v", document)
+		}
 	}
-	body, _, err := configuration.Marshal(document)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(body), "SECRET") {
-		t.Fatalf("TLS secret entered canonical inventory: %s", body)
+}
+
+func TestProtectionSemanticValidationRejectsMissingWrongTypeAndContradiction(t *testing.T) {
+	for name, body := range map[string]string{
+		"missing":       `{"upstream_dns":[]}`,
+		"wrong type":    `{"protection_enabled":"yes"}`,
+		"contradiction": `{"protection_enabled":true,"protection_disabled_until":"2026-08-19T00:01:00Z"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var dns dnsInfoResponse
+			if err := json.Unmarshal([]byte(body), &dns); err != nil {
+				if name == "wrong type" {
+					return
+				}
+				t.Fatal(err)
+			}
+			if err := validateDNSProtection(dns); err == nil {
+				t.Fatal("invalid protection semantics were accepted")
+			}
+		})
 	}
 }
 

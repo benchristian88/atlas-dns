@@ -4,7 +4,7 @@ GO ?= go
 NPM ?= npm
 COMPOSE ?= docker compose
 GO_FILES := $(shell find . -type f -name '*.go' -not -path './web/node_modules/*')
-VERSION ?= 1.0.1-dev
+VERSION ?= 1.0.2-dev
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || printf unknown)
 BUILT_AT ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X github.com/benchristian88/atlas-dns/internal/version.Version=$(VERSION) -X github.com/benchristian88/atlas-dns/internal/version.Commit=$(COMMIT) -X github.com/benchristian88/atlas-dns/internal/version.BuiltAt=$(BUILT_AT)

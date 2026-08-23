@@ -105,13 +105,13 @@ func (s *Store) ClaimNotificationDelivery(ctx context.Context, now time.Time) (h
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	var delivery haoperations.NotificationDelivery
 	var details []byte
-	err = tx.QueryRow(ctx, `SELECT d.id,d.channel_id,d.event_id,d.status,d.attempt_count,d.error_code,d.next_attempt_at,d.created_at,d.completed_at,
+	err = tx.QueryRow(ctx, `SELECT d.id,d.channel_id,d.event_id,d.status,d.attempt_count,d.error_code,d.error_summary,d.http_status,d.next_attempt_at,d.created_at,d.completed_at,
 		e.id,e.cluster_id,e.node_id,e.event_type,e.severity,e.summary,e.details_json,e.occurred_at
 		FROM notification_deliveries d JOIN ha_operational_events e ON e.id=d.event_id
 		JOIN notification_channels c ON c.id=d.channel_id
 		WHERE c.enabled AND d.status IN('pending','failed') AND d.attempt_count<5 AND COALESCE(d.next_attempt_at,d.created_at)<=$1
 		ORDER BY COALESCE(d.next_attempt_at,d.created_at),d.id FOR UPDATE OF d SKIP LOCKED LIMIT 1`, now).Scan(
-		&delivery.ID, &delivery.ChannelID, &delivery.EventID, &delivery.Status, &delivery.AttemptCount, &delivery.ErrorCode,
+		&delivery.ID, &delivery.ChannelID, &delivery.EventID, &delivery.Status, &delivery.AttemptCount, &delivery.ErrorCode, &delivery.ErrorSummary, &delivery.HTTPStatus,
 		&delivery.NextAttemptAt, &delivery.CreatedAt, &delivery.CompletedAt, &delivery.Event.ID, &delivery.Event.ClusterID,
 		&delivery.Event.NodeID, &delivery.Event.EventType, &delivery.Event.Severity, &delivery.Event.Summary, &details, &delivery.Event.OccurredAt)
 	if err != nil {
@@ -141,6 +141,45 @@ func (s *Store) ClaimNotificationDelivery(ctx context.Context, now time.Time) (h
 }
 
 func (s *Store) FinishNotificationDelivery(ctx context.Context, value haoperations.NotificationDelivery) error {
-	_, err := s.pool.Exec(ctx, `UPDATE notification_deliveries SET status=$2,attempt_count=$3,error_code=$4,next_attempt_at=$5,completed_at=$6 WHERE id=$1`, value.ID, value.Status, value.AttemptCount, value.ErrorCode, value.NextAttemptAt, value.CompletedAt)
+	_, err := s.pool.Exec(ctx, `UPDATE notification_deliveries SET status=$2,attempt_count=$3,error_code=$4,error_summary=$5,http_status=$6,next_attempt_at=$7,completed_at=$8 WHERE id=$1`, value.ID, value.Status, value.AttemptCount, value.ErrorCode, value.ErrorSummary, value.HTTPStatus, value.NextAttemptAt, value.CompletedAt)
 	return err
+}
+
+func (s *Store) RecordNotificationTest(ctx context.Context, event haoperations.Event, delivery haoperations.NotificationDelivery, auditEvent domain.AuditEvent) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin notification test history: %w", err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	details, err := json.Marshal(event.Details)
+	if err != nil {
+		return fmt.Errorf("encode notification test event: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO ha_operational_events
+		(id,cluster_id,node_id,event_type,severity,summary,details_json,occurred_at)
+		VALUES($1,$2,NULL,'notification.test','info',$3,$4,$5)`, event.ID, event.ClusterID, event.Summary, details, event.OccurredAt); err != nil {
+		return fmt.Errorf("insert notification test event: %w", err)
+	}
+	tag, err := tx.Exec(ctx, `INSERT INTO notification_deliveries
+		(id,channel_id,event_id,status,attempt_count,error_code,error_summary,http_status,created_at,completed_at,channel_name)
+		SELECT $1,c.id,$3,$4,$5,$6,$7,$8,$9,$10,c.name FROM notification_channels c WHERE c.id=$2`,
+		delivery.ID, delivery.ChannelID, delivery.EventID, delivery.Status, delivery.AttemptCount, delivery.ErrorCode,
+		delivery.ErrorSummary, delivery.HTTPStatus, delivery.CreatedAt, delivery.CompletedAt)
+	if err != nil {
+		return fmt.Errorf("insert notification test delivery: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.NewError(domain.ErrorNotFound, "notification channel was not found")
+	}
+	if err := audit(ctx, tx, auditEvent); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM ha_operational_events WHERE id IN
+		(SELECT id FROM ha_operational_events WHERE occurred_at < $1 ORDER BY occurred_at,id LIMIT 10000)`, event.OccurredAt.Add(-365*24*time.Hour)); err != nil {
+		return fmt.Errorf("clean notification test history: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit notification test history: %w", err)
+	}
+	return nil
 }

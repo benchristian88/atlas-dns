@@ -1,0 +1,1 @@
+{"oldest":"2026-08-18T00:00:00Z","data":[{"client":"192.0.2.10","elapsedMs":0.25,"question":{"name":"example.org","type":"A"},"reason":"NotFilteredNotFound","status":"NOERROR","time":"2026-08-18T00:00:01Z"}]}

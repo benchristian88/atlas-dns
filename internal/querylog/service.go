@@ -231,9 +231,15 @@ func (s *Service) coverage(nodes []domain.Node, checkpoints []Checkpoint, nodeID
 			result.Nodes = append(result.Nodes, coverage)
 			continue
 		}
-		if !SupportsVersion(node.Version) {
+		if VersionBelowMinimum(node.Version) {
 			coverage.Status, coverage.ReasonCode = "unsupported", "QUERY_LOG_UNSUPPORTED"
 			result.UnsupportedNodes++
+			result.Nodes = append(result.Nodes, coverage)
+			continue
+		}
+		if !SupportsVersion(node.Version) {
+			coverage.Status, coverage.ReasonCode = "error", "QUERY_LOG_CAPABILITY_UNKNOWN"
+			result.ErrorNodes++
 			result.Nodes = append(result.Nodes, coverage)
 			continue
 		}
@@ -260,7 +266,10 @@ func (s *Service) coverage(nodes []domain.Node, checkpoints []Checkpoint, nodeID
 				result.CurrentThrough = &at
 			}
 		}
-		if checkpoint.LastStatus == "failed" {
+		if checkpoint.LastStatus == "unsupported" {
+			coverage.Status, coverage.ReasonCode = "unsupported", checkpoint.ErrorCode
+			result.UnsupportedNodes++
+		} else if checkpoint.LastStatus == "failed" {
 			coverage.Status, coverage.ReasonCode = "error", checkpoint.ErrorCode
 			result.ErrorNodes++
 		} else if checkpoint.GapDetected {

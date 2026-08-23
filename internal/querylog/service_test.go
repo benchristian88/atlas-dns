@@ -73,7 +73,7 @@ func TestCoverageReportsPartialAndCollectionDisabledHonestly(t *testing.T) {
 	now := time.Date(2026, 8, 9, 2, 0, 0, 0, time.UTC)
 	nodes := []domain.Node{
 		{ID: queryTestNode, Name: "current", Enabled: true, Version: "v0.107.78"},
-		{ID: "44444444-4444-4444-8444-444444444444", Name: "unsupported", Enabled: true, Version: "v0.107.79"},
+		{ID: "44444444-4444-4444-8444-444444444444", Name: "unsupported", Enabled: true, Version: "v0.107.51"},
 	}
 	service := NewService(&queryRepositoryFake{}, time.Minute)
 	service.now = func() time.Time { return now }

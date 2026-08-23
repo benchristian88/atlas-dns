@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { MetricCard } from "../../components/DataDisplay";
+import { MetricCard, Pagination } from "../../components/DataDisplay";
 import {
   Banner,
   EmptyState,
@@ -13,7 +13,7 @@ import { api } from "../../lib/api";
 import type {
   CertificateHealth,
   Cluster,
-  HAEvent,
+  HAHistoryItem,
   HASummary,
   Node,
   NotificationChannel,
@@ -26,7 +26,10 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [certificates, setCertificates] = useState<CertificateHealth[]>([]);
   const [versions, setVersions] = useState<VersionHealth[]>([]);
-  const [events, setEvents] = useState<HAEvent[]>([]);
+  const [events, setEvents] = useState<HAHistoryItem[]>([]);
+  const [historyCursorStack, setHistoryCursorStack] = useState([""]);
+  const [historyNextCursor, setHistoryNextCursor] = useState("");
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [upgrades, setUpgrades] = useState<UpgradeOperation[]>([]);
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [error, setError] = useState<unknown>();
@@ -43,7 +46,9 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
     message: string;
   }>();
 
+  const historyCursor = historyCursorStack.at(-1) ?? "";
   const load = useCallback(async () => {
+    setHistoryLoading(true);
     try {
       const [
         ha,
@@ -58,7 +63,7 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
         api.nodes(cluster.id),
         api.certificates(cluster.id),
         api.versions(cluster.id),
-        api.haHistory(cluster.id),
+        api.haHistory(cluster.id, { cursor: historyCursor, limit: 50 }),
         api.upgrades(cluster.id),
         api.notificationChannels(cluster.id),
       ]);
@@ -67,12 +72,20 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
       setCertificates(certificateResult.items);
       setVersions(versionResult.items);
       setEvents(history.items);
+      setHistoryNextCursor(history.nextCursor ?? "");
       setUpgrades(upgradeResult.items);
       setChannels(channelResult.items);
       setError(undefined);
     } catch (caught) {
       setError(caught);
+    } finally {
+      setHistoryLoading(false);
     }
+  }, [cluster.id, historyCursor]);
+
+  useEffect(() => {
+    void cluster.id;
+    setHistoryCursorStack([""]);
   }, [cluster.id]);
 
   useEffect(() => {
@@ -504,6 +517,7 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
                   <th>Node</th>
                   <th>Event</th>
                   <th>Severity</th>
+                  <th>Notification</th>
                   <th>Summary</th>
                 </tr>
               </thead>
@@ -516,7 +530,13 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
                         ? (nodeName.get(event.nodeId) ?? event.nodeId)
                         : "Cluster"}
                     </td>
-                    <td>{event.eventType}</td>
+                    <td>
+                      {event.notification?.test
+                        ? "Webhook test"
+                        : event.kind === "notification"
+                          ? `Webhook · ${event.eventType}`
+                          : event.eventType}
+                    </td>
                     <td>
                       <StatusBadge
                         status={
@@ -526,13 +546,48 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
                         }
                       />
                     </td>
-                    <td>{event.summary}</td>
+                    <td>
+                      {event.notification ? (
+                        <StatusBadge
+                          status={notificationTone(event.notification.status)}
+                          label={notificationLabel(event.notification.status)}
+                        />
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td>
+                      {event.summary}
+                      {event.notification && (
+                        <span className="table-subtitle">
+                          {event.notification.channelName}
+                          {` · ${event.notification.attemptCount} ${event.notification.attemptCount === 1 ? "attempt" : "attempts"}`}
+                          {event.notification.errorSummary
+                            ? ` · ${event.notification.errorSummary}`
+                            : ""}
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
+        <Pagination
+          page={historyCursorStack.length}
+          hasPrevious={historyCursorStack.length > 1}
+          hasNext={historyNextCursor !== ""}
+          disabled={historyLoading}
+          onPrevious={() =>
+            setHistoryCursorStack((current) => current.slice(0, -1))
+          }
+          onNext={() =>
+            historyNextCursor !== "" &&
+            setHistoryCursorStack((current) => [...current, historyNextCursor])
+          }
+          label="Operational History pagination"
+        />
       </section>
     </>
   );
@@ -637,6 +692,8 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
               message: `The endpoint did not accept the test (${result.errorCode ?? "NOTIFICATION_TEST_FAILED"}). No destination details were exposed.`,
             },
       );
+      if (historyCursorStack.length > 1) setHistoryCursorStack([""]);
+      else await load();
     } catch (caught) {
       setWebhookFailure(caught);
     } finally {
@@ -681,6 +738,17 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
           : "The webhook action could not be completed.",
     });
   }
+}
+
+function notificationTone(status: string) {
+  if (status === "delivered") return "success" as const;
+  if (status === "failed") return "failed" as const;
+  if (status === "suppressed") return "maintenance" as const;
+  return "pending" as const;
+}
+
+function notificationLabel(status: string) {
+  return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 function formatTime(value?: string) {

@@ -75,7 +75,9 @@ paths never enter this model.
 The AdGuard Home release checker reads the official GitHub latest-release API at
 most every six hours and retains safe stale-cache state after failure.
 Compatibility remains derived from explicit adapter profiles, not an upstream
-tag alone.
+tag alone. During a rolling upgrade, v0.107.78 and v0.107.79 nodes may coexist;
+the upgraded node stops showing an available v0.107.79 update while the older
+peer continues to show it, without requiring equal patch versions.
 
 ## Guided upgrades
 
@@ -93,6 +95,16 @@ AES-256-GCM encrypted, and write-only. Payloads contain bounded event identity,
 type, severity, summary, time, and optional node identity. Normal deliveries are
 durable and retry at most five times with safe error codes.
 
+Every existing HA transition is notification-triggering: DNS failed/recovered,
+redundancy degraded/at-risk/restored, certificate warning/critical/expired and
+recovery, version update/current transitions, planned-maintenance transitions,
+return-validation failure, and guided-upgrade transitions. A maintenance-mode
+DNS failure is retained as `suppressed` and is not sent. Node-connectivity,
+collector-health, deployment, drift, and audit events are separate subsystems
+and are not webhook triggers in v1.0.2. Channels subscribe to future
+transitions; creating or enabling a channel does not replay an already-active
+degraded state.
+
 Administration supports add, edit, enable/disable, delete, and test:
 
 - List/read returns name, safe scheme/host summary, explicit enabled state, the
@@ -102,7 +114,8 @@ Administration supports add, edit, enable/disable, delete, and test:
   requested with a valid new HTTPS value.
 - Disabled channels receive no new events and retain configuration for re-enable.
 - Test sends one bounded synthetic event directly, follows no redirect, does not
-  enqueue an HA alert, and exposes no destination or response body.
+  alter HA state or notify other channels, and records its terminal result in
+  Operational History without exposing a destination or response body.
 - Delete requires exact-name confirmation. HA events remain unchanged and
   delivery rows retain a safe channel-name snapshot with a nullable channel
   reference.
@@ -130,3 +143,13 @@ delivery attempts are separate from desired configuration and deployment
 history. Bounded cleanup never removes audit or configuration history as a side
 effect. Notification channel deletion preserves operational event/delivery
 evidence as described above.
+
+HA Operations combines immutable transition parents and per-destination
+delivery results as separate Operational History rows. Delivery state is
+`delivered`, `failed`, `suppressed`, or `pending` while retry remains possible.
+Only 2xx means delivered. Failures retain a bounded safe classification such as
+timeout, connection refused, TLS verification failure, or HTTP status; response
+bodies and destination path/query never enter history. The authenticated list
+uses 50-row (maximum 100) opaque keyset pages ordered by
+`(occurred_at DESC, id DESC)`. Delivery creation time is the stable ordering
+timestamp; completion remains supplemental evidence.

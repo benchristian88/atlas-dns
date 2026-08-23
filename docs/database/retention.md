@@ -66,3 +66,9 @@ operator/action evidence; capacity must be reviewed before introducing a
 destructive policy. Probe rows contain no query answers or
 client activity—the configured test name, credentials, and raw packets are not
 persisted.
+
+Webhook Test results use the same parent-event retention and one delivery row
+per selected destination. Delivery rows add bounded scalar diagnostics only;
+remote response bodies and destination URLs are never retained. Operational
+History keyset pages and the event lookup index avoid unbounded browser or
+database result sets as this append-heavy history grows.

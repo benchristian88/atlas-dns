@@ -1,0 +1,1 @@
+{"upstream_dns":["1.1.1.1"],"bootstrap_dns":["# bootstrap group","9.9.9.9"],"fallback_dns":[],"local_ptr_upstreams":[],"protection_enabled":false,"protection_disabled_until":"2026-08-19T00:01:00Z","cache_size":4194304,"cache_enabled":true,"upstream_timeout":10,"upstream_mode":"parallel","future_additive_field":"accepted"}

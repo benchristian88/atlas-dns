@@ -1,8 +1,10 @@
 package haoperations
 
-import "time"
+import (
+	"time"
 
-import "github.com/benchristian88/atlas-dns/internal/domain"
+	"github.com/benchristian88/atlas-dns/internal/domain"
+)
 
 type InstallationType string
 
@@ -75,6 +77,52 @@ type Event struct {
 	Summary    string         `json:"summary"`
 	Details    map[string]any `json:"details"`
 	OccurredAt time.Time      `json:"occurredAt"`
+}
+
+type HistoryItem struct {
+	ID           string                      `json:"id"`
+	Kind         string                      `json:"kind"`
+	ClusterID    string                      `json:"clusterId"`
+	NodeID       *string                     `json:"nodeId,omitempty"`
+	EventType    string                      `json:"eventType"`
+	Severity     string                      `json:"severity"`
+	Summary      string                      `json:"summary"`
+	Details      map[string]any              `json:"details"`
+	OccurredAt   time.Time                   `json:"occurredAt"`
+	Notification *NotificationHistoryOutcome `json:"notification,omitempty"`
+}
+
+type NotificationHistoryOutcome struct {
+	ChannelID    *string    `json:"channelId,omitempty"`
+	ChannelName  string     `json:"channelName"`
+	Status       string     `json:"status"`
+	AttemptCount int        `json:"attemptCount"`
+	ErrorCode    string     `json:"errorCode,omitempty"`
+	ErrorSummary string     `json:"errorSummary,omitempty"`
+	HTTPStatus   *int       `json:"httpStatus,omitempty"`
+	Test         bool       `json:"test"`
+	CompletedAt  *time.Time `json:"completedAt,omitempty"`
+}
+
+type HistoryQuery struct {
+	ClusterID string
+	NodeID    string
+	Limit     int
+	BeforeAt  *time.Time
+	BeforeID  string
+}
+
+type HistoryRequest struct {
+	ClusterID string
+	NodeID    string
+	Cursor    string
+	Limit     int
+}
+
+type HistoryPage struct {
+	Items      []HistoryItem `json:"items"`
+	NextCursor string        `json:"nextCursor,omitempty"`
+	HasMore    bool          `json:"hasMore"`
 }
 
 type CertificateState string
@@ -221,6 +269,8 @@ type NotificationDelivery struct {
 	Status        string     `json:"status"`
 	AttemptCount  int        `json:"attemptCount"`
 	ErrorCode     string     `json:"errorCode,omitempty"`
+	ErrorSummary  string     `json:"errorSummary,omitempty"`
+	HTTPStatus    *int       `json:"httpStatus,omitempty"`
 	NextAttemptAt *time.Time `json:"nextAttemptAt,omitempty"`
 	CreatedAt     time.Time  `json:"createdAt"`
 	CompletedAt   *time.Time `json:"completedAt,omitempty"`

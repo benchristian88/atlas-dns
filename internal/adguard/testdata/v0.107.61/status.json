@@ -1,1 +1,1 @@
-{"version":"v0.107.61","running":true,"dns_addresses":["0.0.0.0","127.0.0.1"],"dns_port":53,"http_port":3000,"protection_enabled":true,"language":"en"}
+{"version":"v0.107.61","running":true,"dns_addresses":["0.0.0.0","127.0.0.1"],"dns_port":53,"http_port":3000,"protection_enabled":true,"protection_disabled_duration":0,"language":"en"}

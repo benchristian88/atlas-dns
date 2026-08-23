@@ -23,8 +23,10 @@ backup archives/passphrases, private Query Log data, or raw node responses.
   [compatibility matrix](../operations/compatibility-matrix.md) are release
   commitments. Best-effort and unsupported environments carry no compatibility
   promise.
-- AdGuard Home versions outside the reviewed contract range may be observed as
-  unknown, but affected managed writes remain blocked.
+- AdGuard Home v0.107 patches newer than the latest release-tested patch are
+  provisionally compatible: Atlas attempts its normal typed capability checks
+  and permits operations only when those contracts validate. Other API
+  generations are unknown and affected managed writes remain blocked.
 
 ## Upgrade and deprecation policy
 
@@ -45,7 +47,7 @@ backup archives/passphrases, private Query Log data, or raw node responses.
 
 ## Unsupported cases
 
-Custom forks, source builds, unreviewed AdGuard Home contracts, unsupported
+Custom forks, source builds, incompatible or unknown AdGuard Home API generations, unsupported
 PostgreSQL majors, modified release archives/images, exposed management APIs,
 and deployments that bypass documented secret or migration controls are
 best-effort or unsupported. Atlas support does not cover AdGuard Home defects,

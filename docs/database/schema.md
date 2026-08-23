@@ -72,7 +72,8 @@ stored. Operational-history retention is independent from configuration history.
 - `notification_channels` — encrypted HTTPS destination, safe
   `destination_summary`, name, and enabled state.
 - `notification_deliveries` — HA event delivery attempts with nullable channel
-  reference and durable safe `channel_name` snapshot.
+  reference, durable safe `channel_name` snapshot, bounded HTTP/failure
+  diagnostics, and per-destination Test/real evidence.
 
 Deleting a notification channel sets the delivery foreign key to null rather
 than cascading operational history. HA event and audit records are unaffected.
@@ -122,13 +123,15 @@ bootstrap, and recorded by version/name/SHA-256 in `schema_migrations`.
 | `000012_release_0_8_ha_operations` | DNS probes, HA events, lifecycle settings, guided upgrades, webhooks/deliveries. | Retain; bootstrap dependency and released checksum. |
 | `000013_release_0_9_productisation` | Product settings and controller release cache. | Retain; bootstrap dependency and released checksum. |
 | `000014_release_0_9_2_lifecycle_polish` | Revision/deployment archive metadata and retained webhook delivery identity. | Retain; final v1.0.0 schema and released checksum. |
+| `000015_release_1_0_2_notification_history` | Bounded webhook HTTP/failure diagnostics and delivery-history query index. | Append-only v1.0.2 upgrade. |
 
 The complete chain is the physical v1.0.0 baseline. Pre-1.0 databases are not
 supported for in-place upgrade, but removing or squashing the chain would break
 empty-database creation and v1.0.0 checksum recognition. Release 1.0.1 uses the
-same schema and adds no migration. Future schema-changing 1.x releases append
-new immutable, never-renumbered forward migrations after `000014`; schema-neutral
-patches do not add placeholders.
+same schema and adds no migration. Release 1.0.2 appends `000015`. Future
+schema-changing 1.x releases append new immutable, never-renumbered forward
+migrations after the current highest version; schema-neutral patches do not add
+placeholders.
 
 Down migrations exist for development and controlled rollback analysis. They may
 be destructive—especially where newer history cannot fit the older model—and

@@ -143,10 +143,12 @@ type NodeProbeRequest struct {
 }
 
 type NodeProbeResult struct {
-	Version       string        `json:"version"`
-	Compatibility Compatibility `json:"compatibility"`
-	Running       bool          `json:"running"`
-	LatencyMS     int           `json:"latencyMs"`
+	Version                      string        `json:"version"`
+	Compatibility                Compatibility `json:"compatibility"`
+	Running                      bool          `json:"running"`
+	ProtectionEnabled            bool          `json:"protectionEnabled"`
+	ProtectionDisabledDurationMS int64         `json:"protectionDisabledDurationMillis"`
+	LatencyMS                    int           `json:"latencyMs"`
 }
 
 type AuditEvent struct {

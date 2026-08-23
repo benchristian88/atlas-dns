@@ -2,13 +2,13 @@ package database
 
 import "testing"
 
-func TestEmbeddedV100BaselineIsComplete(t *testing.T) {
+func TestEmbeddedMigrationChainIncludesV102NotificationHistory(t *testing.T) {
 	items, err := loadMigrations()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 14 {
-		t.Fatalf("migration count = %d, want 14", len(items))
+	if len(items) != 15 {
+		t.Fatalf("migration count = %d, want 15", len(items))
 	}
 	for index, item := range items {
 		wantVersion := int64(index + 1)
@@ -19,7 +19,7 @@ func TestEmbeddedV100BaselineIsComplete(t *testing.T) {
 			t.Fatalf("migration %06d is incomplete: %#v", item.version, item)
 		}
 	}
-	if LatestSchemaVersion() != 14 {
-		t.Fatalf("latest schema version = %d, want 14", LatestSchemaVersion())
+	if LatestSchemaVersion() != 15 {
+		t.Fatalf("latest schema version = %d, want 15", LatestSchemaVersion())
 	}
 }

@@ -97,20 +97,88 @@ describe("HA operations", () => {
         },
       ],
     });
-    vi.spyOn(api, "haHistory").mockResolvedValue({
-      items: [
-        {
-          id: "33333333-3333-4333-8333-333333333333",
-          clusterId: cluster.id,
-          nodeId: node.id,
-          eventType: "dns.failed",
-          severity: "critical",
-          summary: "DNS failed",
-          details: {},
-          occurredAt: "2026-08-09T01:00:00Z",
-        },
-      ],
-    });
+    const history = vi
+      .spyOn(api, "haHistory")
+      .mockImplementation(async (_clusterId, options) =>
+        options?.cursor
+          ? {
+              items: [
+                {
+                  id: "66666666-6666-4666-8666-666666666666",
+                  kind: "notification" as const,
+                  clusterId: cluster.id,
+                  nodeId: node.id,
+                  eventType: "dns.recovered",
+                  severity: "info" as const,
+                  summary: "DNS service recovered",
+                  details: {},
+                  occurredAt: "2026-08-09T00:58:00Z",
+                  notification: {
+                    channelName: "Operations",
+                    status: "failed" as const,
+                    attemptCount: 5,
+                    errorCode: "NOTIFICATION_HTTP_REJECTED",
+                    errorSummary: "HTTP 500",
+                    httpStatus: 500,
+                    test: false,
+                  },
+                },
+              ],
+              hasMore: false,
+            }
+          : {
+              items: [
+                {
+                  id: "33333333-3333-4333-8333-333333333333",
+                  kind: "event" as const,
+                  clusterId: cluster.id,
+                  nodeId: node.id,
+                  eventType: "dns.failed",
+                  severity: "critical",
+                  summary: "DNS failed",
+                  details: {},
+                  occurredAt: "2026-08-09T01:00:00Z",
+                },
+                {
+                  id: "44444444-4444-4444-8444-444444444444",
+                  kind: "notification" as const,
+                  clusterId: cluster.id,
+                  nodeId: node.id,
+                  eventType: "dns.failed",
+                  severity: "critical" as const,
+                  summary: "DNS failed",
+                  details: {},
+                  occurredAt: "2026-08-09T01:00:00Z",
+                  notification: {
+                    channelName: "Operations",
+                    status: "delivered" as const,
+                    attemptCount: 1,
+                    httpStatus: 204,
+                    test: false,
+                  },
+                },
+                {
+                  id: "55555555-5555-4555-8555-555555555555",
+                  kind: "notification" as const,
+                  clusterId: cluster.id,
+                  eventType: "notification.test",
+                  severity: "info" as const,
+                  summary: "Atlas DNS Controller webhook test",
+                  details: {},
+                  occurredAt: "2026-08-09T00:59:00Z",
+                  notification: {
+                    channelName: "Operations",
+                    status: "delivered" as const,
+                    attemptCount: 1,
+                    httpStatus: 204,
+                    test: true,
+                  },
+                },
+              ],
+              nextCursor: "cursor-next",
+              hasMore: true,
+            },
+      );
     vi.spyOn(api, "notificationChannels").mockResolvedValue({ items: [] });
     const { container } = render(<HAOperationsPage cluster={cluster} />);
     expect(
@@ -125,7 +193,25 @@ describe("HA operations", () => {
     expect(summary?.querySelectorAll(":scope > .metric-card")).toHaveLength(4);
     expect(summary?.querySelector(".metric")).toBeNull();
     expect(screen.getByText("DNS certificate")).toBeTruthy();
-    expect(screen.getByText("DNS failed")).toBeTruthy();
+    expect(screen.getAllByText("DNS failed")).toHaveLength(2);
+    expect(screen.getByText("Webhook test")).toBeTruthy();
+    expect(screen.getAllByText("Delivered").length).toBe(2);
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() =>
+      expect(history).toHaveBeenCalledWith(cluster.id, {
+        cursor: "cursor-next",
+        limit: 50,
+      }),
+    );
+    expect(await screen.findByText(/HTTP 500/)).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "Next" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: "Previous" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
     const accessibility = await axe.run(container, {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] },
       rules: { "color-contrast": { enabled: false } },
@@ -150,7 +236,10 @@ describe("HA operations", () => {
     });
     vi.spyOn(api, "certificates").mockResolvedValue({ items: [] });
     vi.spyOn(api, "versions").mockResolvedValue({ items: [] });
-    vi.spyOn(api, "haHistory").mockResolvedValue({ items: [] });
+    vi.spyOn(api, "haHistory").mockResolvedValue({
+      items: [],
+      hasMore: false,
+    });
     const channel = {
       id: "44444444-4444-4444-8444-444444444444",
       clusterId: cluster.id,
@@ -261,7 +350,7 @@ describe("HA operations", () => {
         enabled: true,
       }),
     );
-  });
+  }, 15_000);
 
   it("shows bounded loading and a retryable error when the node no longer exists", async () => {
     vi.spyOn(api, "nodes").mockResolvedValue({

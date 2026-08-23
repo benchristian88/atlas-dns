@@ -145,6 +145,41 @@ func TestQueryLogPollerFailureRetainsCheckpointAndExistingEvents(t *testing.T) {
 	}
 }
 
+func TestQueryLogPollerSupportsMixedTestedPatchesAndClassifiesMissingEndpoint(t *testing.T) {
+	now := time.Date(2026, 8, 19, 3, 0, 0, 0, time.UTC)
+	for _, version := range []string{"v0.107.78", "v0.107.79", "v0.107.80"} {
+		store := &queryLogStoreFake{}
+		reader := &queryLogReaderFake{config: querylog.SourceConfig{Enabled: true}}
+		poller := queryLogPollerForTest(store, reader, now)
+		record := queryLogNode()
+		record.Node.Version = version
+		poller.pollNode(context.Background(), record)
+		if len(store.attempts) != 1 || store.attempts[0].Status != "succeeded" {
+			t.Fatalf("%s attempt = %+v", version, store.attempts)
+		}
+	}
+
+	store := &queryLogStoreFake{}
+	reader := &queryLogReaderFake{configErr: domain.NewError(domain.ErrorCapability, "GET /control/querylog/config returned 404")}
+	poller := queryLogPollerForTest(store, reader, now)
+	poller.pollNode(context.Background(), queryLogNode())
+	if store.attempts[0].Status != "unsupported" || store.attempts[0].ErrorCode != "QUERY_LOG_UNSUPPORTED" {
+		t.Fatalf("missing endpoint attempt = %+v", store.attempts[0])
+	}
+}
+
+func TestQueryLogPollerDoesNotCallUnknownAPIGeneration(t *testing.T) {
+	store := &queryLogStoreFake{}
+	reader := &queryLogReaderFake{}
+	poller := queryLogPollerForTest(store, reader, time.Now())
+	record := queryLogNode()
+	record.Node.Version = "v0.108.0"
+	poller.pollNode(context.Background(), record)
+	if store.attempts[0].Status != "failed" || store.attempts[0].ErrorCode != "QUERY_LOG_CAPABILITY_UNKNOWN" || len(reader.cursors) != 0 {
+		t.Fatalf("unknown generation attempt = %+v cursors=%v", store.attempts[0], reader.cursors)
+	}
+}
+
 func TestQueryLogPollerDetectsStalledSourceCursor(t *testing.T) {
 	now := time.Date(2026, 8, 9, 3, 0, 0, 0, time.UTC)
 	events := make([]querylog.SourceEvent, queryLogPageSize)

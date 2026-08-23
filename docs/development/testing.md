@@ -78,6 +78,12 @@ safety, archive visibility/restore, unused revision deletion, terminal deploymen
 archive, started deployment preservation, unstarted deployment deletion, and
 webhook delivery/event survival after channel deletion.
 
+The release 1.0.2 integration case seeds healthy DNS, drives failed/stable-
+failed/recovered probe states, verifies exactly one failure and one recovery
+webhook at a TLS fake receiver, records a Test result, rejects repeated degraded
+spam, checks redaction, and walks every combined Operational History cursor
+page.
+
 ## AdGuard Home integration
 
 Use real or isolated stateful fixtures for authentication, status, configuration

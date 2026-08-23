@@ -1,1 +1,1 @@
-{"upstream_dns":["https://dns.example/dns-query"],"bootstrap_dns":["9.9.9.9","1.1.1.1"],"fallback_dns":[],"local_ptr_upstreams":[],"cache_size":4194304,"cache_hits":999,"cache_misses":10}
+{"upstream_dns":["https://dns.example/dns-query"],"bootstrap_dns":["9.9.9.9","1.1.1.1"],"fallback_dns":[],"local_ptr_upstreams":[],"protection_enabled":true,"protection_disabled_until":null,"cache_size":4194304,"cache_hits":999,"cache_misses":10}

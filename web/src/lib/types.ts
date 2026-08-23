@@ -895,6 +895,29 @@ export interface HAEvent {
   occurredAt: string;
 }
 
+export interface NotificationHistoryOutcome {
+  channelId?: string;
+  channelName: string;
+  status: "delivered" | "failed" | "suppressed" | "pending";
+  attemptCount: number;
+  errorCode?: string;
+  errorSummary?: string;
+  httpStatus?: number;
+  test: boolean;
+  completedAt?: string;
+}
+
+export interface HAHistoryItem extends HAEvent {
+  kind: "event" | "notification";
+  notification?: NotificationHistoryOutcome;
+}
+
+export interface HAHistoryPage {
+  items: HAHistoryItem[];
+  nextCursor?: string;
+  hasMore: boolean;
+}
+
 export interface MaintenancePreflight {
   nodeId: string;
   allowed: boolean;

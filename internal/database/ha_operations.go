@@ -217,7 +217,8 @@ func insertHAEvent(ctx context.Context, tx pgx.Tx, value haoperations.Event) err
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO notification_deliveries
 			(id,channel_id,event_id,status,attempt_count,next_attempt_at,created_at,completed_at,channel_name)
-			SELECT $1,c.id,$3,$4,0,$5,$6,CASE WHEN $4='suppressed' THEN $6 ELSE NULL END,c.name
+			SELECT $1,c.id,$3,$4,0,$5,$6::timestamptz,
+				CASE WHEN $4='suppressed' THEN $6::timestamptz ELSE NULL::timestamptz END,c.name
 			FROM notification_channels c WHERE c.id=$2
 			ON CONFLICT(channel_id,event_id) DO NOTHING`, deliveryID, channelID, value.ID, status, next, value.OccurredAt)
 		if err != nil {
@@ -255,6 +256,78 @@ func (s *Store) ListHAEvents(ctx context.Context, clusterID, nodeID string, limi
 		result = append(result, value)
 	}
 	return result, rows.Err()
+}
+
+func (s *Store) ListHAHistory(ctx context.Context, request haoperations.HistoryQuery) ([]haoperations.HistoryItem, error) {
+	args := []any{request.ClusterID}
+	eventWhere := "e.cluster_id=$1 AND e.event_type<>'notification.test'"
+	deliveryWhere := "e.cluster_id=$1"
+	if request.NodeID != "" {
+		args = append(args, request.NodeID)
+		parameter := fmt.Sprintf("$%d", len(args))
+		eventWhere += " AND e.node_id=" + parameter
+		deliveryWhere += " AND e.node_id=" + parameter
+	}
+	if request.BeforeAt != nil {
+		args = append(args, *request.BeforeAt, request.BeforeID)
+		atParameter := fmt.Sprintf("$%d", len(args)-1)
+		idParameter := fmt.Sprintf("$%d", len(args))
+		eventWhere += " AND (e.occurred_at,e.id)<(" + atParameter + "," + idParameter + ")"
+		deliveryWhere += " AND (d.created_at,d.id)<(" + atParameter + "," + idParameter + ")"
+	}
+	args = append(args, request.Limit)
+	limitParameter := fmt.Sprintf("$%d", len(args))
+	query := `WITH history AS (
+		SELECT e.id,e.cluster_id,e.node_id,e.event_type,e.severity,e.summary,e.details_json,e.occurred_at,
+			'event'::text AS kind,NULL::uuid AS channel_id,''::text AS channel_name,''::text AS delivery_status,
+			0::integer AS attempt_count,''::text AS error_code,''::text AS error_summary,NULL::integer AS http_status,
+			NULL::timestamptz AS completed_at,false AS is_test
+		FROM ha_operational_events e WHERE ` + eventWhere + `
+		UNION ALL
+		SELECT d.id,e.cluster_id,e.node_id,e.event_type,e.severity,e.summary,'{}'::jsonb,d.created_at,
+			'notification',d.channel_id,d.channel_name,
+			CASE WHEN d.status='succeeded' THEN 'delivered'
+				 WHEN d.status='failed' AND d.completed_at IS NULL THEN 'pending'
+				 ELSE d.status END,
+			d.attempt_count,d.error_code,d.error_summary,d.http_status,d.completed_at,e.event_type='notification.test'
+		FROM notification_deliveries d JOIN ha_operational_events e ON e.id=d.event_id WHERE ` + deliveryWhere + `
+	)
+	SELECT id,cluster_id,node_id,event_type,severity,summary,details_json,occurred_at,kind,channel_id,channel_name,
+		delivery_status,attempt_count,error_code,error_summary,http_status,completed_at,is_test
+	FROM history ORDER BY occurred_at DESC,id DESC LIMIT ` + limitParameter
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list HA operational history: %w", err)
+	}
+	defer rows.Close()
+	result := []haoperations.HistoryItem{}
+	for rows.Next() {
+		var value haoperations.HistoryItem
+		var details []byte
+		var channelID *string
+		var channelName, status, errorCode, errorSummary string
+		var attemptCount int
+		var httpStatus *int
+		var completedAt *time.Time
+		var test bool
+		if err := rows.Scan(&value.ID, &value.ClusterID, &value.NodeID, &value.EventType, &value.Severity, &value.Summary,
+			&details, &value.OccurredAt, &value.Kind, &channelID, &channelName, &status, &attemptCount, &errorCode,
+			&errorSummary, &httpStatus, &completedAt, &test); err != nil {
+			return nil, fmt.Errorf("scan HA operational history: %w", err)
+		}
+		if err := json.Unmarshal(details, &value.Details); err != nil {
+			return nil, fmt.Errorf("decode HA operational history: %w", err)
+		}
+		if value.Kind == "notification" {
+			value.Notification = &haoperations.NotificationHistoryOutcome{ChannelID: channelID, ChannelName: channelName, Status: status,
+				AttemptCount: attemptCount, ErrorCode: errorCode, ErrorSummary: errorSummary, HTTPStatus: httpStatus, Test: test, CompletedAt: completedAt}
+		}
+		result = append(result, value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate HA operational history: %w", err)
+	}
+	return result, nil
 }
 
 func (s *Store) ActiveDeploymentExists(ctx context.Context, clusterID string) (bool, error) {

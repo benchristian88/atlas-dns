@@ -16,6 +16,11 @@ is present in the tested v0.107.72–v0.107.78 API contract. Earlier supported
 configuration contracts expose statistics but cannot guarantee those exact
 windows. Additive counters can be summed; averages and percentages cannot.
 
+v1.0.2 extends explicit test evidence through v0.107.79 and treats later
+v0.107 patches as provisionally capable when the same typed configuration and
+statistics response contracts validate. It does not infer support across a
+different API generation.
+
 ## Decision
 
 The controller will:
@@ -76,4 +81,3 @@ bodies.
 - Putting statistics polling in a separate service: deferred because the
   bounded worker is small, uses the same credentials and adapter boundary, and
   does not affect DNS availability.
-

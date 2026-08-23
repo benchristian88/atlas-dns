@@ -103,7 +103,7 @@ type HAOperationsService interface {
 	MaintenancePreflight(context.Context, string) (haoperations.MaintenancePreflight, error)
 	EnterMaintenance(context.Context, domain.Actor, string, int, bool, string) (domain.Node, error)
 	ReturnToService(context.Context, domain.Actor, string, int) (haoperations.ReturnValidation, error)
-	History(context.Context, string, string, int) ([]haoperations.Event, error)
+	History(context.Context, haoperations.HistoryRequest) (haoperations.HistoryPage, error)
 	StartUpgrade(context.Context, domain.Actor, string, string) (haoperations.Upgrade, error)
 	CompleteUpgrade(context.Context, domain.Actor, string, int) (haoperations.Upgrade, error)
 	Upgrades(context.Context, string, int) ([]haoperations.Upgrade, error)

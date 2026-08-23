@@ -23,7 +23,7 @@ import type {
   DhcpOperation,
   DNSOperationalCommand,
   DriftEvent,
-  HAEvent,
+  HAHistoryPage,
   HASummary,
   LifecycleSettings,
   MaintenancePreflight,
@@ -268,10 +268,14 @@ export const api = {
     ),
   haStatus: (clusterId: string) =>
     request<HASummary>(`/api/v1/clusters/${clusterId}/ha-status`),
-  haHistory: (clusterId: string, nodeId = "") => {
-    const query = new URLSearchParams({ limit: "100" });
-    if (nodeId) query.set("nodeId", nodeId);
-    return request<{ items: HAEvent[] }>(
+  haHistory: (
+    clusterId: string,
+    options: { nodeId?: string; cursor?: string; limit?: number } = {},
+  ) => {
+    const query = new URLSearchParams({ limit: String(options.limit ?? 50) });
+    if (options.nodeId) query.set("nodeId", options.nodeId);
+    if (options.cursor) query.set("cursor", options.cursor);
+    return request<HAHistoryPage>(
       `/api/v1/clusters/${clusterId}/ha-history?${query.toString()}`,
     );
   },

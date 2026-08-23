@@ -53,7 +53,9 @@ records.
   lifecycle operations, and audit events.
 - Sends bounded HTTPS webhook notifications with write-only endpoints, safe
   endpoint summaries, edit/pause/delete/test lifecycle, delivery evidence, and
-  retained historical delivery identity after channel deletion.
+  retained historical delivery identity after channel deletion. Delivery/Test
+  outcomes appear in cursor-paginated Operational History with safe failure
+  diagnostics.
 
 ## Administration
 

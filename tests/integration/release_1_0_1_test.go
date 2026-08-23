@@ -11,7 +11,7 @@ import (
 	"github.com/benchristian88/atlas-dns/internal/inventory"
 )
 
-func TestRelease101AcceptsV100SchemaWithoutMigration(t *testing.T) {
+func TestRelease102ReappliesCurrentMigrationChainWithoutChangingLedger(t *testing.T) {
 	store := integrationStore(t)
 	ctx := context.Background()
 
@@ -19,8 +19,8 @@ func TestRelease101AcceptsV100SchemaWithoutMigration(t *testing.T) {
 	if err := store.Pool().QueryRow(ctx, `SELECT count(*),max(version) FROM schema_migrations`).Scan(&beforeCount, &beforeVersion); err != nil {
 		t.Fatal(err)
 	}
-	if beforeCount != 14 || beforeVersion != 14 {
-		t.Fatalf("baseline ledger count/version = %d/%d, want 14/14", beforeCount, beforeVersion)
+	if beforeCount != 15 || beforeVersion != 15 {
+		t.Fatalf("baseline ledger count/version = %d/%d, want 15/15", beforeCount, beforeVersion)
 	}
 
 	if err := database.ApplyMigrations(ctx, store.Pool()); err != nil {

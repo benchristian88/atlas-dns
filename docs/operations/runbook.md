@@ -167,8 +167,11 @@ only scheme/host summaries and safe codes. Editing preserves the secret unless
 replacement is explicit; deletion retains historical event/delivery identity.
 
 If delivery fails, test DNS/TLS/network reachability from the controller,
-destination policy, and safe response status. Never log or publish the stored
-URL, token, response body, or request payload.
+destination policy, and the safe Operational History reason/status. `Pending`
+may retry up to five total attempts; `Failed` is terminal. A channel created
+after degradation does not replay that existing state, so validate with a
+controlled healthy → degraded transition and restore it afterward. Never log
+or publish the stored URL, token, response body, or request payload.
 
 ## Backup and disaster recovery
 

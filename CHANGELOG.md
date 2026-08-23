@@ -5,6 +5,69 @@ All notable changes to Atlas DNS Controller are documented in this file.
 The stable 1.x line follows Semantic Versioning for documented public
 interfaces.
 
+## 1.0.2 - Unreleased
+
+### Added
+
+- Webhook delivery outcomes now appear as separate rows in HA Controller → HA
+  Operations → Operational History, including destination name, test/real
+  identity, delivery state, attempts, HTTP status, and a bounded sanitized
+  failure reason.
+- Operational History now uses authenticated server-side cursor pagination with
+  a 50-row default, 100-row maximum, and accessible Previous/Next controls.
+
+### Security
+
+- Upgraded the supported Go toolchain to Go 1.27 and updated `pgx`,
+  `golang.org/x/crypto`, and `golang.org/x/text` past the vulnerabilities
+  identified by `govulncheck` during the 1.0.2 audit.
+- Added `govulncheck` to pull-request, branch, and release gates, restricted CI
+  workflow permissions to read-only repository contents, and refreshed every
+  third-party GitHub Action to a current immutable commit pin.
+- Added adversarial regression coverage for authenticated route boundaries,
+  session and CSRF failures, mass-assignment rejection, node URL validation,
+  redirect refusal, and bounded AdGuard response bodies.
+
+### Fixed
+
+- HA DNS failure and recovery transitions now have end-to-end regression
+  coverage across durable event creation, per-channel queueing, webhook
+  delivery, deduplication, and Operational History. Test Webhook now records
+  the same safe operational delivery evidence as real notifications.
+- Fixed the PostgreSQL notification-queue INSERT type inference error that
+  rolled back real HA transition events/deliveries while the direct Test
+  Webhook path continued to succeed.
+- Added AdGuard Home v0.107.79 compatibility for node observation, Query Log,
+  exact-range Statistics, configuration inventory/write verification, and
+  mixed v0.107.78/v0.107.79 rolling upgrades.
+- Removed the v0.107.78 patch ceiling that rejected node observation and
+  disabled collectors before making an AdGuard API request.
+- Query Log now reserves `QUERY_LOG_UNSUPPORTED` for an old contract or a
+  proven missing endpoint; unknown API generations and transport/response
+  failures remain distinct failed/unknown states.
+
+### Changed
+
+- AdGuard Home v0.107.52 remains the minimum managed version. v0.107.79 is the
+  latest explicitly tested patch. Newer patches in the v0.107 API generation
+  are provisionally compatible only after Atlas's typed capability and semantic
+  validation succeeds; other API generations remain unknown and fail closed.
+- Status and DNS inventory now validate and normalize the distinct
+  `protection_disabled_duration` and `protection_disabled_until` runtime
+  semantics. Additive upstream fields remain tolerated.
+- Safe node diagnostics now identify the AdGuard version, method, endpoint,
+  HTTP status/content type, and decode/semantic failure without retaining
+  response bodies or secrets.
+
+### Internal
+
+- Added representative v0.107.78/v0.107.79 status, DNS, Query Log, and
+  Statistics fixtures plus mixed-version, rolling-upgrade, additive-field,
+  provisional-patch, missing-endpoint, and malformed-contract regressions.
+- Added append-only migration `000015_release_1_0_2_notification_history` for
+  bounded delivery diagnostics and the delivery/event history query index. The
+  released `000001`–`000014` baseline remains unchanged.
+
 ## 1.0.1 - Unreleased
 
 ### Fixed

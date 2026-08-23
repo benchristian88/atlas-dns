@@ -52,9 +52,10 @@ type queryLogItem struct {
 	Time        string `json:"time"`
 }
 
-// SupportsQueryLog restricts ingestion to the configuration contracts tested
-// by this repository. A newer version is unknown until its query-log response
-// and paging behavior are reviewed.
+// SupportsQueryLog reports whether the version belongs to the supported
+// AdGuard Home API generation.  Endpoint and response validation remain the
+// decisive capability checks, including for newer, provisionally compatible
+// patches in that generation.
 func SupportsQueryLog(version string) bool { return querylog.SupportsVersion(version) }
 
 func (r *ConfigurationReader) ReadQueryLogConfig(ctx context.Context, request domain.NodeProbeRequest, version string) (querylog.SourceConfig, error) {
@@ -69,7 +70,7 @@ func (r *ConfigurationReader) ReadQueryLogConfig(ctx context.Context, request do
 		Enabled           bool `json:"enabled"`
 		AnonymizeClientIP bool `json:"anonymize_client_ip"`
 	}
-	if err := r.get(ctx, request, path, &response); err != nil {
+	if err := r.getOperationalResource(ctx, request, path, nil, &response); err != nil {
 		return querylog.SourceConfig{}, err
 	}
 	return querylog.SourceConfig{Enabled: response.Enabled, AnonymizeClientIP: response.AnonymizeClientIP}, nil

@@ -56,9 +56,11 @@ export function AboutPage() {
           </p>
           <p>
             Supported managed configuration: AdGuard Home v0.107.52 on schema v1
-            and reviewed v0.107.53–v0.107.78 contracts on schema v2. PostgreSQL
-            17 and Debian 13/systemd or Docker Compose v2 are the current
-            reference platforms.
+            and v0.107.53+ patches in the v0.107 API generation on schema v2.
+            v0.107.78 and v0.107.79 are explicitly tested; newer v0.107 patches
+            are provisionally compatible after API validation. PostgreSQL 17 and
+            Debian 13/systemd or Docker Compose v2 are the current reference
+            platforms.
           </p>
           <p>
             <a

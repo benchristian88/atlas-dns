@@ -19,8 +19,9 @@ an authorization control.
 ## Browser and API protections
 
 - Serve the browser origin over HTTPS and configure `PUBLIC_BASE_URL` exactly.
-- State-changing browser requests require a valid CSRF token and acceptable
-  origin in addition to the session.
+- State-changing browser requests require a matching, session-bound CSRF
+  cookie/header pair in addition to the session. Both cookies use Strict
+  SameSite policy; Atlas does not rely on an `Origin` header as its CSRF proof.
 - API paths are versioned under `/api/v1`; request IDs support safe correlation.
 - External input is validated at the API boundary and machine-readable error
   codes avoid returning internal schema or secret detail.

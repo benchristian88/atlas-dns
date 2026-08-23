@@ -5,9 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/benchristian88/atlas-dns/internal/domain"
@@ -25,6 +28,7 @@ type NotificationRepository interface {
 	SaveNotificationChannel(context.Context, NotificationChannelRecord, int, domain.AuditEvent) error
 	DeleteNotificationChannel(context.Context, string, int, domain.AuditEvent) error
 	RecordAuditEvent(context.Context, domain.AuditEvent) error
+	RecordNotificationTest(context.Context, Event, NotificationDelivery, domain.AuditEvent) error
 	ClaimNotificationDelivery(context.Context, time.Time) (NotificationDelivery, NotificationChannelRecord, error)
 	FinishNotificationDelivery(context.Context, NotificationDelivery) error
 }
@@ -36,13 +40,14 @@ type NotificationService struct {
 	now        func() time.Time
 }
 
-func NewNotificationService(repository NotificationRepository, protector PayloadProtector) *NotificationService {
-	return &NotificationService{repository: repository, protector: protector, client: &http.Client{
-		Timeout: 10 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}, now: time.Now}
+func NewNotificationService(repository NotificationRepository, protector PayloadProtector, clients ...*http.Client) *NotificationService {
+	client := &http.Client{}
+	if len(clients) > 0 && clients[0] != nil {
+		client.Transport = clients[0].Transport
+	}
+	client.Timeout = 10 * time.Second
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &NotificationService{repository: repository, protector: protector, client: client, now: time.Now}
 }
 
 func (s *NotificationService) List(ctx context.Context, clusterID string) ([]NotificationChannel, error) {
@@ -193,9 +198,10 @@ func (s *NotificationService) Test(ctx context.Context, actor domain.Actor, chan
 		return NotificationTestResult{}, err
 	}
 	result := NotificationTestResult{ChannelID: channelID, TestedAt: now}
+	attempt := deliveryAttempt{}
 	destination, err := s.protector.DecryptPayload("notification:"+channelID, record.Destination)
 	if err != nil {
-		result.ErrorCode = "NOTIFICATION_SECRET_UNAVAILABLE"
+		attempt = failedAttempt("NOTIFICATION_SECRET_UNAVAILABLE", "stored destination unavailable")
 	} else {
 		body, marshalErr := json.Marshal(map[string]any{"type": "notification.test", "summary": "Atlas DNS Controller webhook test", "occurredAt": now})
 		if marshalErr != nil {
@@ -203,33 +209,29 @@ func (s *NotificationService) Test(ctx context.Context, actor domain.Actor, chan
 		}
 		testContext, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		request, requestErr := http.NewRequestWithContext(testContext, http.MethodPost, string(destination), bytes.NewReader(body))
-		if requestErr != nil {
-			result.ErrorCode = "NOTIFICATION_DESTINATION_INVALID"
-		} else {
-			request.Header.Set("Content-Type", "application/json")
-			request.Header.Set("User-Agent", "Atlas-DNS-Controller")
-			client := &http.Client{Transport: s.client.Transport, Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			}}
-			response, requestErr := client.Do(request)
-			if requestErr != nil {
-				result.ErrorCode = "NOTIFICATION_TEST_FAILED"
-			} else {
-				_ = response.Body.Close()
-				if response.StatusCode >= 200 && response.StatusCode < 300 {
-					result.Success = true
-				} else {
-					result.ErrorCode = "NOTIFICATION_TEST_REJECTED"
-				}
-			}
-		}
+		attempt = s.post(testContext, string(destination), body)
 	}
+	result.Success, result.ErrorCode = attempt.success, attempt.errorCode
 	completed, err := audit(actor, "notification.channel_test_completed", "notification_channel", channelID, map[string]any{"clusterId": record.Channel.ClusterID, "success": result.Success, "errorCode": result.ErrorCode}, s.now().UTC())
 	if err != nil {
 		return NotificationTestResult{}, err
 	}
-	if err := s.repository.RecordAuditEvent(ctx, completed); err != nil {
+	eventID, err := domain.NewID()
+	if err != nil {
+		return NotificationTestResult{}, err
+	}
+	deliveryID, err := domain.NewID()
+	if err != nil {
+		return NotificationTestResult{}, err
+	}
+	completedAt := s.now().UTC()
+	event := Event{ID: eventID, ClusterID: record.Channel.ClusterID, EventType: "notification.test", Severity: "info", Summary: "Atlas DNS Controller webhook test", Details: map[string]any{"requestId": actor.RequestID}, OccurredAt: now}
+	status := "failed"
+	if attempt.success {
+		status = "succeeded"
+	}
+	delivery := NotificationDelivery{ID: deliveryID, ChannelID: channelID, EventID: eventID, Status: status, AttemptCount: 1, ErrorCode: attempt.errorCode, ErrorSummary: attempt.errorSummary, HTTPStatus: attempt.httpStatus, CreatedAt: now, CompletedAt: &completedAt, Event: event}
+	if err := s.repository.RecordNotificationTest(ctx, event, delivery, completed); err != nil {
 		return NotificationTestResult{}, err
 	}
 	return result, nil
@@ -266,34 +268,74 @@ func (s *NotificationService) DeliverNext(ctx context.Context) (bool, error) {
 	}
 	destination, err := s.protector.DecryptPayload("notification:"+channel.Channel.ID, channel.Destination)
 	if err != nil {
-		return true, s.failDelivery(ctx, delivery, "NOTIFICATION_SECRET_UNAVAILABLE")
+		return true, s.failDelivery(ctx, delivery, failedAttempt("NOTIFICATION_SECRET_UNAVAILABLE", "stored destination unavailable"))
 	}
 	payload := map[string]any{"id": delivery.Event.ID, "clusterId": delivery.Event.ClusterID, "nodeId": delivery.Event.NodeID, "type": delivery.Event.EventType, "severity": delivery.Event.Severity, "summary": delivery.Event.Summary, "occurredAt": delivery.Event.OccurredAt}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return true, s.failDelivery(ctx, delivery, "NOTIFICATION_PAYLOAD_FAILED")
+		return true, s.failDelivery(ctx, delivery, failedAttempt("NOTIFICATION_PAYLOAD_FAILED", "payload serialization failed"))
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, string(destination), bytes.NewReader(body))
+	attempt := s.post(ctx, string(destination), body)
+	if !attempt.success {
+		return true, s.failDelivery(ctx, delivery, attempt)
+	}
+	now := s.now().UTC()
+	delivery.Status, delivery.CompletedAt, delivery.ErrorCode, delivery.ErrorSummary, delivery.HTTPStatus, delivery.NextAttemptAt = "succeeded", &now, "", "", attempt.httpStatus, nil
+	return true, s.repository.FinishNotificationDelivery(ctx, delivery)
+}
+
+type deliveryAttempt struct {
+	success      bool
+	errorCode    string
+	errorSummary string
+	httpStatus   *int
+}
+
+func failedAttempt(code, summary string) deliveryAttempt {
+	return deliveryAttempt{errorCode: code, errorSummary: summary}
+}
+
+func (s *NotificationService) post(ctx context.Context, destination string, body []byte) deliveryAttempt {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, destination, bytes.NewReader(body))
 	if err != nil {
-		return true, s.failDelivery(ctx, delivery, "NOTIFICATION_DESTINATION_INVALID")
+		return failedAttempt("NOTIFICATION_DESTINATION_INVALID", "invalid destination")
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "Atlas-DNS-Controller")
 	response, err := s.client.Do(request)
 	if err != nil {
-		return true, s.failDelivery(ctx, delivery, "NOTIFICATION_DELIVERY_FAILED")
+		return classifyDeliveryError(err)
 	}
 	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return true, s.failDelivery(ctx, delivery, "NOTIFICATION_DELIVERY_REJECTED")
+	status := response.StatusCode
+	if status < 200 || status >= 300 {
+		attempt := failedAttempt("NOTIFICATION_HTTP_REJECTED", fmt.Sprintf("HTTP %d", status))
+		attempt.httpStatus = &status
+		return attempt
 	}
-	now := s.now().UTC()
-	delivery.Status, delivery.CompletedAt, delivery.ErrorCode, delivery.NextAttemptAt = "succeeded", &now, "", nil
-	return true, s.repository.FinishNotificationDelivery(ctx, delivery)
+	return deliveryAttempt{success: true, httpStatus: &status}
 }
 
-func (s *NotificationService) failDelivery(ctx context.Context, delivery NotificationDelivery, code string) error {
-	delivery.ErrorCode = code
+func classifyDeliveryError(err error) deliveryAttempt {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return failedAttempt("NOTIFICATION_TIMEOUT", "timeout")
+	}
+	var networkError net.Error
+	if errors.As(err, &networkError) && networkError.Timeout() {
+		return failedAttempt("NOTIFICATION_TIMEOUT", "timeout")
+	}
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return failedAttempt("NOTIFICATION_CONNECTION_REFUSED", "connection refused")
+	}
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "certificate") || strings.Contains(message, "tls") || strings.Contains(message, "x509") {
+		return failedAttempt("NOTIFICATION_TLS_VERIFICATION_FAILED", "TLS verification failed")
+	}
+	return failedAttempt("NOTIFICATION_DELIVERY_FAILED", "network error")
+}
+
+func (s *NotificationService) failDelivery(ctx context.Context, delivery NotificationDelivery, attempt deliveryAttempt) error {
+	delivery.ErrorCode, delivery.ErrorSummary, delivery.HTTPStatus = attempt.errorCode, attempt.errorSummary, attempt.httpStatus
 	if delivery.AttemptCount >= 5 {
 		now := s.now().UTC()
 		delivery.Status, delivery.CompletedAt, delivery.NextAttemptAt = "failed", &now, nil

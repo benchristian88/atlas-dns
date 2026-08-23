@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/benchristian88/atlas-dns/internal/domain"
 	"github.com/benchristian88/atlas-dns/internal/querylog"
 )
 
@@ -67,6 +70,41 @@ func TestReadQueryLogUsesStableSourceCursorWithoutOffset(t *testing.T) {
 	}
 }
 
+func TestReadQueryLogCompatibilityFixtures(t *testing.T) {
+	for _, version := range []string{"v0.107.78", "v0.107.79"} {
+		version := version
+		t.Run(version, func(t *testing.T) {
+			body, err := os.ReadFile(filepath.Join("testdata", version, "querylog.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+				if request.URL.Path != "/control/querylog" {
+					http.NotFound(response, request)
+					return
+				}
+				response.Header().Set("Content-Type", "application/json")
+				_, _ = response.Write(body)
+			}))
+			defer server.Close()
+			page, err := NewConfigurationReader(NewProbe(time.Second)).ReadQueryLog(context.Background(), probeRequest(server.URL), "", 500)
+			if err != nil || len(page.Events) != 1 || page.InvalidRecords != 0 {
+				t.Fatalf("ReadQueryLog(%s) page=%+v error=%v", version, page, err)
+			}
+		})
+	}
+}
+
+func TestReadQueryLogMissingEndpointIsCapabilityError(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+	reader := NewConfigurationReader(NewProbe(time.Second))
+	_, err := reader.ReadQueryLogConfig(context.Background(), probeRequest(server.URL), "v0.107.79")
+	assertDomainErrorKind(t, err, domain.ErrorCapability)
+	_, err = reader.ReadQueryLog(context.Background(), probeRequest(server.URL), "", 50)
+	assertDomainErrorKind(t, err, domain.ErrorCapability)
+}
+
 func TestNormalizeQueryLogItemPreservesClientIDAsIdentifier(t *testing.T) {
 	item := queryLogItem{ClientID: "dot-client", Time: "2026-08-09T01:02:03Z", ElapsedMS: json.RawMessage(`1`)}
 	item.Question.Name, item.Question.Type = "example.org", "A"
@@ -110,7 +148,7 @@ func TestFilteringStatusMapping(t *testing.T) {
 }
 
 func TestSupportsQueryLogBoundaries(t *testing.T) {
-	for version, want := range map[string]bool{"v0.107.51": false, "v0.107.52": true, "v0.107.78": true, "v0.107.79": false} {
+	for version, want := range map[string]bool{"v0.107.51": false, "v0.107.52": true, "v0.107.78": true, "v0.107.79": true, "v0.107.80": true, "v0.108.0": false} {
 		if got := SupportsQueryLog(version); got != want {
 			t.Errorf("SupportsQueryLog(%q) = %v, want %v", version, got, want)
 		}

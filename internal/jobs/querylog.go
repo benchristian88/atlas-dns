@@ -154,8 +154,13 @@ func (p *QueryLogPoller) pollNode(ctx context.Context, record domain.NodeRecord)
 		recordAttempt(nil)
 		return
 	}
-	if !querylog.SupportsVersion(record.Node.Version) {
+	if querylog.VersionBelowMinimum(record.Node.Version) {
 		attempt.Status, attempt.ErrorCode = "unsupported", "QUERY_LOG_UNSUPPORTED"
+		recordAttempt(nil)
+		return
+	}
+	if !querylog.SupportsVersion(record.Node.Version) {
+		attempt.Status, attempt.ErrorCode = "failed", "QUERY_LOG_CAPABILITY_UNKNOWN"
 		recordAttempt(nil)
 		return
 	}
@@ -171,7 +176,7 @@ func (p *QueryLogPoller) pollNode(ctx context.Context, record domain.NodeRecord)
 	config, err := p.reader.ReadQueryLogConfig(requestContext, request, record.Node.Version)
 	cancel()
 	if err != nil {
-		attempt.Status, attempt.ErrorCode = "failed", queryLogErrorCode(err)
+		attempt.Status, attempt.ErrorCode = queryLogFailure(err)
 		recordAttempt(nil)
 		return
 	}
@@ -192,7 +197,7 @@ func (p *QueryLogPoller) pollNode(ctx context.Context, record domain.NodeRecord)
 		page, readErr := p.reader.ReadQueryLog(requestContext, request, olderThan, queryLogPageSize)
 		cancel()
 		if readErr != nil {
-			attempt.Status, attempt.ErrorCode = "failed", queryLogErrorCode(readErr)
+			attempt.Status, attempt.ErrorCode = queryLogFailure(readErr)
 			recordAttempt(nil)
 			return
 		}
@@ -269,6 +274,14 @@ func (p *QueryLogPoller) pollNode(ctx context.Context, record domain.NodeRecord)
 	checkpoint.LastSuccessAt = &completed
 	attempt.Status = "succeeded"
 	recordAttempt(events)
+}
+
+func queryLogFailure(err error) (status, code string) {
+	var domainError *domain.Error
+	if errors.As(err, &domainError) && domainError.Kind == domain.ErrorCapability {
+		return "unsupported", "QUERY_LOG_UNSUPPORTED"
+	}
+	return "failed", queryLogErrorCode(err)
 }
 
 func queryLogErrorCode(err error) string {

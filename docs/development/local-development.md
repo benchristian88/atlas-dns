@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.24.
+- Go 1.27.
 - Node.js 22 and npm.
 - `make` and `rg`.
 - PostgreSQL 17 when running database integration tests or the controller.

@@ -3,6 +3,7 @@ package inventory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -141,7 +142,14 @@ func (s *Service) Observe(ctx context.Context, nodeID string) (Snapshot, error) 
 		if err := s.repository.SaveObservation(ctx, snapshot, capability); err != nil {
 			return Snapshot{}, err
 		}
-		return snapshot, readErr
+		var domainError *domain.Error
+		if errors.As(readErr, &domainError) {
+			return snapshot, &domain.Error{
+				Kind: domainError.Kind, Field: domainError.Field, Cause: readErr,
+				Message: fmt.Sprintf("node %s (AdGuard Home %s): %s", nodeID, record.Node.Version, domainError.Message),
+			}
+		}
+		return snapshot, fmt.Errorf("observe node %s (AdGuard Home %s): %w", nodeID, record.Node.Version, readErr)
 	}
 	_, hash, err := configuration.Marshal(document)
 	if err != nil {

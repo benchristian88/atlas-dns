@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/benchristian88/atlas-dns/internal/domain"
 	"github.com/benchristian88/atlas-dns/internal/haoperations"
@@ -41,13 +43,24 @@ func (s *Server) handleHAHistory(response http.ResponseWriter, request *http.Req
 	if !s.requireHA(response, request) {
 		return
 	}
-	limit := parseBoundedInt(request.URL.Query().Get("limit"), 100, 1, 200)
-	value, err := s.haOperations.History(request.Context(), request.PathValue("clusterId"), request.URL.Query().Get("nodeId"), limit)
+	limit := 50
+	if value := strings.TrimSpace(request.URL.Query().Get("limit")); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 100 {
+			s.writeError(response, request, domain.Validation("limit", "must be an integer between 1 and 100"))
+			return
+		}
+		limit = parsed
+	}
+	value, err := s.haOperations.History(request.Context(), haoperations.HistoryRequest{
+		ClusterID: request.PathValue("clusterId"), NodeID: strings.TrimSpace(request.URL.Query().Get("nodeId")),
+		Cursor: strings.TrimSpace(request.URL.Query().Get("cursor")), Limit: limit,
+	})
 	if err != nil {
 		s.writeError(response, request, err)
 		return
 	}
-	writeJSON(response, http.StatusOK, map[string]any{"items": value})
+	writeJSON(response, http.StatusOK, value)
 }
 func (s *Server) handleCertificates(response http.ResponseWriter, request *http.Request) {
 	if !s.requireHA(response, request) {

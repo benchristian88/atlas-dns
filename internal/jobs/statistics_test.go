@@ -95,3 +95,21 @@ func TestStatisticsPollerDoesNotCallUnsupportedNode(t *testing.T) {
 		t.Fatalf("unsupported node was read: config=%d ranges=%v", reader.configReads, reader.rangeReads)
 	}
 }
+
+func TestStatisticsPollerAllowsNewerCompatiblePatchAndSeparatesUnknownGeneration(t *testing.T) {
+	store := &statisticsStoreFake{}
+	reader := &statisticsReaderFake{config: telemetry.SourceConfig{Enabled: true, Retention: 24 * time.Hour}}
+	poller := NewStatisticsPoller(store, decrypterFake{}, reader, time.Hour, time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	poller.pollNode(context.Background(), domain.NodeRecord{Node: domain.Node{ID: "22222222-2222-4222-8222-222222222222", ClusterID: "11111111-1111-4111-8111-111111111111", Version: "v0.107.80"}})
+	if store.attempt.Status != "succeeded" || reader.configReads != 1 {
+		t.Fatalf("newer compatible patch attempt=%+v reads=%d", store.attempt, reader.configReads)
+	}
+
+	store = &statisticsStoreFake{}
+	reader = &statisticsReaderFake{}
+	poller = NewStatisticsPoller(store, decrypterFake{}, reader, time.Hour, time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	poller.pollNode(context.Background(), domain.NodeRecord{Node: domain.Node{ID: "22222222-2222-4222-8222-222222222222", ClusterID: "11111111-1111-4111-8111-111111111111", Version: "v0.108.0"}})
+	if store.attempt.Status != "failed" || store.attempt.ErrorCode != "STATISTICS_CAPABILITY_UNKNOWN" || reader.configReads != 0 {
+		t.Fatalf("unknown generation attempt=%+v reads=%d", store.attempt, reader.configReads)
+	}
+}

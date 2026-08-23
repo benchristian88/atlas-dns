@@ -218,9 +218,10 @@ export function ConfigurationPage({ cluster }: { cluster: Cluster }) {
           <div className="notice notice--error">
             <strong>Unsupported draft format</strong>
             <p>
-              Configuration Control requires a schema-v2 draft collected from
-              AdGuard Home 0.107.78. Refresh a node observation below and import
-              it to replace this draft before validating or publishing.
+              Configuration Control requires a schema-v2 draft collected from a
+              compatible AdGuard Home v0.107.53 or later node. Refresh a node
+              observation below and import it to replace this draft before
+              validating or publishing.
             </p>
           </div>
         </section>

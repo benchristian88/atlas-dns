@@ -148,33 +148,34 @@ func (r *ConfigurationReader) ReadStatisticsConfig(ctx context.Context, request 
 }
 
 type dnsInfoResponse struct {
-	UpstreamDNS        []string `json:"upstream_dns"`
-	BootstrapDNS       []string `json:"bootstrap_dns"`
-	FallbackDNS        []string `json:"fallback_dns"`
-	PrivateReverseDNS  []string `json:"local_ptr_upstreams"`
-	ProtectionEnabled  bool     `json:"protection_enabled"`
-	RateLimit          int      `json:"ratelimit"`
-	RateLimitIPv4      int      `json:"ratelimit_subnet_len_ipv4"`
-	RateLimitIPv6      int      `json:"ratelimit_subnet_len_ipv6"`
-	RateLimitAllowlist []string `json:"ratelimit_whitelist"`
-	BlockingMode       string   `json:"blocking_mode"`
-	BlockingIPv4       string   `json:"blocking_ipv4"`
-	BlockingIPv6       string   `json:"blocking_ipv6"`
-	BlockedResponseTTL int      `json:"blocked_response_ttl"`
-	EDNSClientSubnet   bool     `json:"edns_cs_enabled"`
-	EDNSUseCustom      bool     `json:"edns_cs_use_custom"`
-	EDNSCustomIP       string   `json:"edns_cs_custom_ip"`
-	DisableIPv6        bool     `json:"disable_ipv6"`
-	DNSSECEnabled      bool     `json:"dnssec_enabled"`
-	CacheSize          int      `json:"cache_size"`
-	CacheEnabled       *bool    `json:"cache_enabled"`
-	CacheTTLMin        int      `json:"cache_ttl_min"`
-	CacheTTLMax        int      `json:"cache_ttl_max"`
-	CacheOptimistic    bool     `json:"cache_optimistic"`
-	UpstreamMode       string   `json:"upstream_mode"`
-	UsePrivateReverse  bool     `json:"use_private_ptr_resolvers"`
-	ResolveClients     bool     `json:"resolve_clients"`
-	UpstreamTimeout    *int     `json:"upstream_timeout"`
+	UpstreamDNS             []string   `json:"upstream_dns"`
+	BootstrapDNS            []string   `json:"bootstrap_dns"`
+	FallbackDNS             []string   `json:"fallback_dns"`
+	PrivateReverseDNS       []string   `json:"local_ptr_upstreams"`
+	ProtectionEnabled       *bool      `json:"protection_enabled"`
+	ProtectionDisabledUntil *time.Time `json:"protection_disabled_until"`
+	RateLimit               int        `json:"ratelimit"`
+	RateLimitIPv4           int        `json:"ratelimit_subnet_len_ipv4"`
+	RateLimitIPv6           int        `json:"ratelimit_subnet_len_ipv6"`
+	RateLimitAllowlist      []string   `json:"ratelimit_whitelist"`
+	BlockingMode            string     `json:"blocking_mode"`
+	BlockingIPv4            string     `json:"blocking_ipv4"`
+	BlockingIPv6            string     `json:"blocking_ipv6"`
+	BlockedResponseTTL      int        `json:"blocked_response_ttl"`
+	EDNSClientSubnet        bool       `json:"edns_cs_enabled"`
+	EDNSUseCustom           bool       `json:"edns_cs_use_custom"`
+	EDNSCustomIP            string     `json:"edns_cs_custom_ip"`
+	DisableIPv6             bool       `json:"disable_ipv6"`
+	DNSSECEnabled           bool       `json:"dnssec_enabled"`
+	CacheSize               int        `json:"cache_size"`
+	CacheEnabled            *bool      `json:"cache_enabled"`
+	CacheTTLMin             int        `json:"cache_ttl_min"`
+	CacheTTLMax             int        `json:"cache_ttl_max"`
+	CacheOptimistic         bool       `json:"cache_optimistic"`
+	UpstreamMode            string     `json:"upstream_mode"`
+	UsePrivateReverse       bool       `json:"use_private_ptr_resolvers"`
+	ResolveClients          bool       `json:"resolve_clients"`
+	UpstreamTimeout         *int       `json:"upstream_timeout"`
 }
 
 type filterListResponse struct {
@@ -366,7 +367,10 @@ func (r *ConfigurationReader) ReadConfiguration(ctx context.Context, request dom
 	profile := inventory.CapabilityProfile{ProductVersion: version, Compatibility: string(ConfigurationCompatibility(version)), SchemaVersion: configuration.SchemaVersion, Features: map[string]bool{"dns": false, "cache_toggle": false, "upstream_timeout": false, "test_upstream_dns": false, "cache_clear": false, "filtering": false, "test_host_filtering": false, "test_host_filtering_context": false, "filter_interval_arbitrary": false, "clients": false, "rewrites": false, "rewrite_toggle": false, "blocked_services": false, "safety": false, "safe_search_ecosia": supportsEcosia(version), "query_log": false, "querylog_clear": false, "statistics": false, "statistics_exact_range": SupportsRecentStatistics(version), "stats_reset": false, "ignored_lists_toggle": false, "tls": false, "dhcp": false}, Warnings: []string{}}
 	if ConfigurationCompatibility(version) != domain.CompatibilitySupported {
 		profile.Warnings = append(profile.Warnings, "This AdGuard Home version is outside the tested configuration inventory range.")
-		return configuration.Document{}, profile, domain.NewError(domain.ErrorNodeResponse, "the node version is not supported for configuration inventory")
+		return configuration.Document{}, profile, domain.NewError(domain.ErrorCapability, "the node version is outside the supported AdGuard Home API generation")
+	}
+	if IsProvisionallyCompatible(version) {
+		profile.Warnings = append(profile.Warnings, "This newer AdGuard Home 0.107 patch is provisionally compatible; Atlas validated the APIs it uses, but this patch has not been explicitly release-tested.")
 	}
 	// These destructive endpoints predate the supported v0.107.52 floor and do
 	// not depend on schema-v2 policy inventory.
@@ -386,6 +390,10 @@ func (r *ConfigurationReader) ReadConfiguration(ctx context.Context, request dom
 		profile.Warnings = append(profile.Warnings, "DNS configuration could not be read.")
 		return configuration.Document{}, profile, err
 	}
+	if err := validateDNSProtection(dns); err != nil {
+		profile.Warnings = append(profile.Warnings, "DNS protection state could not be validated.")
+		return configuration.Document{}, profile, err
+	}
 	profile.Features["dns"] = true
 	profile.Features["test_upstream_dns"] = true
 	profile.Features["cache_clear"] = true
@@ -402,7 +410,7 @@ func (r *ConfigurationReader) ReadConfiguration(ctx context.Context, request dom
 	profile.Features["filter_interval_arbitrary"] = supportsConfigurationPatch(version, 78)
 	if !supportsSchemaV2(version) {
 		profile.SchemaVersion = configuration.LegacySchemaVersion
-		profile.Warnings = append(profile.Warnings, "AdGuard Home v0.107.53 through v0.107.78 is required for schema-v2 configuration management; legacy schema-v1 inventory remains available.")
+		profile.Warnings = append(profile.Warnings, "AdGuard Home v0.107.53 or later in the supported 0.107 API generation is required for schema-v2 configuration management; legacy schema-v1 inventory remains available.")
 		document := configuration.ProjectDocument(configurationDocument(version, status, dns, filtering), configuration.LegacySchemaVersion)
 		document.Unsupported = []configuration.Unsupported{
 			{Section: "services", Reason: "blocked services and safety services require schema-v2 inventory"},
@@ -622,13 +630,22 @@ func (r *ConfigurationReader) readFilterLists(ctx context.Context, request domai
 }
 
 func validateListenerStatus(status statusResponse) error {
-	if status.DNSPort < 1 || status.DNSPort > 65535 || len(status.DNSAddresses) == 0 {
+	if status.DNSPort < 1 || status.DNSPort > 65535 || len(status.DNSAddresses) == 0 ||
+		status.ProtectionEnabled == nil || status.ProtectionDisabledDurationMS == nil ||
+		*status.ProtectionDisabledDurationMS < 0 || (*status.ProtectionEnabled && *status.ProtectionDisabledDurationMS > 0) {
 		return domain.NewError(domain.ErrorNodeResponse, "the node returned an invalid DNS listener configuration")
 	}
 	for _, address := range status.DNSAddresses {
 		if _, err := netip.ParseAddr(strings.TrimSpace(address)); err != nil {
 			return domain.NewError(domain.ErrorNodeResponse, "the node returned an invalid DNS listener configuration")
 		}
+	}
+	return nil
+}
+
+func validateDNSProtection(dns dnsInfoResponse) error {
+	if dns.ProtectionEnabled == nil || (*dns.ProtectionEnabled && dns.ProtectionDisabledUntil != nil) {
+		return domain.NewError(domain.ErrorNodeResponse, "the node returned an invalid DNS protection state")
 	}
 	return nil
 }
@@ -660,7 +677,7 @@ func configurationDocument(version string, status statusResponse, dns dnsInfoRes
 		SchemaVersion: configuration.SchemaVersion,
 		Shared: configuration.Shared{DNS: configuration.DNS{
 			UpstreamDNS: dns.UpstreamDNS, BootstrapDNS: dns.BootstrapDNS, FallbackDNS: dns.FallbackDNS, PrivateReverseDNS: dns.PrivateReverseDNS,
-			ProtectionEnabled: dns.ProtectionEnabled, RateLimit: dns.RateLimit, RateLimitIPv4: dns.RateLimitIPv4, RateLimitIPv6: dns.RateLimitIPv6,
+			ProtectionEnabled: valueOrDefault(dns.ProtectionEnabled, false), RateLimit: dns.RateLimit, RateLimitIPv4: dns.RateLimitIPv4, RateLimitIPv6: dns.RateLimitIPv6,
 			RateLimitAllowlist: dns.RateLimitAllowlist, BlockingMode: dns.BlockingMode, BlockingIPv4: dns.BlockingIPv4, BlockingIPv6: dns.BlockingIPv6,
 			BlockedResponseTTL: dns.BlockedResponseTTL, EDNSClientSubnet: dns.EDNSClientSubnet, EDNSUseCustom: dns.EDNSUseCustom,
 			EDNSCustomIP: dns.EDNSCustomIP, DisableIPv6: dns.DisableIPv6, DNSSECEnabled: dns.DNSSECEnabled, CacheSize: dns.CacheSize, CacheEnabled: valueOrDefault(dns.CacheEnabled, dns.CacheSize > 0),
@@ -668,9 +685,16 @@ func configurationDocument(version string, status statusResponse, dns dnsInfoRes
 			UsePrivateReverse: dns.UsePrivateReverse, ResolveClients: dns.ResolveClients, UpstreamTimeout: valueOrDefault(dns.UpstreamTimeout, 0),
 		}, Filtering: configuration.Filtering{Enabled: enabled, UpdateInterval: filtering.Interval, FilterURLs: filterURLs, WhitelistURLs: whitelistURLs, UserRules: filtering.UserRules}},
 		NodeSpecific: configuration.NodeSpecific{BindHosts: status.DNSAddresses, DNSPort: status.DNSPort},
-		ObservedOnly: configuration.ObservedOnly{ProductVersion: version},
+		ObservedOnly: configuration.ObservedOnly{ProductVersion: version, ProtectionDisabledUntil: protectionDisabledUntil(dns.ProtectionDisabledUntil)},
 		Unsupported:  []configuration.Unsupported{{Section: "tls_mutation", Reason: "TLS is inventory-only until controller secret references are implemented"}},
 	}
+}
+
+func protectionDisabledUntil(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339Nano)
 }
 
 func valueOrDefault[T any](value *T, fallback T) T {
@@ -1044,18 +1068,18 @@ func (r *ConfigurationReader) getOperationalResource(ctx context.Context, reques
 	}
 	if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusNotImplemented {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxConfigurationBody))
-		return domain.NewError(domain.ErrorCapability, "the node does not support this operational command")
+		return nodeAPIError(domain.ErrorCapability, http.MethodGet, path, response.StatusCode, response.Header.Get("Content-Type"), "is not implemented by this node", nil)
 	}
 	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxConfigurationBody))
-		return domain.NewError(domain.ErrorNodeResponse, "the node operational endpoint returned an unexpected status")
+		return nodeAPIError(domain.ErrorNodeResponse, http.MethodGet, path, response.StatusCode, response.Header.Get("Content-Type"), "returned an unexpected HTTP status", nil)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxConfigurationBody+1))
 	if err != nil || len(body) > maxConfigurationBody {
 		return domain.NewError(domain.ErrorNodeResponse, "the node operational response could not be read safely")
 	}
 	if err := json.Unmarshal(body, target); err != nil {
-		return domain.NewError(domain.ErrorNodeResponse, "the node returned invalid operational JSON")
+		return nodeAPIError(domain.ErrorNodeResponse, http.MethodGet, path, response.StatusCode, response.Header.Get("Content-Type"), "returned invalid JSON", err)
 	}
 	return nil
 }
@@ -1475,7 +1499,8 @@ func (r *ConfigurationReader) getResource(ctx context.Context, request domain.No
 		return false, nil
 	}
 	if response.StatusCode != http.StatusOK {
-		return false, domain.NewError(domain.ErrorNodeResponse, "the node configuration endpoint returned an unexpected status")
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxConfigurationBody))
+		return false, nodeAPIError(domain.ErrorNodeResponse, http.MethodGet, path, response.StatusCode, response.Header.Get("Content-Type"), "returned an unexpected HTTP status", nil)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxConfigurationBody+1))
 	if err != nil {
@@ -1485,7 +1510,7 @@ func (r *ConfigurationReader) getResource(ctx context.Context, request domain.No
 		return false, domain.NewError(domain.ErrorNodeResponse, "the node configuration response was too large")
 	}
 	if err := json.Unmarshal(body, target); err != nil {
-		return false, domain.NewError(domain.ErrorNodeResponse, "the node returned invalid configuration JSON")
+		return false, nodeAPIError(domain.ErrorNodeResponse, http.MethodGet, path, response.StatusCode, response.Header.Get("Content-Type"), "returned invalid JSON", err)
 	}
 	return true, nil
 }

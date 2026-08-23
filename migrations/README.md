@@ -50,3 +50,4 @@ Released schema milestones:
 - `000012_release_0_8_ha_operations`: DNS probes, HA events, node lifecycle settings, guided upgrades, release awareness, and encrypted webhook delivery.
 - `000013_release_0_9_productisation`: controller release cache and optimistic system settings.
 - `000014_release_0_9_2_lifecycle_polish`: revision/deployment archive state and retained webhook delivery identity.
+- `000015_release_1_0_2_notification_history`: bounded webhook HTTP/failure diagnostics and delivery-history query indexing.

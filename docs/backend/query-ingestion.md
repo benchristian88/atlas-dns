@@ -7,7 +7,9 @@ outside the DNS request path.
 
 ## Supported source contract
 
-Atlas DNS Controller accepts reviewed AdGuard Home versions v0.107.52 through v0.107.78. It
+Atlas DNS Controller accepts AdGuard Home v0.107.52 and later patches in the
+v0.107 API generation. v0.107.78 and v0.107.79 are explicitly tested; newer
+v0.107 patches use the same bounded typed contract provisionally. It
 reads `GET /control/querylog` newest-first with a maximum page size of 500,
 using the response `oldest` timestamp as the next request's `older_than`
 cursor. The first request omits `older_than`; `search` is empty and
@@ -36,6 +38,11 @@ by default), with at most four node requests active concurrently. Each enabled
 node is handled independently with the configured node timeout. Maintenance,
 unsupported, unreachable, authentication, disabled-query-log, malformed-source,
 and timeout outcomes become safe per-node attempt/checkpoint evidence.
+
+An old version below v0.107.52 or a proven missing Query Log endpoint is
+`QUERY_LOG_UNSUPPORTED`. A malformed/different API generation or a network,
+TLS, authentication, timeout, or decode failure is failed/unknown rather than
+misreported as unsupported.
 
 Each pass begins at the newest event and follows `oldest`/`older_than` for at
 most 20 pages. It stops after exhausting the source or crossing two poll

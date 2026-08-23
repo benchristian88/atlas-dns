@@ -8,7 +8,8 @@ The supported database compatibility baseline is Atlas DNS Controller v1.0.0.
 Physically, a clean database reaches that baseline by applying the immutable
 embedded `000001`–`000014` chain shipped in v1.0.0. The release-era names are
 historical labels, not support promises for pre-1.0 databases. Release 1.0.1 is
-schema-neutral and reuses the same ledger unchanged.
+schema-neutral. Release 1.0.2 appends migration `000015` without changing the
+released baseline files.
 
 Release 0.7 adds no parallel health tables. Durable node, observation,
 Statistics, Query Log, deployment, and drift records remain authoritative;
@@ -299,7 +300,8 @@ successful management API request does not prove that the node answers DNS.
 `dns_probe_results`, `ha_operational_events`, and `upgrade_operations` are
 durable operational history. `upstream_release_cache` bounds external lookups.
 `notification_channels` stores only encrypted destinations and
-`notification_deliveries` stores bounded state/error codes. Node/history
+`notification_deliveries` stores bounded state/error codes, safe HTTP status and
+failure summaries, and an event/history lookup index. Node/history
 foreign keys are restrictive; internal deliveries cascade when their channel is
 removed or their one-year parent event expires.
 

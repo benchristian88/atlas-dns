@@ -17,6 +17,7 @@ type notificationRepositoryFake struct {
 	finished  NotificationDelivery
 	audits    []domain.AuditEvent
 	lastAudit domain.AuditEvent
+	testEvent Event
 }
 
 func (r *notificationRepositoryFake) ClusterByID(context.Context, string) (domain.Cluster, error) {
@@ -39,6 +40,12 @@ func (r *notificationRepositoryFake) DeleteNotificationChannel(_ context.Context
 }
 func (r *notificationRepositoryFake) RecordAuditEvent(_ context.Context, event domain.AuditEvent) error {
 	r.audits = append(r.audits, event)
+	return nil
+}
+func (r *notificationRepositoryFake) RecordNotificationTest(_ context.Context, event Event, value NotificationDelivery, audit domain.AuditEvent) error {
+	r.testEvent = event
+	r.finished = value
+	r.audits = append(r.audits, audit)
 	return nil
 }
 func (r *notificationRepositoryFake) ClaimNotificationDelivery(context.Context, time.Time) (NotificationDelivery, NotificationChannelRecord, error) {
@@ -155,8 +162,30 @@ func TestNotificationTestIsBoundedRedactedAndAudited(t *testing.T) {
 	if err != nil || !result.Success || len(repository.audits) != 2 {
 		t.Fatalf("result=%#v audits=%d err=%v", result, len(repository.audits), err)
 	}
+	if repository.finished.Status != "succeeded" || repository.finished.AttemptCount != 1 || repository.testEvent.EventType != "notification.test" || repository.finished.HTTPStatus == nil || *repository.finished.HTTPStatus != http.StatusNoContent {
+		t.Fatalf("test history event=%#v delivery=%#v", repository.testEvent, repository.finished)
+	}
 	if strings.Contains(sent, "receiver.test") || strings.Contains(sent, "secret") {
 		t.Fatalf("test payload leaked destination: %s", sent)
+	}
+}
+
+func TestNotificationTestFailureRecordsSafeTerminalHistory(t *testing.T) {
+	repository := &notificationRepositoryFake{record: NotificationChannelRecord{Channel: NotificationChannel{ID: "11111111-1111-4111-8111-111111111111", ClusterID: "22222222-2222-4222-8222-222222222222", Name: "Operations", Enabled: true, RecordVersion: 1}}}
+	protector := &payloadProtectorFake{plaintext: []byte("https://receiver.test/private?token=secret")}
+	service := NewNotificationService(repository, protector)
+	service.client = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(strings.NewReader("secret remote response")), Header: http.Header{}}, nil
+	})}
+	result, err := service.Test(context.Background(), domain.Actor{UserID: "33333333-3333-4333-8333-333333333333", RequestID: "request"}, repository.record.Channel.ID)
+	if err != nil || result.Success || result.ErrorCode != "NOTIFICATION_HTTP_REJECTED" {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+	if repository.finished.Status != "failed" || repository.finished.ErrorSummary != "HTTP 500" || repository.finished.HTTPStatus == nil || *repository.finished.HTTPStatus != 500 {
+		t.Fatalf("failed test history=%#v", repository.finished)
+	}
+	if strings.Contains(repository.finished.ErrorSummary, "secret") {
+		t.Fatalf("remote body leaked: %#v", repository.finished)
 	}
 }
 
@@ -177,5 +206,22 @@ func TestNotificationPayloadExcludesDetailsAndDestination(t *testing.T) {
 	}
 	if strings.Contains(sent, "rawError") || strings.Contains(sent, "secret") || strings.Contains(sent, "receiver.test") {
 		t.Fatalf("sensitive notification payload: %s", sent)
+	}
+}
+
+func TestNotificationFailureRetainsOneRetryingResultWithSafeReason(t *testing.T) {
+	repository := &notificationRepositoryFake{delivery: NotificationDelivery{ID: "delivery", AttemptCount: 2, Event: Event{ID: "event", ClusterID: "cluster", EventType: "dns.failed", Severity: "critical", Summary: "DNS failed", OccurredAt: time.Now()}}}
+	protector := &payloadProtectorFake{plaintext: []byte("https://receiver.test/hook")}
+	repository.record = NotificationChannelRecord{Channel: NotificationChannel{ID: "channel", Enabled: true}}
+	service := NewNotificationService(repository, protector)
+	service.client = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusUnauthorized, Body: io.NopCloser(strings.NewReader("token=secret")), Header: http.Header{}}, nil
+	})}
+	processed, err := service.DeliverNext(context.Background())
+	if err != nil || !processed || repository.finished.Status != "failed" || repository.finished.CompletedAt != nil || repository.finished.NextAttemptAt == nil {
+		t.Fatalf("processed=%v delivery=%#v err=%v", processed, repository.finished, err)
+	}
+	if repository.finished.AttemptCount != 2 || repository.finished.ErrorCode != "NOTIFICATION_HTTP_REJECTED" || repository.finished.ErrorSummary != "HTTP 401" {
+		t.Fatalf("retry diagnostics=%#v", repository.finished)
 	}
 }

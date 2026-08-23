@@ -17,7 +17,8 @@ upgrade or backup-restore guarantee from the pre-1.0 product.
 - Schema downgrade is not generally supported. A down migration in source is a
   development aid unless release notes explicitly authorize it for rollback.
 - Schema-neutral patch releases do not add empty migrations. Release 1.0.1 uses
-  the v1.0.0 schema unchanged.
+  the v1.0.0 schema unchanged; Release 1.0.2 appends `000015` for notification
+  delivery diagnostics and history indexing.
 
 ## Supported 1.x upgrade flow
 

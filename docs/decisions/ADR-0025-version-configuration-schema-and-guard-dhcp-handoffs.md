@@ -16,6 +16,16 @@ TLS status responses can contain certificate and private-key material. The contr
 
 - Introduce canonical configuration schema v2 and allow both versions in PostgreSQL. Never rewrite schema-v1 snapshots, drafts, or revisions.
 - Continue schema-v1 inventory and historical reconciliation for AdGuard Home v0.107.52. Use schema v2 for the explicitly reviewed v0.107.53–v0.107.78 contract, where patch-level feature flags cover subsequent cache, timeout, rewrite, ignored-list, and filter-interval additions. Treat newer contracts as unknown until reviewed.
+
+## v1.0.2 compatibility clarification
+
+The exact v0.107.78 ceiling above described the original reviewed boundary; it
+is not a permanent patch allowlist. v0.107.79 is now explicitly tested. Later
+patches in the same v0.107 API generation may use schema v2 provisionally only
+after the complete typed observation and capability preflight succeeds. Other
+API generations remain unknown and writes fail closed. This preserves the
+decision's version-aware, capability-aware intent while avoiding patch-number
+releases when the consumed contracts are unchanged.
 - Project current observations down to the revision schema before historical verification or drift comparison. Compare only shared-managed and node-managed fields for convergence; observed-only and unsupported metadata remain visible but cannot create drift.
 - Model DNS, allowlists, clients, rewrites, blocked services and schedules, safety services, query-log policy, and statistics policy as shared desired state. Model DHCP configuration and static leases in UUID-keyed node overrides. Dynamic DHCP leases and redacted TLS status are observed-only.
 - Permit DHCP to be enabled on at most one node in a desired document. A deployment that hands off the role orders every desired-disabled node before the desired-enabled node and retains sequential stop-on-failure behavior.
