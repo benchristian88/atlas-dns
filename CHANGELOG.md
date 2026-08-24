@@ -51,7 +51,8 @@ interfaces.
 ### Fixed
 
 - Fixed onboarding and System Settings monitoring saves reflecting read-only
-  presentation fields into the strict update API payload.
+  presentation fields into the strict update API payload, and made a normal
+  monitoring save record the selected cluster's reviewed milestone.
 - Completed onboarding is not revoked by a transient node health failure; live
   topology evidence remains visible for remediation without trapping admins.
 - Preserved explicit unavailable and partial-source states on Dashboard instead

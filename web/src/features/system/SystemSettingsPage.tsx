@@ -3,9 +3,9 @@ import { ErrorState, Loading } from "../../components/Feedback";
 import { PageContainer, PageHeader } from "../../components/Page";
 import { SettingRow, SettingsGroup } from "../../components/Settings";
 import { api } from "../../lib/api";
-import type { SystemSettings } from "../../lib/types";
+import type { Cluster, SystemSettings } from "../../lib/types";
 
-export function SystemSettingsPage() {
+export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
   const [settings, setSettings] = useState<SystemSettings>();
   const [error, setError] = useState<unknown>();
   const load = useCallback(async () => {
@@ -36,7 +36,18 @@ export function SystemSettingsPage() {
   async function saveMonitoring() {
     if (!settings) return;
     try {
-      setSettings(await api.updateSystemSettings(settings));
+      const saved = await api.updateSystemSettings(settings);
+      setSettings(saved);
+      if (cluster) {
+        const onboarding = await api.onboardingStatus(cluster.id);
+        if (onboarding.state.monitoringReviewedAt === undefined) {
+          await api.updateOnboardingProgress(
+            cluster.id,
+            onboarding.state.recordVersion,
+            { monitoringReviewed: true },
+          );
+        }
+      }
       setError(undefined);
     } catch (caught) {
       setError(caught);

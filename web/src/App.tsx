@@ -177,7 +177,8 @@ function Application({ user, onLogout }: { user: User; onLogout: () => void }) {
   else if (route.kind === "backups") content = <BackupPage />;
   else if (route.kind === "updates") content = <UpdatesPage />;
   else if (route.kind === "about") content = <AboutPage />;
-  else if (route.kind === "system-settings") content = <SystemSettingsPage />;
+  else if (route.kind === "system-settings")
+    content = <SystemSettingsPage cluster={selected} />;
   else if (selected === undefined && route.kind === "onboarding")
     content = (
       <OnboardingPage
