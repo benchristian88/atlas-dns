@@ -90,6 +90,7 @@ func run() error {
 	inventoryService := inventory.NewService(store, credentialCipher, configurationAdapter)
 	haOperationsService := haoperations.NewService(store, management, inventoryService, probe, credentialCipher, haoperations.NewWireDNSProber(2*time.Second))
 	haOperationsService.SetVersionCompatibility(adguard.ConfigurationCompatibility)
+	haOperationsService.SetRuntimeSettings(runtimeSettings)
 	notificationService := haoperations.NewNotificationService(store, credentialCipher)
 	releaseChecker := haoperations.NewReleaseChecker(store)
 	operationService := operations.NewService(store, credentialCipher)

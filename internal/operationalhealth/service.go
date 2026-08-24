@@ -120,7 +120,7 @@ func (s *Service) Status(ctx context.Context, clusterID string) (Status, error) 
 	now := s.now().UTC()
 	status := Status{GeneratedAt: now, ClusterID: clusterID, API: Healthy, Database: database, Workers: s.tracker.Snapshot()}
 	status.Nodes = nodeHealth(nodes, now, maxDuration(3*options.NodeInterval, time.Minute))
-	status.DNSService = dnsServiceHealth(nodes, dnsProbes, now, maxDuration(3*options.NodeInterval, 2*time.Minute), options.NodeInterval)
+	status.DNSService = dnsServiceHealth(nodes, dnsProbes, now, haoperations.DNSFreshnessWindow(options.NodeInterval), options.NodeInterval)
 	if s.ha != nil {
 		status.HA, _ = s.ha.Summary(ctx, clusterID)
 	}
@@ -157,11 +157,11 @@ func dnsServiceHealth(nodes []domain.Node, probes []haoperations.DNSProbeResult,
 				if probe.Status == "healthy" {
 					item.State = Healthy
 					item.LastSuccessAt = &probe.ProbedAt
+					if now.Sub(probe.ProbedAt) > staleAfter {
+						item.State = Stale
+					}
 				} else {
 					item.State = Failed
-				}
-				if now.Sub(probe.ProbedAt) > staleAfter {
-					item.State = Stale
 				}
 				if probe.LatencyMS != nil {
 					lag := int64(*probe.LatencyMS)

@@ -25,6 +25,13 @@ management API reachability and actual DNS answers cannot be conflated. Detailed
 maintenance, certificate, version, notification, and upgrade actions live on HA
 Operations rather than expanding this diagnostic page.
 
+Scheduled node API and DNS evidence follows the persisted node-health cadence.
+Successful DNS evidence remains current for the greater of three configured
+intervals or two minutes; missing that deadline becomes `stale`, while an
+explicit failed probe remains failed until a later probe succeeds. The same DNS
+deadline is used by Dashboard, HA summary, Operational Status, and maintenance
+preflight so normal long polling intervals do not create contradictory health.
+
 Core Services uses the shared divided panel anatomy and semantic
 `SummaryTileGrid`. API state, PostgreSQL state/ping, schema version,
 and pool use remain the same information model, presented as four inset tiles

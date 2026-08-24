@@ -15,6 +15,7 @@ import (
 	"github.com/benchristian88/atlas-dns/internal/configuration"
 	"github.com/benchristian88/atlas-dns/internal/domain"
 	"github.com/benchristian88/atlas-dns/internal/inventory"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 )
 
 const BreakGlassConfirmation = "CONTINUE_WITHOUT_DNS_REDUNDANCY"
@@ -67,6 +68,9 @@ type Service struct {
 	warningDays   int
 	criticalDays  int
 	compatibility func(string) domain.Compatibility
+	runtime       interface {
+		RuntimeSettings() systemsettings.RuntimeSettings
+	}
 }
 
 func NewService(repository Repository, maintenance MaintenanceManager, observer Observer, apiProbe domain.NodeStatusProbe, credentials CredentialDecrypter, dnsProbe DNSProber) *Service {
@@ -77,6 +81,27 @@ func (s *Service) SetVersionCompatibility(check func(string) domain.Compatibilit
 	if check != nil {
 		s.compatibility = check
 	}
+}
+
+func (s *Service) SetRuntimeSettings(provider interface {
+	RuntimeSettings() systemsettings.RuntimeSettings
+}) {
+	s.runtime = provider
+}
+
+// DNSFreshnessWindow is the shared deadline for scheduled DNS probe evidence.
+// It tolerates two missed schedules while retaining a two-minute minimum for
+// the historical 30-second default. Explicit failed probes remain failures
+// immediately; this window only controls when prior evidence becomes stale.
+func DNSFreshnessWindow(interval time.Duration) time.Duration {
+	return max(3*interval, 2*time.Minute)
+}
+
+func (s *Service) dnsFreshnessWindow() time.Duration {
+	if s.runtime != nil {
+		return DNSFreshnessWindow(s.runtime.RuntimeSettings().NodeHealthInterval)
+	}
+	return DNSFreshnessWindow(0)
 }
 
 func (s *Service) Settings(ctx context.Context, nodeID string) (NodeSettings, error) {
@@ -392,12 +417,14 @@ func (s *Service) Summary(ctx context.Context, clusterID string) (HASummary, err
 	// nodes.  A nil slice serializes as null and forces browser clients to treat
 	// an ordinary first-run state as a malformed response.
 	summary := HASummary{Nodes: []HANodeStatus{}}
+	now := s.now().UTC()
+	freshnessWindow := s.dnsFreshnessWindow()
 	for _, node := range nodes {
 		dnsState := HANodeStatus{NodeID: node.ID, DNSStatus: "unknown", UDPStatus: "unknown", TCPStatus: "unknown"}
 		if probe, ok := probeByNode[node.ID]; ok {
 			dnsState.DNSStatus, dnsState.UDPStatus, dnsState.TCPStatus = probe.Status, probe.UDPStatus, probe.TCPStatus
 			dnsState.DNSProbedAt, dnsState.ErrorCode = &probe.ProbedAt, probe.ErrorCode
-			if s.now().UTC().Sub(probe.ProbedAt) > 2*time.Minute {
+			if probe.Status == "healthy" && now.Sub(probe.ProbedAt) > freshnessWindow {
 				dnsState.DNSStatus = "stale"
 			}
 		}
@@ -420,7 +447,7 @@ func (s *Service) Summary(ctx context.Context, clusterID string) (HASummary, err
 		if node.Enabled && !node.MaintenanceMode && node.ConvergenceStatus == "converged" {
 			summary.ConvergedNodes++
 		}
-		if probe, ok := probeByNode[node.ID]; ok && node.Enabled && !node.MaintenanceMode && probe.Status == "healthy" && s.now().UTC().Sub(probe.ProbedAt) <= 2*time.Minute {
+		if probe, ok := probeByNode[node.ID]; ok && node.Enabled && !node.MaintenanceMode && probe.Status == "healthy" && now.Sub(probe.ProbedAt) <= freshnessWindow {
 			summary.ServingDNSNodes++
 		}
 	}
@@ -528,8 +555,10 @@ func (s *Service) MaintenancePreflight(ctx context.Context, nodeID string) (Main
 		return MaintenancePreflight{}, err
 	}
 	activeDHCP := s.nodeActiveDHCP(ctx, node.ClusterID, nodeID)
+	now := s.now().UTC()
+	freshnessWindow := s.dnsFreshnessWindow()
 	remaining := summary.ServingDNSNodes
-	if latest, latestErr := s.repository.LatestDNSProbe(ctx, nodeID); latestErr == nil && latest.Status == "healthy" && !node.MaintenanceMode && s.now().UTC().Sub(latest.ProbedAt) <= 2*time.Minute {
+	if latest, latestErr := s.repository.LatestDNSProbe(ctx, nodeID); latestErr == nil && latest.Status == "healthy" && !node.MaintenanceMode && now.Sub(latest.ProbedAt) <= freshnessWindow {
 		remaining--
 	}
 	if remaining < 0 {
@@ -544,7 +573,7 @@ func (s *Service) MaintenancePreflight(ctx context.Context, nodeID string) (Main
 	}
 	targetDNSHealthy := false
 	if latest, latestErr := s.repository.LatestDNSProbe(ctx, nodeID); latestErr == nil {
-		targetDNSHealthy = latest.Status == "healthy" && s.now().UTC().Sub(latest.ProbedAt) <= 2*time.Minute
+		targetDNSHealthy = latest.Status == "healthy" && now.Sub(latest.ProbedAt) <= freshnessWindow
 	}
 	tlsCheck := Check{Name: "tls", Status: "unknown", ErrorCode: "TLS_STATE_UNAVAILABLE", Message: "TLS configuration state is unavailable"}
 	if snapshots, snapshotErr := s.repository.LatestSuccessfulSnapshots(ctx, node.ClusterID); snapshotErr == nil {

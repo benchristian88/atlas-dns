@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/benchristian88/atlas-dns/internal/domain"
+	"github.com/benchristian88/atlas-dns/internal/haoperations"
 	"github.com/benchristian88/atlas-dns/internal/inventory"
 	"github.com/benchristian88/atlas-dns/internal/querylog"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 	"github.com/benchristian88/atlas-dns/internal/telemetry"
 )
 
@@ -16,6 +18,7 @@ type repositoryFake struct {
 	snapshots   []inventory.Snapshot
 	attempts    []telemetry.NodeAttempt
 	checkpoints []querylog.Checkpoint
+	dnsProbes   []haoperations.DNSProbeResult
 	database    Database
 }
 
@@ -39,6 +42,9 @@ func (r repositoryFake) LatestStatisticsAttempts(context.Context, string, string
 }
 func (r repositoryFake) QueryLogCheckpoints(context.Context, string, string) ([]querylog.Checkpoint, error) {
 	return r.checkpoints, nil
+}
+func (r repositoryFake) LatestDNSProbes(context.Context, string) ([]haoperations.DNSProbeResult, error) {
+	return r.dnsProbes, nil
 }
 func (r repositoryFake) OperationalDatabase(context.Context, time.Duration, time.Duration) (Database, error) {
 	return r.database, nil
@@ -78,6 +84,57 @@ func TestDatabaseFailureFailsOverallHealth(t *testing.T) {
 	}
 	if status.Summary.State != Failed || !status.Summary.ActionRequired {
 		t.Fatalf("summary = %#v", status.Summary)
+	}
+}
+
+func TestDNSHealthUsesLiveRuntimeFreshnessWindow(t *testing.T) {
+	now := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	probedAt := now.Add(-5 * time.Minute)
+	nodeID := "22222222-2222-4222-8222-222222222222"
+	repository := repositoryFake{
+		nodes:     []domain.Node{{ID: nodeID, Name: "dns-primary", Enabled: true, HealthStatus: domain.NodeHealthy}},
+		dnsProbes: []haoperations.DNSProbeResult{{NodeID: nodeID, Status: "healthy", ProbedAt: probedAt}},
+		database:  Database{State: Healthy},
+	}
+	runtime := systemsettings.NewRuntimeStore(systemsettings.RuntimeSettings{
+		NodeHealthInterval: 6 * time.Minute, StatisticsPollInterval: time.Hour,
+		QueryLogCollection: true, QueryLogPollInterval: 30 * time.Second, QueryLogRetention: 24 * time.Hour,
+	})
+	service := NewService(repository, NewTracker(), Options{NodeInterval: 30 * time.Second, RequestTimeout: 10 * time.Second, StatisticsInterval: time.Hour, QueryLogInterval: 30 * time.Second, QueryLogEnabled: true})
+	service.SetRuntimeSettings(runtime)
+	service.now = func() time.Time { return now }
+
+	status, err := service.Status(context.Background(), "11111111-1111-4111-8111-111111111111")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.DNSService.State != Healthy || status.DNSService.Nodes[0].State != Healthy {
+		t.Fatalf("long-interval DNS health=%#v", status.DNSService)
+	}
+
+	runtime.Update(systemsettings.RuntimeSettings{
+		NodeHealthInterval: 30 * time.Second, StatisticsPollInterval: time.Hour,
+		QueryLogCollection: true, QueryLogPollInterval: 30 * time.Second, QueryLogRetention: 24 * time.Hour,
+	})
+	status, err = service.Status(context.Background(), "11111111-1111-4111-8111-111111111111")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.DNSService.State != Degraded || status.DNSService.Nodes[0].State != Stale {
+		t.Fatalf("live short-interval DNS health=%#v", status.DNSService)
+	}
+}
+
+func TestDNSHealthKeepsExplicitFailureAfterFreshnessWindow(t *testing.T) {
+	now := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	nodeID := "22222222-2222-4222-8222-222222222222"
+	result := dnsServiceHealth(
+		[]domain.Node{{ID: nodeID, Name: "dns-primary", Enabled: true}},
+		[]haoperations.DNSProbeResult{{NodeID: nodeID, Status: "failed", ErrorCode: "DNS_PROBE_UNREACHABLE", ProbedAt: now.Add(-20 * time.Minute)}},
+		now, 2*time.Minute, 30*time.Second,
+	)
+	if result.State != Failed || result.Nodes[0].State != Failed || result.Nodes[0].ErrorCode != "DNS_PROBE_UNREACHABLE" {
+		t.Fatalf("aged explicit failure health=%#v", result)
 	}
 }
 

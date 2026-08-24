@@ -106,7 +106,10 @@ Statistics polling cadence, Query Log collection, Query Log polling cadence,
 and central Query Log retention. Changes use optimistic concurrency, are
 audited, and update collector scheduling without restart. Database connectivity,
 secrets, listener settings, and the public origin remain protected deployment
-configuration. Use Operational Status to verify effective worker behavior.
+configuration. API and DNS freshness deadlines expand with the selected node
+health cadence; an explicit probe failure still takes effect immediately. Use
+Operational Status to verify effective worker behavior and the next scheduled
+run.
 
 ## About
 
