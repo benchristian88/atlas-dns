@@ -106,6 +106,7 @@ export function OnboardingPage({
         />
         {error !== undefined && <ErrorState error={error} />}
         <ClusterCreate
+          layout="onboarding"
           onCreated={(created) => {
             onClusterCreated?.(created);
             window.history.replaceState({}, "", "/onboarding");
@@ -309,19 +310,32 @@ export function OnboardingPage({
                 source of truth. Atlas will retain every node&apos;s listener
                 identity in the draft.
               </p>
-              {successfulSources.map((item) => (
-                <label className="onboarding-source" key={item.node.id}>
-                  <input
-                    type="radio"
-                    name="baseline-source"
-                    value={item.snapshot?.id}
-                    checked={sourceSnapshot === item.snapshot?.id}
-                    onChange={() => setSourceSnapshot(item.snapshot?.id ?? "")}
-                  />
-                  <strong>{item.node.name}</strong>
-                  <span>{item.node.version}</span>
-                </label>
-              ))}
+              {successfulSources.map((item) => {
+                const selected = sourceSnapshot === item.snapshot?.id;
+                return (
+                  <label
+                    className={`onboarding-source${selected ? " is-selected" : ""}`}
+                    key={item.node.id}
+                  >
+                    <input
+                      type="radio"
+                      name="baseline-source"
+                      value={item.snapshot?.id}
+                      checked={sourceSnapshot === item.snapshot?.id}
+                      onChange={() =>
+                        setSourceSnapshot(item.snapshot?.id ?? "")
+                      }
+                    />
+                    <span className="onboarding-source__details">
+                      <strong>{item.node.name}</strong>
+                      <small>{item.node.version}</small>
+                    </span>
+                    <span className="onboarding-source__selection">
+                      {selected ? "Selected" : "Select"}
+                    </span>
+                  </label>
+                );
+              })}
               {successfulSources.length > 1 && (
                 <button
                   className="button button--secondary"
@@ -564,7 +578,7 @@ export function OnboardingPage({
             disabled={!status.canFinish || busy !== ""}
             onClick={() => void finish()}
           >
-            Finish onboarding
+            {busy === "finish" ? "Preparing dashboard…" : "Finish onboarding"}
           </button>
         </Step>
       )}

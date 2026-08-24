@@ -53,6 +53,18 @@ function status(overrides: Partial<OnboardingStatus> = {}): OnboardingStatus {
 }
 
 describe("OnboardingPage", () => {
+  it("uses the full onboarding card width for initial cluster creation", async () => {
+    vi.spyOn(api, "onboardingStatus").mockResolvedValue(status());
+    render(<OnboardingPage />);
+
+    const heading = await screen.findByRole("heading", {
+      name: "Create a cluster",
+    });
+    const form = heading.closest("form");
+    expect(form?.classList.contains("onboarding-cluster-form")).toBe(true);
+    expect(form?.classList.contains("compact-form")).toBe(false);
+  });
+
   it("resumes at the first node and blocks an old AdGuard version before storage", async () => {
     const user = userEvent.setup();
     vi.spyOn(api, "onboardingStatus").mockResolvedValue(status());
@@ -174,6 +186,9 @@ describe("OnboardingPage", () => {
     });
     expect((establish as HTMLButtonElement).disabled).toBe(true);
     await user.click(screen.getByLabelText(/Secondary/));
+    const selectedSource = screen.getByLabelText(/Secondary/).closest("label");
+    expect(selectedSource?.classList.contains("is-selected")).toBe(true);
+    expect(selectedSource?.textContent).toContain("Selected");
     expect((establish as HTMLButtonElement).disabled).toBe(true);
     await user.click(
       screen.getByRole("button", { name: "Review differences first" }),

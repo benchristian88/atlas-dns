@@ -2,6 +2,9 @@ package onboarding
 
 import (
 	"context"
+	"errors"
+	"io"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -74,6 +77,16 @@ func (settingsReaderFake) Get(context.Context) (systemsettings.Settings, error) 
 		NodeHealthIntervalSeconds: 30, StatisticsPollIntervalSeconds: 3600,
 		QueryLogCollectionEnabled: true, QueryLogPollIntervalSeconds: 30, QueryLogRetentionSeconds: 604800,
 	}, nil
+}
+
+type initialCollectorFake struct {
+	clusterID string
+	err       error
+}
+
+func (f *initialCollectorFake) CollectInitial(_ context.Context, clusterID string) error {
+	f.clusterID = clusterID
+	return f.err
 }
 
 func newOnboardingService(repository *onboardingRepositoryFake) *Service {
@@ -162,12 +175,17 @@ func TestFinishIsAuditedAndNotRevokedByTransientHealth(t *testing.T) {
 	node, snapshot, profile := readyNode("v0.107.79")
 	repository.nodes, repository.snapshots, repository.profiles = []domain.Node{node}, []inventory.Snapshot{snapshot}, []inventory.CapabilityProfile{profile}
 	service := newOnboardingService(repository)
+	collector := &initialCollectorFake{err: errors.New("one collector unavailable")}
+	service.SetInitialCollector(collector, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	status, err := service.Finish(context.Background(), domain.Actor{UserID: testUserID, RequestID: "request"}, testClusterID, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !status.Completed || status.SetupRequired || status.ResumeStep != StepComplete || repository.lastAudit.Action != "onboarding.completed" {
 		t.Fatalf("completed status=%#v audit=%#v", status, repository.lastAudit)
+	}
+	if collector.clusterID != testClusterID {
+		t.Fatalf("initial collection cluster = %q", collector.clusterID)
 	}
 	repository.nodes[0].HealthStatus = domain.NodeUnreachable
 	status, err = service.Status(context.Background(), testClusterID)

@@ -227,9 +227,28 @@ func (s *Service) ProbeNode(ctx context.Context, nodeID string) (DNSProbeResult,
 }
 
 func (s *Service) PollAll(ctx context.Context) error {
+	return s.poll(ctx, "")
+}
+
+// PollCluster refreshes DNS service evidence and derived HA transitions for a
+// single cluster without waiting for the controller-wide scheduled pass.
+func (s *Service) PollCluster(ctx context.Context, clusterID string) error {
+	return s.poll(ctx, clusterID)
+}
+
+func (s *Service) poll(ctx context.Context, clusterID string) error {
 	records, err := s.repository.PollableNodes(ctx)
 	if err != nil {
 		return err
+	}
+	if clusterID != "" {
+		filtered := make([]domain.NodeRecord, 0, len(records))
+		for _, record := range records {
+			if record.Node.ClusterID == clusterID {
+				filtered = append(filtered, record)
+			}
+		}
+		records = filtered
 	}
 	clusters := map[string]bool{}
 	semaphore := make(chan struct{}, 4)

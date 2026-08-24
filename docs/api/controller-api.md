@@ -57,7 +57,10 @@ topology facts, the first qualifying schema-v2 revision, monitoring settings,
 notification count, and `canFinish`. Progress accepts the current onboarding
 `recordVersion` plus optional `redundancySkipped`, `monitoringReviewed`, and
 `notificationsSkipped` booleans. Finish fails with conflict until the
-server-derived prerequisites are satisfied.
+server-derived prerequisites are satisfied. After recording completion, Finish
+runs one cluster-scoped node-health, DNS-health, Statistics, and Query Log pass
+concurrently with a 20-second overall limit. Collection failures do not roll
+back completion and remain visible through the normal operational endpoints.
 
 Node candidate validation accepts the normal node-creation payload, applies the
 same SSRF/TLS/credential/status probe without storing it, and adds

@@ -156,7 +156,9 @@ func run() error {
 	apiServer.SetBackups(backupService)
 	apiServer.SetControllerUpdates(controllerUpdates)
 	apiServer.SetSystemSettings(systemSettings)
-	apiServer.SetOnboarding(onboarding.NewService(store, systemSettings, configuration.PublicBaseURL.String()))
+	onboardingService := onboarding.NewService(store, systemSettings, configuration.PublicBaseURL.String())
+	onboardingService.SetInitialCollector(jobs.NewOnboardingCollector(healthPoller, statisticsPoller, queryLogPoller, haOperationsService), logger)
+	apiServer.SetOnboarding(onboardingService)
 	apiServer.SetRuntimeSettings(runtimeSettings)
 	apiServer.SetMetrics(workerHealth, configuration.MetricsToken)
 	httpServer := &http.Server{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -58,6 +59,10 @@ type SettingsReader interface {
 	Get(context.Context) (systemsettings.Settings, error)
 }
 
+type InitialCollector interface {
+	CollectInitial(context.Context, string) error
+}
+
 type Status struct {
 	SetupRequired      bool                    `json:"setupRequired"`
 	Completed          bool                    `json:"completed"`
@@ -90,11 +95,20 @@ type Service struct {
 	repository    Repository
 	settings      SettingsReader
 	publicBaseURL string
+	collector     InitialCollector
+	logger        *slog.Logger
 	now           func() time.Time
 }
 
 func NewService(repository Repository, settings SettingsReader, publicBaseURL string) *Service {
-	return &Service{repository: repository, settings: settings, publicBaseURL: publicBaseURL, now: time.Now}
+	return &Service{repository: repository, settings: settings, publicBaseURL: publicBaseURL, logger: slog.Default(), now: time.Now}
+}
+
+func (s *Service) SetInitialCollector(collector InitialCollector, logger *slog.Logger) {
+	s.collector = collector
+	if logger != nil {
+		s.logger = logger
+	}
 }
 
 func (s *Service) Status(ctx context.Context, clusterID string) (Status, error) {
@@ -303,7 +317,18 @@ func (s *Service) Finish(ctx context.Context, actor domain.Actor, clusterID stri
 	if err := s.repository.SaveOnboardingState(ctx, state, expectedVersion, event); err != nil {
 		return Status{}, err
 	}
-	return s.Status(ctx, clusterID)
+	completed, err := s.Status(ctx, clusterID)
+	if err != nil {
+		return Status{}, err
+	}
+	if s.collector != nil {
+		collectionContext, cancel := context.WithTimeout(ctx, 20*time.Second)
+		if collectionErr := s.collector.CollectInitial(collectionContext, clusterID); collectionErr != nil {
+			s.logger.Warn("onboarding initial dashboard collection was incomplete", "cluster_id", clusterID, "error", collectionErr)
+		}
+		cancel()
+	}
+	return completed, nil
 }
 
 func onboardingAudit(actor domain.Actor, action, clusterID string, metadata map[string]any, at time.Time) (domain.AuditEvent, error) {

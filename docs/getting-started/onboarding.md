@@ -22,7 +22,7 @@ The sequence is:
 5. explicit selection of the initial configuration source;
 6. monitoring settings review;
 7. encrypted webhook configuration and test, or deliberate skip;
-8. review and completion.
+8. review, audited completion, and an initial dashboard collection pass.
 
 Atlas resumes at the first unmet requirement. Existing nodes are shown instead
 of recreated, an existing schema-v2 revision satisfies the authoritative-state
@@ -70,6 +70,14 @@ UI changes are adopted by collector scheduling without a controller restart.
 Recommended defaults are 30 seconds, one hour, enabled, 30 seconds, and seven
 days respectively.
 
+Finishing onboarding immediately runs the normal node-health, DNS-health,
+Statistics, and Query Log collectors for the selected cluster. The collectors
+run concurrently with a 20-second overall limit before the completed screen is
+shown, so the Dashboard starts with current durable evidence instead of waiting
+for the next configured interval. A failed or disabled source is recorded using
+its normal operational state; it does not undo the audited completion, and the
+scheduled collectors continue from the configured cadence.
+
 Webhook destinations remain encrypted and write-only. Choose one or more of
 DNS, redundancy, certificate, version, maintenance, and upgrade event
 categories, then send the bounded Test Webhook. Notifications are optional and
@@ -79,7 +87,8 @@ may be skipped.
 
 Every onboarding API is administrator-only. Browser mutations require the
 normal session-bound CSRF token and optimistic record version; progress and
-completion are audited. Node credentials and webhook URL path/query values are
-never returned. A failed later step leaves prior cluster, node, observation,
-draft, or revision work intact so the operator can exit, correct the issue, and
-resume safely.
+completion are audited. Initial collection is read-only against the nodes and
+cannot change their DNS or managed configuration. Node credentials and webhook
+URL path/query values are never returned. A failed later step leaves prior
+cluster, node, observation, draft, or revision work intact so the operator can
+exit, correct the issue, and resume safely.

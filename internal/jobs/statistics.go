@@ -69,7 +69,18 @@ func (p *StatisticsPoller) Run(ctx context.Context) {
 	}
 }
 
+// PollClusterNow performs an immediate bounded collection for one cluster.
+// It deliberately reuses the scheduled collection path so attempts and
+// snapshots remain identical, while leaving global retention to its schedule.
+func (p *StatisticsPoller) PollClusterNow(ctx context.Context, clusterID string) error {
+	return p.pollCluster(ctx, clusterID, false)
+}
+
 func (p *StatisticsPoller) poll(ctx context.Context) {
+	_ = p.pollCluster(ctx, "", true)
+}
+
+func (p *StatisticsPoller) pollCluster(ctx context.Context, clusterID string, cleanup bool) error {
 	interval := p.currentInterval()
 	if p.health != nil {
 		p.health.Start("statistics_collection", p.now().UTC().Add(interval))
@@ -80,11 +91,14 @@ func (p *StatisticsPoller) poll(ctx context.Context) {
 		if p.health != nil {
 			p.health.Failure("statistics_collection", "STATISTICS_NODE_LIST_FAILED", p.now().UTC().Add(interval))
 		}
-		return
+		return err
 	}
 	semaphore := make(chan struct{}, p.concurrency)
 	var group sync.WaitGroup
 	for _, record := range records {
+		if clusterID != "" && record.Node.ClusterID != clusterID {
+			continue
+		}
 		record := record
 		group.Add(1)
 		go func() {
@@ -102,6 +116,9 @@ func (p *StatisticsPoller) poll(ctx context.Context) {
 	if p.health != nil {
 		p.health.Success("statistics_collection", p.now().UTC().Add(interval))
 	}
+	if !cleanup {
+		return nil
+	}
 	if p.health != nil {
 		p.health.Start("statistics_retention", p.now().UTC().Add(interval))
 	}
@@ -110,11 +127,12 @@ func (p *StatisticsPoller) poll(ctx context.Context) {
 		if p.health != nil {
 			p.health.Failure("statistics_retention", "STATISTICS_RETENTION_FAILED", p.now().UTC().Add(interval))
 		}
-		return
+		return err
 	}
 	if p.health != nil {
 		p.health.Success("statistics_retention", p.now().UTC().Add(interval))
 	}
+	return nil
 }
 
 func (p *StatisticsPoller) pollNode(ctx context.Context, record domain.NodeRecord) {

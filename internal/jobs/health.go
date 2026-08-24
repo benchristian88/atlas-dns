@@ -84,7 +84,17 @@ func (p *HealthPoller) PollNow(ctx context.Context, nodeID string) error {
 	return domain.NewError(domain.ErrorNotFound, "node was not found or is disabled")
 }
 
+// PollClusterNow refreshes every enabled node in one cluster using the same
+// durable health path as the scheduled worker.
+func (p *HealthPoller) PollClusterNow(ctx context.Context, clusterID string) error {
+	return p.pollCluster(ctx, clusterID)
+}
+
 func (p *HealthPoller) poll(ctx context.Context) {
+	_ = p.pollCluster(ctx, "")
+}
+
+func (p *HealthPoller) pollCluster(ctx context.Context, clusterID string) error {
 	interval := p.currentInterval()
 	if p.health != nil {
 		p.health.Start("node_connectivity", p.now().UTC().Add(interval))
@@ -95,11 +105,14 @@ func (p *HealthPoller) poll(ctx context.Context) {
 		if p.health != nil {
 			p.health.Failure("node_connectivity", "NODE_LIST_FAILED", p.now().UTC().Add(interval))
 		}
-		return
+		return err
 	}
 	semaphore := make(chan struct{}, p.concurrency)
 	var group sync.WaitGroup
 	for _, record := range records {
+		if clusterID != "" && record.Node.ClusterID != clusterID {
+			continue
+		}
 		record := record
 		group.Add(1)
 		go func() {
@@ -117,6 +130,7 @@ func (p *HealthPoller) poll(ctx context.Context) {
 	if p.health != nil {
 		p.health.Success("node_connectivity", p.now().UTC().Add(interval))
 	}
+	return nil
 }
 
 func (p *HealthPoller) pollNode(ctx context.Context, record domain.NodeRecord) {
