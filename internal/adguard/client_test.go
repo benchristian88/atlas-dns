@@ -194,6 +194,22 @@ func TestConfigurationCompatibilityBoundaries(t *testing.T) {
 	}
 }
 
+func TestOnboardingCompatibilityBoundaries(t *testing.T) {
+	t.Parallel()
+	for version, want := range map[string]domain.Compatibility{
+		"v0.107.77": domain.CompatibilityUnsupported,
+		"v0.107.78": domain.CompatibilitySupported,
+		"v0.107.79": domain.CompatibilitySupported,
+		"v0.107.80": domain.CompatibilitySupported,
+		"v0.108.0":  domain.CompatibilityUnknown,
+		"invalid":   domain.CompatibilityUnknown,
+	} {
+		if got := OnboardingCompatibility(version); got != want {
+			t.Errorf("OnboardingCompatibility(%q) = %q, want %q", version, got, want)
+		}
+	}
+}
+
 func TestProbeRejectsInvalidStatusSemantics(t *testing.T) {
 	for name, body := range map[string]string{
 		"missing running":            `{"version":"v0.107.79","protection_enabled":true,"protection_disabled_duration":0}`,

@@ -28,6 +28,18 @@ an authorization control.
 - Content security and other response headers should be reinforced by the
   trusted TLS reverse proxy where deployment policy requires it.
 
+Guided onboarding is not part of public administrator bootstrap. Its status,
+node candidate validation, progress, and finish routes require administrator
+authorization; mutations also require session-bound CSRF and optimistic
+concurrency. Candidate validation reuses normal node URL/SSRF, TLS trust,
+bounded response, credential, and AdGuard status checks.
+
+The browser may hold node credentials or a webhook URL only while its form is
+submitted. Status and re-entry expose canonical node metadata and safe webhook
+counts, never those secrets. Deliberate skips and completion are audited, while
+node creation, revision publication, monitoring changes, webhook creation, and
+Test Webhook keep their existing dedicated audit/transaction boundaries.
+
 ## Secrets
 
 Node credentials and webhook destinations are encrypted at rest with

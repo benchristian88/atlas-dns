@@ -11,6 +11,7 @@ not part of the operator documentation set.
 - [Portainer Stack installation](getting-started/portainer.md)
 - [Debian 13 and systemd installation](getting-started/native-systemd.md)
 - [Manual release archive installation](getting-started/manual-release.md)
+- [Guided first-run onboarding](getting-started/onboarding.md)
 - [User guide](user-guide/overview.md)
 - [Administration guide](administration/administration.md)
 

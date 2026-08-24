@@ -191,7 +191,11 @@ func (s *Server) handleListNodes(response http.ResponseWriter, request *http.Req
 		s.writeError(response, request, err)
 		return
 	}
-	staleAfterSeconds := max(int64(s.healthInterval/time.Second)*3, 1)
+	healthInterval := s.healthInterval
+	if s.runtime != nil {
+		healthInterval = s.runtime.RuntimeSettings().NodeHealthInterval
+	}
+	staleAfterSeconds := max(int64(healthInterval/time.Second)*3, 1)
 	writeJSON(response, http.StatusOK, map[string]any{
 		"items": nodes, "refreshedAt": time.Now().UTC(), "staleAfterSeconds": staleAfterSeconds,
 	})

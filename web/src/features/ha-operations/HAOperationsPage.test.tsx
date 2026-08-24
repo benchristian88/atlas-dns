@@ -248,7 +248,7 @@ describe("HA operations", () => {
       enabled: true,
       destinationSet: true,
       destinationSummary: "https://hooks.example.test",
-      subscribedEvents: ["all_ha_transitions"],
+      subscribedCategories: ["redundancy"],
       recordVersion: 3,
       createdAt: "2026-08-09T00:00:00Z",
       updatedAt: "2026-08-09T01:00:00Z",
@@ -294,6 +294,7 @@ describe("HA operations", () => {
         name: "Operations renamed",
         enabled: true,
         recordVersion: 3,
+        subscribedCategories: ["redundancy"],
       }),
     );
 
@@ -309,6 +310,7 @@ describe("HA operations", () => {
         name: channel.name,
         enabled: true,
         recordVersion: 3,
+        subscribedCategories: ["redundancy"],
         destination:
           "https://replacement.example.test/private?token=new-hidden",
         replaceDestination: true,
@@ -321,6 +323,7 @@ describe("HA operations", () => {
         name: channel.name,
         enabled: false,
         recordVersion: 3,
+        subscribedCategories: ["redundancy"],
       }),
     );
     await user.click(screen.getByRole("button", { name: "Test" }));
@@ -348,6 +351,14 @@ describe("HA operations", () => {
         name: "Pager",
         destination: "https://pager.example.test/hook?token=hidden",
         enabled: true,
+        subscribedCategories: [
+          "dns",
+          "redundancy",
+          "certificates",
+          "versions",
+          "maintenance",
+          "upgrades",
+        ],
       }),
     );
   }, 15_000);

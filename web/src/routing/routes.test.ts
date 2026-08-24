@@ -37,6 +37,7 @@ describe("canonical route safety", () => {
       "/ha/deployments": "deployments",
       "/ha/drift": "drift",
       "/setup-guide": "setup-guide",
+      "/onboarding": "onboarding",
       "/system/users": "users",
       "/system/audit": "audit",
       "/system/operational-status": "operational-status",

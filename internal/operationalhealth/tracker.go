@@ -34,6 +34,16 @@ func (t *Tracker) Register(name string, paused bool) {
 	t.workers[name] = workerState{Worker: Worker{Name: name, State: state}}
 }
 
+func (t *Tracker) Pause(name string, next time.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	item := t.workers[name]
+	item.Name, item.State, item.Running, item.startedAt = name, Paused, false, nil
+	item.NextScheduledAt = timePtr(next)
+	item.ErrorCode, item.ConsecutiveFailures = "", 0
+	t.workers[name] = item
+}
+
 func (t *Tracker) Start(name string, next time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

@@ -40,9 +40,65 @@ export interface ControllerUpdateStatus {
 export interface SystemSettings {
   updateChecksEnabled: boolean;
   recordVersion: number;
+  nodeHealthIntervalSeconds: number;
+  statisticsPollIntervalSeconds: number;
+  queryLogCollectionEnabled: boolean;
+  queryLogPollIntervalSeconds: number;
+  queryLogRetentionSeconds: number;
   queryLogRetention: string;
   statisticsRetention: string;
   installationType: string;
+}
+
+export type OnboardingStep =
+  | "welcome"
+  | "controller_identity"
+  | "primary_node"
+  | "secondary_node"
+  | "topology_validation"
+  | "baseline_selection"
+  | "monitoring"
+  | "notifications"
+  | "review"
+  | "completed";
+
+export interface OnboardingState {
+  clusterId: string;
+  redundancySkippedAt?: string;
+  monitoringReviewedAt?: string;
+  notificationsSkippedAt?: string;
+  completedAt?: string;
+  completedBy?: string;
+  recordVersion: number;
+  updatedAt?: string;
+}
+
+export interface OnboardingNodeStatus {
+  node: Node;
+  onboardingCompatible: boolean;
+  configurationAvailable: boolean;
+  capability?: CapabilityProfile;
+  snapshot?: ConfigurationSnapshot;
+}
+
+export interface OnboardingStatus {
+  setupRequired: boolean;
+  completed: boolean;
+  resumeStep: OnboardingStep;
+  publicBaseUrl: string;
+  cluster?: Cluster;
+  state: OnboardingState;
+  nodes: OnboardingNodeStatus[];
+  nodeCount: number;
+  eligibleNodeCount: number;
+  redundant: boolean;
+  topologyReady: boolean;
+  authoritativeReady: boolean;
+  revision?: ConfigurationRevision;
+  monitoring: SystemSettings;
+  notificationCount: number;
+  notificationsReady: boolean;
+  canFinish: boolean;
 }
 
 export interface BackupManifest {
@@ -979,7 +1035,7 @@ export interface NotificationChannel {
   enabled: boolean;
   destinationSet: boolean;
   destinationSummary: string;
-  subscribedEvents: string[];
+  subscribedCategories: string[];
   recordVersion: number;
   createdAt: string;
   updatedAt: string;

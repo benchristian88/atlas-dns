@@ -57,6 +57,9 @@ Settings and Filters exclusively author desired AdGuard Home configuration.
 Notifications belongs to HA Controller because it configures Atlas delivery of
 HA lifecycle events. There is no general Integrations destination. Setup Guide
 is state-derived reference/help and is not a first-run onboarding mechanism.
+Guided onboarding is a state-aware authenticated workflow offered for
+incomplete setup or launched manually from Setup Guide; it does not add a
+second permanent navigation section.
 
 ## Route map
 
@@ -91,6 +94,7 @@ is state-derived reference/help and is not a first-run onboarding mechanism.
 | `/system/updates` | Administration | Updates |
 | `/system/about` | Administration | About |
 | `/setup-guide` | Help utility | Setup Guide |
+| `/onboarding` | Setup Guide/manual offer | Guided onboarding or completed review |
 
 All pre-v1.1 supported routes remain supported. Compatibility redirects retain
 query strings and fragments. Unknown routes render Not Found and never silently
@@ -149,6 +153,10 @@ column; KPI cells wrap two-by-two; and node tables keep their established
 contained horizontal treatment. The shell does not use document-level
 horizontal clipping as a substitute for component responsiveness. iOS safe
 areas remain supported and browser zoom is not disabled.
+
+The onboarding progress rail scrolls locally on narrow screens, source cards
+become one column, and actions wrap. Exit, Back, validation errors, retry, and
+all labelled native fields remain reachable without document-level overflow.
 
 ## Dashboard purpose
 

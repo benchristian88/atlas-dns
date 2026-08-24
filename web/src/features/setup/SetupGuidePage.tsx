@@ -1,112 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
-import { ErrorState, Loading } from "../../components/Feedback";
+import { Banner, ErrorState, Loading } from "../../components/Feedback";
 import { PageContainer, PageHeader } from "../../components/Page";
 import { api } from "../../lib/api";
-import type { Cluster } from "../../lib/types";
+import type { Cluster, OnboardingStatus } from "../../lib/types";
 
-type Step = { label: string; complete: boolean; href: string; action: string };
+type GuideStep = {
+  label: string;
+  complete: boolean;
+  href: string;
+  action: string;
+  required: boolean;
+};
+
 export function SetupGuidePage({ cluster }: { cluster: Cluster }) {
-  const [steps, setSteps] = useState<Step[]>();
+  const [status, setStatus] = useState<OnboardingStatus>();
   const [error, setError] = useState<unknown>();
   const load = useCallback(async () => {
-    setSteps(undefined);
     setError(undefined);
     try {
-      const [
-        nodes,
-        inventory,
-        revisions,
-        deployments,
-        statistics,
-        queries,
-        health,
-        operational,
-      ] = await Promise.all([
-        api.nodes(cluster.id),
-        api.configurationInventory(cluster.id),
-        api.configurationRevisions(cluster.id),
-        api.deployments(cluster.id),
-        api.statistics(cluster.id, "24h"),
-        api.queryEvents(cluster.id, { limit: 1 }),
-        api.haStatus(cluster.id),
-        api.operationalStatus(cluster.id),
-      ]);
-      const nodeItems = nodes.items;
-      const draft = inventory.draft;
-      const revisionItems = revisions.items;
-      const deploymentItems = deployments.items;
-      setSteps([
-        {
-          label: "Administrator configured",
-          complete: true,
-          href: "/system/users",
-          action: "Manage administrators",
-        },
-        {
-          label: "First AdGuard Home node added",
-          complete: nodeItems.filter((node) => node.enabled).length >= 1,
-          href: "/ha/nodes",
-          action: "Add first node",
-        },
-        {
-          label: "Redundant node added",
-          complete: nodeItems.filter((node) => node.enabled).length >= 2,
-          href: "/ha/nodes",
-          action: "Add redundant node",
-        },
-        {
-          label: "Configuration observed",
-          complete: inventory.snapshots.length > 0,
-          href: "/ha/configuration",
-          action: "Observe configuration",
-        },
-        {
-          label: "Desired draft adopted",
-          complete: draft !== undefined,
-          href: "/ha/configuration",
-          action: "Import desired state",
-        },
-        {
-          label: "Immutable revision published",
-          complete: revisionItems.length > 0,
-          href: "/ha/revisions",
-          action: "Validate and publish",
-        },
-        {
-          label: "Active revision deployed",
-          complete:
-            revisionItems.some((revision) => revision.active) &&
-            deploymentItems.some(
-              (deployment) => deployment.status === "succeeded",
-            ),
-          href: "/ha/deployments",
-          action: "Deploy revision",
-        },
-        {
-          label: "Statistics current",
-          complete: statistics.totals.dnsQueries > 0,
-          href: "/statistics",
-          action: "Check Statistics",
-        },
-        {
-          label: "Query Log current",
-          complete: queries.items.length > 0,
-          href: "/query-log",
-          action: "Check Query Log",
-        },
-        {
-          label: "HA/DNS health available",
-          complete: health.nodes.length > 0,
-          href: "/ha/operations",
-          action: "Check HA Operations",
-        },
-        {
-          label: "Operational Status available",
-          complete: operational.summary !== undefined,
-          href: "/system/operational-status",
-          action: "Open Operational Status",
-        },
-      ]);
+      setStatus(await api.onboardingStatus(cluster.id));
     } catch (caught) {
       setError(caught);
     }
@@ -114,19 +26,94 @@ export function SetupGuidePage({ cluster }: { cluster: Cluster }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const steps: GuideStep[] = status
+    ? [
+        {
+          label: "Administrator and controller identity configured",
+          complete: status.cluster !== undefined,
+          href: "/system/users",
+          action: "Review administrators",
+          required: true,
+        },
+        {
+          label: "First compatible AdGuard Home node added",
+          complete: status.eligibleNodeCount >= 1,
+          href: "/ha/nodes",
+          action: "Review nodes",
+          required: true,
+        },
+        {
+          label: "Topology and schema-v2 configuration validated",
+          complete: status.topologyReady,
+          href: "/ha/configuration",
+          action: "Review observations",
+          required: true,
+        },
+        {
+          label: "Initial immutable revision published",
+          complete: status.authoritativeReady,
+          href: "/ha/revisions",
+          action: "Review revisions",
+          required: true,
+        },
+        {
+          label: "Redundant node configured",
+          complete: status.redundant,
+          href: "/ha/nodes",
+          action: "Add redundancy",
+          required: false,
+        },
+        {
+          label: "Monitoring settings reviewed",
+          complete: status.state.monitoringReviewedAt !== undefined,
+          href: "/system/settings",
+          action: "Review monitoring",
+          required: false,
+        },
+        {
+          label: "Webhook notification configured",
+          complete: status.notificationCount > 0,
+          href: "/ha/notifications",
+          action: "Review notifications",
+          required: false,
+        },
+        {
+          label: "Initial revision deployed and active",
+          complete: Boolean(cluster.activeRevisionId),
+          href: "/ha/deployments",
+          action: "Deploy safely",
+          required: false,
+        },
+      ]
+    : [];
+
   return (
     <PageContainer size="wide">
       <PageHeader
         eyebrow="Getting started"
         title="Setup Guide"
-        description="Completion is derived from controller state, not page visits."
+        description="Reference and follow-up guidance backed by the same canonical status as onboarding."
+        primaryAction={
+          <a className="button" href="/onboarding">
+            {status?.completed ? "Review onboarding" : "Continue onboarding"}
+          </a>
+        }
       />
+      {status?.completed && (
+        <Banner tone="success" title="Core setup complete">
+          Optional operational recommendations remain visible below and do not
+          redefine onboarding completion.
+        </Banner>
+      )}
       {error !== undefined && (
         <ErrorState error={error} retry={() => void load()} />
       )}
-      {!steps && !error && <Loading label="Checking setup progress…" />}
+      {!status && error === undefined && (
+        <Loading label="Checking setup progress…" />
+      )}
       <ol className="setup-guide">
-        {steps?.map((step) => (
+        {steps.map((step) => (
           <li
             key={step.label}
             className={step.complete ? "setup-guide__complete" : ""}
@@ -136,7 +123,8 @@ export function SetupGuidePage({ cluster }: { cluster: Cluster }) {
             </span>
             <div className="setup-guide__detail">
               <span className="setup-guide__status">
-                {step.complete ? "Complete" : "Incomplete"}
+                {step.complete ? "Complete" : "Incomplete"} ·{" "}
+                {step.required ? "Required" : "Recommended"}
               </span>
               <strong className="setup-guide__label">{step.label}</strong>
             </div>

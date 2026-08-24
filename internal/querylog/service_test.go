@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/benchristian88/atlas-dns/internal/domain"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 )
 
 const (
@@ -86,6 +87,28 @@ func TestCoverageReportsPartialAndCollectionDisabledHonestly(t *testing.T) {
 	coverage = disabled.coverage(nodes[:1], nil, "")
 	if coverage.CollectionEnabled || coverage.Status != "unavailable" || coverage.Nodes[0].ReasonCode != "QUERY_LOG_COLLECTION_DISABLED" {
 		t.Fatalf("disabled coverage = %+v", coverage)
+	}
+}
+
+func TestCoverageUsesLivePersistedRuntimeSettings(t *testing.T) {
+	now := time.Date(2026, 8, 24, 2, 0, 0, 0, time.UTC)
+	nodes := []domain.Node{{ID: queryTestNode, Name: "current", Enabled: true, Version: "v0.107.78"}}
+	service := NewService(&queryRepositoryFake{}, time.Minute)
+	service.now = func() time.Time { return now }
+	runtime := systemsettings.NewRuntimeStore(systemsettings.RuntimeSettings{
+		NodeHealthInterval: 30 * time.Second, StatisticsPollInterval: time.Hour,
+		QueryLogCollection: false, QueryLogPollInterval: 15 * time.Second, QueryLogRetention: 48 * time.Hour,
+	})
+	service.SetRuntimeSettings(runtime)
+	coverage := service.coverage(nodes, nil, "")
+	if coverage.CollectionEnabled || coverage.RetentionSeconds != int64((48*time.Hour)/time.Second) || coverage.Nodes[0].ReasonCode != "QUERY_LOG_COLLECTION_DISABLED" {
+		t.Fatalf("dynamic disabled coverage = %#v", coverage)
+	}
+	updated := runtime.RuntimeSettings()
+	updated.QueryLogCollection = true
+	runtime.Update(updated)
+	if coverage = service.coverage(nodes, nil, ""); !coverage.CollectionEnabled || coverage.Nodes[0].ReasonCode == "QUERY_LOG_COLLECTION_DISABLED" {
+		t.Fatalf("dynamic enabled coverage = %#v", coverage)
 	}
 }
 

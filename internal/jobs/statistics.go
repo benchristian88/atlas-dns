@@ -34,6 +34,17 @@ type StatisticsPoller struct {
 	logger      *slog.Logger
 	now         func() time.Time
 	health      *operationalhealth.Tracker
+	settings    RuntimeSettingsProvider
+}
+
+func (p *StatisticsPoller) SetRuntimeSettings(provider RuntimeSettingsProvider) {
+	p.settings = provider
+}
+func (p *StatisticsPoller) currentInterval() time.Duration {
+	if p.settings != nil {
+		return p.settings.RuntimeSettings().StatisticsPollInterval
+	}
+	return p.interval
 }
 
 func NewStatisticsPoller(store StatisticsStore, decrypter CredentialDecrypter, reader StatisticsReader, interval, timeout time.Duration, logger *slog.Logger, trackers ...*operationalhealth.Tracker) *StatisticsPoller {
@@ -46,27 +57,28 @@ func NewStatisticsPoller(store StatisticsStore, decrypter CredentialDecrypter, r
 
 func (p *StatisticsPoller) Run(ctx context.Context) {
 	p.poll(ctx)
-	ticker := time.NewTicker(p.interval)
-	defer ticker.Stop()
 	for {
+		timer := time.NewTimer(p.currentInterval())
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			p.poll(ctx)
 		}
 	}
 }
 
 func (p *StatisticsPoller) poll(ctx context.Context) {
+	interval := p.currentInterval()
 	if p.health != nil {
-		p.health.Start("statistics_collection", p.now().UTC().Add(p.interval))
+		p.health.Start("statistics_collection", p.now().UTC().Add(interval))
 	}
 	records, err := p.store.PollableNodes(ctx)
 	if err != nil {
-		p.logger.Error("statistics polling could not load nodes", "subsystem", "statistics_collection", "error", err, "retry_in", p.interval)
+		p.logger.Error("statistics polling could not load nodes", "subsystem", "statistics_collection", "error", err, "retry_in", interval)
 		if p.health != nil {
-			p.health.Failure("statistics_collection", "STATISTICS_NODE_LIST_FAILED", p.now().UTC().Add(p.interval))
+			p.health.Failure("statistics_collection", "STATISTICS_NODE_LIST_FAILED", p.now().UTC().Add(interval))
 		}
 		return
 	}
@@ -88,20 +100,20 @@ func (p *StatisticsPoller) poll(ctx context.Context) {
 	}
 	group.Wait()
 	if p.health != nil {
-		p.health.Success("statistics_collection", p.now().UTC().Add(p.interval))
+		p.health.Success("statistics_collection", p.now().UTC().Add(interval))
 	}
 	if p.health != nil {
-		p.health.Start("statistics_retention", p.now().UTC().Add(p.interval))
+		p.health.Start("statistics_retention", p.now().UTC().Add(interval))
 	}
 	if err := p.store.CleanupStatistics(ctx, p.now().UTC()); err != nil {
-		p.logger.Error("statistics retention cleanup failed", "subsystem", "statistics_retention", "error", err, "retry_in", p.interval)
+		p.logger.Error("statistics retention cleanup failed", "subsystem", "statistics_retention", "error", err, "retry_in", interval)
 		if p.health != nil {
-			p.health.Failure("statistics_retention", "STATISTICS_RETENTION_FAILED", p.now().UTC().Add(p.interval))
+			p.health.Failure("statistics_retention", "STATISTICS_RETENTION_FAILED", p.now().UTC().Add(interval))
 		}
 		return
 	}
 	if p.health != nil {
-		p.health.Success("statistics_retention", p.now().UTC().Add(p.interval))
+		p.health.Success("statistics_retention", p.now().UTC().Add(interval))
 	}
 }
 

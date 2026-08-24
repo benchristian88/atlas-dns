@@ -33,6 +33,7 @@ export type RouteResolution =
   | { kind: "backups" }
   | { kind: "updates" }
   | { kind: "setup-guide" }
+  | { kind: "onboarding" }
   | { kind: "system-settings" }
   | { kind: "about" }
   | { kind: "redirect"; to: string }
@@ -62,6 +63,7 @@ export const CANONICAL_PATHS = [
   "/ha/deployments",
   "/ha/drift",
   "/setup-guide",
+  "/onboarding",
   "/system/users",
   "/system/audit",
   "/system/operational-status",
@@ -188,6 +190,8 @@ export function resolveRoute(pathname: string): RouteResolution {
       return { kind: "updates" };
     case "/setup-guide":
       return { kind: "setup-guide" };
+    case "/onboarding":
+      return { kind: "onboarding" };
     case "/system/settings":
       return { kind: "system-settings" };
     case "/system/about":

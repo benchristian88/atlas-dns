@@ -29,7 +29,7 @@ describe("NotificationsPage", () => {
           enabled: true,
           destinationSet: true,
           destinationSummary: "https://hooks.example.test",
-          subscribedEvents: ["ha_transitions"],
+          subscribedCategories: ["ha_transition"],
           recordVersion: 1,
           createdAt: "2026-08-24T06:00:00Z",
           updatedAt: "2026-08-24T07:00:00Z",

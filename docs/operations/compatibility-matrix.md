@@ -23,6 +23,7 @@ a compatibility commitment. **Unsupported** must not be advertised as working.
 | Upgrade | 1.0.x → later documented 1.x | Supported policy | Backup first; ordered forward migrations and release notes. |
 | Upgrade | 1.0.0 → 1.0.1 | Supported, schema-neutral | Preserve environment/volumes; the v1.0.0 migration ledger is accepted unchanged. |
 | Upgrade | 1.0.1 → 1.0.2 | Supported, forward migration | Back up first; startup applies `000015` for notification delivery diagnostics/history indexing. |
+| Upgrade | 1.0.2 → 1.1.0 | Supported, forward migration | Back up first; startup applies `000016`, initializes persisted monitoring defaults once (health 5s–1h, Statistics 1m–24h, Query Log 5s–1h/1h–90d), preserves all-category webhook behavior, and marks established node+revision clusters complete. |
 | Upgrade | Any pre-1.0 installation → 1.0 | Unsupported in place | Destroy/rebuild and fresh Atlas installation. |
 | Backup | Atlas backup format v1 within compatible 1.x schema | Supported | Newer application/schema inputs fail closed. |
 | Backup | Pre-1.0 `.aghhabackup`/`AGHHABACKUP` | Unsupported | Not interpreted as Atlas backup v1. |
@@ -31,3 +32,9 @@ a compatibility commitment. **Unsupported** must not be advertised as working.
 
 This matrix describes Atlas DNS Controller compatibility, not endorsement or
 support by AdGuard Software, Docker, Portainer, PostgreSQL, or browser vendors.
+
+Guided onboarding has a stricter establishment floor than ongoing management:
+v0.107.78 and v0.107.79 are explicitly tested, newer v0.107 patches are
+capability/API evaluated, and pre-v0.107.78 nodes cannot satisfy a new v1.1
+topology. Existing supported managed clusters are not withdrawn or forced
+through first-run onboarding by this policy.

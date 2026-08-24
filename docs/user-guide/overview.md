@@ -11,6 +11,20 @@ Log, and Operational Status. Settings and Filters contain only AdGuard Home
 configuration; Atlas functions live under HA Controller or Administration.
 Setup Guide remains available near the bottom of the rail as reference/help.
 
+## Guided onboarding
+
+After administrator bootstrap, Atlas offers onboarding until the selected
+cluster has compatible observed topology, an initial immutable schema-v2
+revision, reviewed monitoring settings, and either a configured webhook or an
+explicit notification skip. A second node is recommended but may be
+deliberately skipped with a visible no-redundancy warning.
+
+The initial configuration source is never inferred. Review normalized
+differences and select the intended node before Atlas imports into the normal
+draft, validates capabilities, and publishes the initial revision. Publication
+does not deploy. You can exit and resume safely; Setup Guide reads the same
+canonical status. See [Guided Onboarding](../getting-started/onboarding.md).
+
 ## Dashboard
 
 The Dashboard summarizes verified DNS serving, management API reachability, HA

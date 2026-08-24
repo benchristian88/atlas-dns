@@ -56,6 +56,9 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	if healthInterval < 5*time.Second || healthInterval > time.Hour {
+		return Config{}, fmt.Errorf("NODE_HEALTH_INTERVAL must be between 5s and 1h")
+	}
 	requestTimeout, err := duration("NODE_REQUEST_TIMEOUT", 10*time.Second)
 	if err != nil {
 		return Config{}, err
@@ -63,6 +66,9 @@ func Load() (Config, error) {
 	statisticsInterval, err := duration("STATISTICS_POLL_INTERVAL", time.Hour)
 	if err != nil {
 		return Config{}, err
+	}
+	if statisticsInterval < time.Minute || statisticsInterval > 24*time.Hour {
+		return Config{}, fmt.Errorf("STATISTICS_POLL_INTERVAL must be between 1m and 24h")
 	}
 	queryLogCollection, err := boolean("QUERY_LOG_COLLECTION_ENABLED", true)
 	if err != nil {

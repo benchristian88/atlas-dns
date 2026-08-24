@@ -12,11 +12,18 @@ type HAOperationsPoller interface {
 	PollAll(context.Context) error
 }
 
-func RunHAOperations(ctx context.Context, service HAOperationsPoller, interval time.Duration, logger *slog.Logger, tracker *operationalhealth.Tracker) {
+func RunHAOperations(ctx context.Context, service HAOperationsPoller, interval time.Duration, logger *slog.Logger, tracker *operationalhealth.Tracker, providers ...RuntimeSettingsProvider) {
 	if interval <= 0 {
 		interval = 30 * time.Second
 	}
+	currentInterval := func() time.Duration {
+		if len(providers) > 0 && providers[0] != nil {
+			return providers[0].RuntimeSettings().NodeHealthInterval
+		}
+		return interval
+	}
 	run := func() {
+		interval = currentInterval()
 		next := time.Now().UTC().Add(interval)
 		if tracker != nil {
 			tracker.Start("dns_service_health", next)
@@ -33,13 +40,13 @@ func RunHAOperations(ctx context.Context, service HAOperationsPoller, interval t
 		}
 	}
 	run()
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
 	for {
+		timer := time.NewTimer(currentInterval())
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			run()
 		}
 	}

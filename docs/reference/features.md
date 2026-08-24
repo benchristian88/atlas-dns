@@ -55,15 +55,21 @@ records.
   endpoint summaries, edit/pause/delete/test lifecycle, delivery evidence, and
   retained historical delivery identity after channel deletion. Delivery/Test
   outcomes appear in cursor-paginated Operational History with safe failure
-  diagnostics.
+  diagnostics; channels subscribe to explicit DNS, redundancy, certificate,
+  version, maintenance, and upgrade categories.
 
 ## Administration
 
 - Bootstraps the first local administrator and supports multiple local
   administrator accounts.
+- Offers resumable guided onboarding based on canonical node, observation,
+  capability, revision, monitoring, and notification state. It requires an
+  explicit initial configuration source and publishes through the normal
+  schema-v2 immutable revision path.
 - Creates, disables/re-enables, and resets administrator credentials while
   preventing self-disable and loss of the final enabled administrator.
-- Provides state-derived Setup Guide, System Settings, About/build metadata,
+- Provides canonical-status Setup Guide, persisted/audited runtime monitoring
+  System Settings, About/build metadata,
   update awareness, Backup & Restore, and audit views.
 - Supports System, Light, and Dark themes and accessible responsive navigation.
 

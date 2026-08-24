@@ -9,6 +9,20 @@ interfaces.
 
 ### Added
 
+- Added resumable first-run onboarding with automatic incomplete-setup offers,
+  manual review/re-entry, deliberate single-node/notification skips, and a
+  canonical server-derived state shared with Setup Guide.
+- Added pre-storage node candidate validation and a v1.1 guided floor of
+  AdGuard Home v0.107.78, with v0.107.78/v0.107.79 explicit coverage and newer
+  v0.107 capability/API evaluation.
+- Added explicit initial source-of-truth comparison/selection through the
+  existing observation, schema-v2 draft validation, and immutable revision
+  publication path. Publication remains separate from deployment.
+- Added persisted, audited runtime monitoring controls and encrypted webhook
+  category subscriptions with bounded Test Webhook support during onboarding.
+- Added append-only migration `000016_release_1_1_onboarding`; established
+  node+revision clusters are preserved as complete and existing webhooks retain
+  all-category behavior.
 - Added the responsive v1.1 application shell with a collapsible desktop left
   rail, equivalent mobile drawer, project-owned line icons, utility-focused top
   bar, and accessible active/open navigation ancestry.
@@ -22,6 +36,10 @@ interfaces.
 
 ### Changed
 
+- Setup Guide is now reference/follow-up guidance backed by the same canonical
+  onboarding status instead of maintaining a second definition of setup.
+- Collector scheduling adopts persisted node-health, Statistics, Query Log
+  collection/cadence, and Query Log retention changes without restart.
 - Moved Statistics, Query Log, and Operational Status into the Monitoring
   navigation group while retaining every stable route.
 - Kept Settings and Filters exclusive to managed AdGuard Home configuration;
@@ -32,6 +50,8 @@ interfaces.
 
 ### Fixed
 
+- Completed onboarding is not revoked by a transient node health failure; live
+  topology evidence remains visible for remediation without trapping admins.
 - Preserved explicit unavailable and partial-source states on Dashboard instead
   of presenting missing operational data as zero.
 - Added regression coverage for route/menu mapping, active and nested

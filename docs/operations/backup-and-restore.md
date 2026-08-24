@@ -22,7 +22,8 @@ separate.
 - **Standard** contains the control plane: users/password hashes/enabled state,
   nodes/encrypted credentials, drafts, immutable observations/revisions,
   revision/deployment archive metadata, deployments/results, drift, audit,
-  lifecycle/upgrades, notification channels, and system settings.
+  lifecycle/upgrades, notification channels/category subscriptions, onboarding
+  completion/acknowledgements, and persisted runtime system settings.
 - **Full** includes the same control plane plus retained Statistics, Query Log,
   DNS probes, HA events, and notification delivery history.
 
@@ -117,7 +118,8 @@ Keep the old database and archive unchanged until all checks pass:
 2. Disabled accounts and session invalidation expectations.
 3. Node credential decryption, connection test, and fresh observation.
 4. Draft, active/archived revisions, deployments, per-node results, and drift.
-5. Lifecycle settings/upgrades, webhook summaries, system settings, and audit.
+5. Lifecycle settings/upgrades, webhook summaries/categories, onboarding
+   completion, runtime system settings, and audit.
 6. Statistics/Query Log/HA/delivery history expected for the chosen backup type.
 7. New collector records and no unexpected known gaps.
 

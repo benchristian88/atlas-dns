@@ -22,4 +22,12 @@ describe("responsive shell contract", () => {
     expect(css).toContain(".dashboard-node-table { min-width: 760px; }");
     expect(css).toMatch(/\.table-wrap \{[^}]*overflow-x: auto/);
   });
+
+  it("keeps guided onboarding usable at phone widths", () => {
+    expect(css).toMatch(
+      /@media \(max-width: 620px\)[\s\S]*\.onboarding-progress \{[^}]*overflow-x: auto/,
+    );
+    expect(css).toContain(".onboarding-source { grid-template-columns: auto minmax(0, 1fr);");
+    expect(css).toContain(".onboarding-page { display: grid;");
+  });
 });

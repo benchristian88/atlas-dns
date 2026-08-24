@@ -9,6 +9,7 @@ import (
 	"github.com/benchristian88/atlas-dns/internal/haoperations"
 	"github.com/benchristian88/atlas-dns/internal/inventory"
 	"github.com/benchristian88/atlas-dns/internal/querylog"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 	"github.com/benchristian88/atlas-dns/internal/telemetry"
 )
 
@@ -43,15 +44,32 @@ type Service struct {
 	options    Options
 	now        func() time.Time
 	ha         HAReader
+	settings   interface {
+		RuntimeSettings() systemsettings.RuntimeSettings
+	}
 }
 
 func (s *Service) SetHAOperations(reader HAReader) { s.ha = reader }
+func (s *Service) SetRuntimeSettings(provider interface {
+	RuntimeSettings() systemsettings.RuntimeSettings
+}) {
+	s.settings = provider
+}
 
 func NewService(repository Repository, tracker *Tracker, options Options) *Service {
 	return &Service{repository: repository, tracker: tracker, options: options, now: time.Now}
 }
 
 func (s *Service) Status(ctx context.Context, clusterID string) (Status, error) {
+	options := s.options
+	if s.settings != nil {
+		current := s.settings.RuntimeSettings()
+		options.NodeInterval = current.NodeHealthInterval
+		options.StatisticsInterval = current.StatisticsPollInterval
+		options.QueryLogInterval = current.QueryLogPollInterval
+		options.QueryLogRetention = current.QueryLogRetention
+		options.QueryLogEnabled = current.QueryLogCollection
+	}
 	if !domain.ValidID(clusterID) {
 		return Status{}, domain.Validation("clusterId", "must be a valid UUID")
 	}
@@ -94,21 +112,21 @@ func (s *Service) Status(ctx context.Context, clusterID string) (Status, error) 
 			return Status{}, err
 		}
 	}
-	database, dbErr := s.repository.OperationalDatabase(ctx, s.options.StatisticsRetention, s.options.QueryLogRetention)
+	database, dbErr := s.repository.OperationalDatabase(ctx, options.StatisticsRetention, options.QueryLogRetention)
 	if dbErr != nil {
 		database.State, database.ErrorCode = Failed, "DATABASE_UNAVAILABLE"
 	}
 
 	now := s.now().UTC()
 	status := Status{GeneratedAt: now, ClusterID: clusterID, API: Healthy, Database: database, Workers: s.tracker.Snapshot()}
-	status.Nodes = nodeHealth(nodes, now, maxDuration(3*s.options.NodeInterval, time.Minute))
-	status.DNSService = dnsServiceHealth(nodes, dnsProbes, now, maxDuration(3*s.options.NodeInterval, 2*time.Minute), s.options.NodeInterval)
+	status.Nodes = nodeHealth(nodes, now, maxDuration(3*options.NodeInterval, time.Minute))
+	status.DNSService = dnsServiceHealth(nodes, dnsProbes, now, maxDuration(3*options.NodeInterval, 2*time.Minute), options.NodeInterval)
 	if s.ha != nil {
 		status.HA, _ = s.ha.Summary(ctx, clusterID)
 	}
-	status.Observation = observationHealth(nodes, snapshots, successfulSnapshots, profiles, now, maxDuration(3*s.options.NodeInterval+s.options.RequestTimeout, 2*time.Minute), s.options.NodeInterval)
-	status.Statistics = statisticsHealth(nodes, attempts, now, maxDuration(2*s.options.StatisticsInterval+s.options.RequestTimeout, 3*time.Hour), s.options.StatisticsInterval)
-	status.QueryLog = queryLogHealth(nodes, checkpoints, now, maxDuration(3*s.options.QueryLogInterval, 2*time.Minute), s.options.QueryLogInterval, s.options.QueryLogEnabled)
+	status.Observation = observationHealth(nodes, snapshots, successfulSnapshots, profiles, now, maxDuration(3*options.NodeInterval+options.RequestTimeout, 2*time.Minute), options.NodeInterval)
+	status.Statistics = statisticsHealth(nodes, attempts, now, maxDuration(2*options.StatisticsInterval+options.RequestTimeout, 3*time.Hour), options.StatisticsInterval)
+	status.QueryLog = queryLogHealth(nodes, checkpoints, now, maxDuration(3*options.QueryLogInterval, 2*time.Minute), options.QueryLogInterval, options.QueryLogEnabled)
 	status.Summary = aggregate(status)
 	return status, nil
 }

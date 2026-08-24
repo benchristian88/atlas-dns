@@ -70,15 +70,33 @@ func TestNotificationDestinationIsHTTPSWriteOnly(t *testing.T) {
 	repository, protector := &notificationRepositoryFake{}, &payloadProtectorFake{}
 	service := NewNotificationService(repository, protector)
 	actor := domain.Actor{UserID: "22222222-2222-4222-8222-222222222222", RequestID: "request"}
-	if _, err := service.Create(context.Background(), actor, "11111111-1111-4111-8111-111111111111", "Unsafe", "http://receiver.test/hook", true); err == nil {
+	if _, err := service.Create(context.Background(), actor, "11111111-1111-4111-8111-111111111111", "Unsafe", "http://receiver.test/hook", true, RecommendedNotificationCategories()); err == nil {
 		t.Fatal("plaintext webhook accepted")
 	}
-	channel, err := service.Create(context.Background(), actor, "11111111-1111-4111-8111-111111111111", "Operations", "https://receiver.test/hook?token=secret", true)
+	channel, err := service.Create(context.Background(), actor, "11111111-1111-4111-8111-111111111111", "Operations", "https://receiver.test/hook?token=secret", true, RecommendedNotificationCategories())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !channel.DestinationSet || channel.DestinationSummary != "https://receiver.test" || strings.Contains(string(repository.record.Destination.Ciphertext), "receiver") || strings.Contains(channel.DestinationSummary, "secret") {
 		t.Fatalf("destination leaked in channel=%#v envelope=%q", channel, repository.record.Destination.Ciphertext)
+	}
+}
+
+func TestNotificationCategoriesAreValidatedAndMappedFromOperationalEvents(t *testing.T) {
+	values, err := ValidateNotificationCategories([]string{"redundancy", "dns", "redundancy"})
+	if err != nil || len(values) != 2 || values[0] != "redundancy" || values[1] != "dns" {
+		t.Fatalf("validated categories=%#v err=%v", values, err)
+	}
+	if _, err := ValidateNotificationCategories([]string{"secrets"}); err == nil {
+		t.Fatal("unsupported category accepted")
+	}
+	for eventType, want := range map[string]string{
+		"dns.failed": "dns", "redundancy.degraded": "redundancy", "certificate.expired": "certificates",
+		"version.update_available": "versions", "maintenance.started": "maintenance", "upgrade.failed": "upgrades",
+	} {
+		if got := NotificationCategoryForEvent(eventType); got != want {
+			t.Errorf("category for %q = %q, want %q", eventType, got, want)
+		}
 	}
 }
 
@@ -101,21 +119,21 @@ func TestNotificationUpdatePreservesOrDeliberatelyReplacesHiddenDestination(t *t
 	protector := &payloadProtectorFake{}
 	service := NewNotificationService(repository, protector)
 	actor := domain.Actor{UserID: "22222222-2222-4222-8222-222222222222", RequestID: "request"}
-	created, err := service.Create(context.Background(), actor, "11111111-1111-4111-8111-111111111111", "Operations", "https://receiver.test/original?token=secret", true)
+	created, err := service.Create(context.Background(), actor, "11111111-1111-4111-8111-111111111111", "Operations", "https://receiver.test/original?token=secret", true, RecommendedNotificationCategories())
 	if err != nil {
 		t.Fatal(err)
 	}
 	originalCiphertext := string(repository.record.Destination.Ciphertext)
 	originalPlaintext := string(protector.plaintext)
-	updated, err := service.Update(context.Background(), actor, created.ID, "Operations renamed", nil, false, created.RecordVersion)
+	updated, err := service.Update(context.Background(), actor, created.ID, "Operations renamed", nil, false, created.RecordVersion, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(repository.record.Destination.Ciphertext) != originalCiphertext || string(protector.plaintext) != originalPlaintext || updated.Enabled {
+	if string(repository.record.Destination.Ciphertext) != originalCiphertext || string(protector.plaintext) != originalPlaintext || updated.Enabled || len(updated.SubscribedCategories) != len(RecommendedNotificationCategories()) {
 		t.Fatalf("hidden destination was not preserved: channel=%#v", updated)
 	}
 	replacement := "https://replacement.test/hook?token=new-secret"
-	replaced, err := service.Update(context.Background(), actor, created.ID, updated.Name, &replacement, true, updated.RecordVersion)
+	replaced, err := service.Update(context.Background(), actor, created.ID, updated.Name, &replacement, true, updated.RecordVersion, RecommendedNotificationCategories())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,15 +146,15 @@ func TestNotificationEnableDisableAndDeleteAreExplicitAndAudited(t *testing.T) {
 	repository := &notificationRepositoryFake{}
 	service := NewNotificationService(repository, &payloadProtectorFake{})
 	actor := domain.Actor{UserID: "22222222-2222-4222-8222-222222222222", RequestID: "request"}
-	channel, err := service.Create(context.Background(), actor, "11111111-1111-4111-8111-111111111111", "Operations", "https://receiver.test/hook", true)
+	channel, err := service.Create(context.Background(), actor, "11111111-1111-4111-8111-111111111111", "Operations", "https://receiver.test/hook", true, RecommendedNotificationCategories())
 	if err != nil {
 		t.Fatal(err)
 	}
-	channel, err = service.Update(context.Background(), actor, channel.ID, channel.Name, nil, false, channel.RecordVersion)
+	channel, err = service.Update(context.Background(), actor, channel.ID, channel.Name, nil, false, channel.RecordVersion, channel.SubscribedCategories)
 	if err != nil || repository.lastAudit.Action != "notification.channel_disabled" {
 		t.Fatalf("disable channel=%#v audit=%#v err=%v", channel, repository.lastAudit, err)
 	}
-	channel, err = service.Update(context.Background(), actor, channel.ID, channel.Name, nil, true, channel.RecordVersion)
+	channel, err = service.Update(context.Background(), actor, channel.ID, channel.Name, nil, true, channel.RecordVersion, channel.SubscribedCategories)
 	if err != nil || repository.lastAudit.Action != "notification.channel_enabled" {
 		t.Fatalf("enable channel=%#v audit=%#v err=%v", channel, repository.lastAudit, err)
 	}

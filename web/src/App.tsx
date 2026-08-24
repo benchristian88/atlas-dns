@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { EmptyState, ErrorState, Loading } from "./components/Feedback";
+import { Banner, EmptyState, ErrorState, Loading } from "./components/Feedback";
 import { PageContainer } from "./components/Page";
 import { AllowlistsPage } from "./features/allowlists/AllowlistsPage";
 import { AuditPage } from "./features/audit/AuditPage";
@@ -22,6 +22,7 @@ import { NodeLifecyclePage } from "./features/ha-operations/NodeLifecyclePage";
 import { RevisionsPage } from "./features/history/HistoryPage";
 import { NodesPage } from "./features/nodes/NodesPage";
 import { NotificationsPage } from "./features/notifications/NotificationsPage";
+import { OnboardingPage } from "./features/onboarding/OnboardingPage";
 import { OperationalStatusPage } from "./features/operational-status/OperationalStatusPage";
 import { QueryLogPage } from "./features/query-log/QueryLogPage";
 import { RewritesPage } from "./features/rewrites/RewritesPage";
@@ -177,6 +178,12 @@ function Application({ user, onLogout }: { user: User; onLogout: () => void }) {
   else if (route.kind === "updates") content = <UpdatesPage />;
   else if (route.kind === "about") content = <AboutPage />;
   else if (route.kind === "system-settings") content = <SystemSettingsPage />;
+  else if (selected === undefined && route.kind === "onboarding")
+    content = (
+      <OnboardingPage
+        onClusterCreated={(cluster) => void loadClusters(cluster.id)}
+      />
+    );
   else if (selected === undefined)
     content = (
       <EmptyState title="Create your first cluster">
@@ -185,6 +192,11 @@ function Application({ user, onLogout }: { user: User; onLogout: () => void }) {
           service.
         </p>
         <ClusterCreate onCreated={(cluster) => void loadClusters(cluster.id)} />
+        <p>
+          <a className="button" href="/onboarding">
+            Start guided onboarding
+          </a>
+        </p>
       </EmptyState>
     );
   else {
@@ -230,6 +242,9 @@ function Application({ user, onLogout }: { user: User; onLogout: () => void }) {
       case "setup-guide":
         content = <SetupGuidePage cluster={selected} />;
         break;
+      case "onboarding":
+        content = <OnboardingPage cluster={selected} />;
+        break;
       case "blocked-services":
         content = <BlockedServicesPage cluster={selected} />;
         break;
@@ -271,8 +286,52 @@ function Application({ user, onLogout }: { user: User; onLogout: () => void }) {
       onSelectCluster={setSelectedID}
       onLogout={() => void logout()}
     >
-      <PageContainer size={routePageWidth(route)}>{content}</PageContainer>
+      <PageContainer size={routePageWidth(route)}>
+        {selected && route.kind !== "onboarding" && (
+          <OnboardingOffer cluster={selected} />
+        )}
+        {content}
+      </PageContainer>
     </ApplicationShell>
+  );
+}
+
+export function OnboardingOffer({ cluster }: { cluster: Cluster }) {
+  const key = `atlas-dns.onboarding-dismissed.${cluster.id}`;
+  const [required, setRequired] = useState(false);
+  const [dismissed, setDismissed] = useState(
+    () => sessionStorage.getItem(key) === "true",
+  );
+  useEffect(() => {
+    let active = true;
+    void api
+      .onboardingStatus(cluster.id)
+      .then((status) => {
+        if (active) setRequired(status.setupRequired);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [cluster.id]);
+  if (!required || dismissed) return null;
+  return (
+    <Banner tone="info" title="Atlas setup is incomplete">
+      <span>
+        Continue guided onboarding from your current controller state.{" "}
+      </span>
+      <a href="/onboarding">Continue setup</a>{" "}
+      <button
+        className="button button--quiet"
+        type="button"
+        onClick={() => {
+          sessionStorage.setItem(key, "true");
+          setDismissed(true);
+        }}
+      >
+        Not now
+      </button>
+    </Banner>
   );
 }
 
