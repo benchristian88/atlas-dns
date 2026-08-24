@@ -40,3 +40,4 @@ to match later implementation chronology.
 | [ADR-0031](ADR-0031-use-passphrase-encrypted-portable-controller-backups-and-offline-restore.md) | Accepted | Use passphrase-encrypted portable controller backups and offline restore |
 | [ADR-0032](ADR-0032-use-cached-github-release-awareness-and-host-guided-controller-updates.md) | Accepted | Use cached GitHub release awareness and host-guided controller updates |
 | [ADR-0033](ADR-0033-license-atlas-dns-controller-under-busl-1-1.md) | Accepted | License Atlas DNS Controller under Business Source License 1.1 |
+| [ADR-0034](ADR-0034-use-a-left-rail-and-operational-dashboard.md) | Accepted | Use a left rail and operational dashboard |

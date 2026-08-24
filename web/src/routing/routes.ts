@@ -11,6 +11,7 @@ export type RouteResolution =
   | { kind: "dashboard" }
   | { kind: "nodes" }
   | { kind: "ha-operations" }
+  | { kind: "notifications" }
   | { kind: "node-lifecycle"; nodeId: string }
   | { kind: "statistics" }
   | { kind: "query-log" }
@@ -55,6 +56,7 @@ export const CANONICAL_PATHS = [
   "/query-log",
   "/ha/nodes",
   "/ha/operations",
+  "/ha/notifications",
   "/ha/configuration",
   "/ha/revisions",
   "/ha/deployments",
@@ -158,6 +160,8 @@ export function resolveRoute(pathname: string): RouteResolution {
       return { kind: "nodes" };
     case "/ha/operations":
       return { kind: "ha-operations" };
+    case "/ha/notifications":
+      return { kind: "notifications" };
     case "/ha/configuration":
       return { kind: "configuration" };
     case "/ha/deployments":

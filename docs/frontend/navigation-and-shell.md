@@ -1,192 +1,178 @@
 # Navigation and Application Shell
 
-## Desktop header
+## v1.1 outcome
 
-Use horizontal desktop navigation.
+Atlas uses a persistent left rail for product navigation and a thin top bar for
+shared context and utilities. The shell makes the distinction between managed
+AdGuard Home configuration and Atlas controller functions explicit. It does
+not imply multi-controller or multi-cluster orchestration that the backend does
+not provide.
 
-```text
-Brand | Dashboard | Statistics | Settings ▾ | Filters ▾ | Query Log
-      | HA Controller ▾ | Setup Guide         Theme ◐   User/System
-```
-
-### Settings menu
-
-- General
-- DNS
-- Encryption
-- Clients
-- DHCP
-
-### Filters menu
-
-- DNS Blocklists
-- DNS Allowlists
-- DNS Rewrites
-- Blocked Services
-- Custom Filter Rules
-
-### HA Controller menu
-
-- Nodes
-- Configuration Control
-- Revisions
-- Deployments
-- Drift
-
-## Context row
-
-Immediately below the main header:
+## Information architecture
 
 ```text
-[Cluster: Home DNS ▾] [Scope: Entire Cluster ▾] Revision 24  ● Healthy
+Dashboard
+
+Monitoring
+├── Statistics
+├── Query Log
+└── Operational Status
+
+Settings                         AdGuard Home configuration
+├── General
+├── DNS
+├── Encryption
+├── Clients
+└── DHCP
+
+Filters                          AdGuard Home configuration
+├── DNS Blocklists
+├── DNS Allowlists
+├── DNS Rewrites
+├── Blocked Services
+└── Custom Filter Rules
+
+HA Controller                    Atlas controller functions
+├── Nodes
+├── HA Operations
+├── Notifications
+├── Configuration Control
+├── Revisions
+├── Deployments
+└── Drift
+
+Administration
+├── Users
+├── Audit Log
+├── System Settings
+├── Backups
+├── Updates
+└── About
+
+Help utility
+└── Setup Guide
 ```
 
-Optional active operation:
-
-```text
-Deployment 8f3… Applying Node B
-```
-
-Required context:
-
-- cluster selector;
-- Entire Cluster or selected node;
-- active revision;
-- cluster health;
-- active deployment.
+Settings and Filters exclusively author desired AdGuard Home configuration.
+Notifications belongs to HA Controller because it configures Atlas delivery of
+HA lifecycle events. There is no general Integrations destination. Setup Guide
+is state-derived reference/help and is not a first-run onboarding mechanism.
 
 ## Route map
 
+| Route | Menu owner | Destination |
+|---|---|---|
+| `/` | Dashboard | Cluster dashboard |
+| `/statistics` | Monitoring | Statistics |
+| `/query-log` | Monitoring | Query Log |
+| `/system/operational-status` | Monitoring | Operational Status |
+| `/settings/general` | Settings | General |
+| `/settings/dns` | Settings | DNS |
+| `/settings/encryption` | Settings | Encryption |
+| `/settings/clients` | Settings | Clients |
+| `/settings/dhcp` | Settings | DHCP |
+| `/filters/blocklists` | Filters | DNS Blocklists |
+| `/filters/allowlists` | Filters | DNS Allowlists |
+| `/filters/rewrites` | Filters | DNS Rewrites |
+| `/filters/blocked-services` | Filters | Blocked Services |
+| `/filters/custom-rules` | Filters | Custom Filter Rules |
+| `/ha/nodes` | HA Controller | Nodes |
+| `/ha/nodes/{nodeId}` | HA Controller / Nodes | Node lifecycle detail |
+| `/ha/operations` | HA Controller | HA Operations |
+| `/ha/notifications` | HA Controller | Notifications |
+| `/ha/configuration` | HA Controller | Configuration Control |
+| `/ha/revisions` | HA Controller | Revisions |
+| `/ha/deployments` | HA Controller | Deployments |
+| `/ha/drift` | HA Controller | Drift |
+| `/system/users` | Administration | Users |
+| `/system/audit` | Administration | Audit Log |
+| `/system/settings` | Administration | System Settings |
+| `/system/backups` | Administration | Backups |
+| `/system/updates` | Administration | Updates |
+| `/system/about` | Administration | About |
+| `/setup-guide` | Help utility | Setup Guide |
+
+All pre-v1.1 supported routes remain supported. Compatibility redirects retain
+query strings and fragments. Unknown routes render Not Found and never silently
+fall through to Dashboard. Authentication, route guards, browser refresh, and
+deep-link behavior are unchanged.
+
+## Desktop left rail
+
+The rail uses the project-owned line-icon renderer and shows icons with labels.
+Groups are native buttons with `aria-expanded` and `aria-controls`. The group
+that owns the current route remains visibly active and open; node-detail routes
+keep Nodes current. Operators may open or close inactive groups.
+
+The collapse control is at the bottom of the rail. Collapsed state is
+browser-local presentation state under `atlas-dns.sidebar-collapsed`; it does
+not create an API setting or database record. Collapsed links and group buttons
+retain accessible names and native title tooltips. Selecting a group while
+collapsed expands the rail before revealing its children.
+
+Keyboard behavior:
+
+- Tab reaches every group, link, utility, and collapse control;
+- Enter or Space toggles a group;
+- Arrow Down or Arrow Right opens a group and focuses its first child;
+- visible focus uses the shared Atlas focus token;
+- the current link uses `aria-current="page"`.
+
+## Utility top bar
+
+The top bar contains existing shared capabilities only:
+
+- selected cluster;
+- Entire Cluster or selected-node scope;
+- active revision and aggregate health where space permits;
+- active deployment link when present;
+- last node-inventory refresh state;
+- Light, Dark, or System theme control;
+- notification shortcut when notification support is available; and
+- user/account menu and Sign Out.
+
+It does not repeat primary navigation. Smaller viewports progressively hide
+secondary facts while preserving cluster selection, theme, notifications, and
+the account action.
+
+## Mobile and responsive contract
+
+At tablet and phone widths the left rail becomes a left-hand modal drawer. The
+drawer uses the same labels, order, grouping, active state, and utility item as
+desktop. Escape and the close control dismiss it and restore focus to the menu
+trigger. Group disclosures never depend on hover.
+
+The shell uses `minmax(0, 1fr)`, explicit inline-size containment, and local
+table scrolling. Dashboard health cards reflow from five to three, two, and one
+columns; the activity, attention, and recent-change grid becomes a single
+column; KPI cells wrap two-by-two; and node tables keep their established
+contained horizontal treatment. The shell does not use document-level
+horizontal clipping as a substitute for component responsiveness. iOS safe
+areas remain supported and browser zoom is not disabled.
+
+## Dashboard purpose
+
+Dashboard is the concise operational answer to:
+
 ```text
-/                           Dashboard
-/statistics                 Statistics
-/settings/general           General
-/settings/dns               DNS
-/settings/encryption        Encryption
-/settings/clients           Clients
-/settings/dhcp              DHCP
-/filters/blocklists         DNS Blocklists
-/filters/allowlists         DNS Allowlists
-/filters/rewrites           DNS Rewrites
-/filters/blocked-services   Blocked Services
-/filters/custom-rules       Custom Filter Rules
-/query-log                  Query Log
-/ha/nodes                   Nodes
-/ha/configuration           Configuration Control
-/ha/revisions               Configuration Revisions
-/ha/deployments             Deployments
-/ha/drift                   Drift
-/setup-guide                Setup Guide
+Is DNS healthy?
+Are my nodes reachable?
+Is HA healthy?
+Is collection healthy?
+What needs attention?
+What changed recently?
 ```
 
-## Route migration rules
+It composes existing Nodes, HA status, Operational Status, Statistics,
+versions, revisions, deployments, drift, and safe audit summaries. It does not
+create a second alert engine, derive traffic from Query Log, invent node roles,
+or manufacture unavailable metrics. Detailed action and coverage remain on the
+owning pages.
 
-- Existing routes must redirect to new canonical routes where appropriate.
-- Unknown paths render an explicit Not Found page.
-- Unknown paths must never render Dashboard.
-- Browser bookmarks should remain usable through redirects.
-- Active submenu child highlights its parent.
-- The mobile drawer uses the same labels and hierarchy.
-- Route scope and selected node may use route/query state, but secrets never appear in URLs.
+## Failure and security behavior
 
-## Mobile
-
-- Compact top header.
-- Hamburger opens drawer.
-- Settings, Filters, and HA Controller become expandable sections.
-- Context row remains visible or opens as a dedicated context sheet.
-- No mobile-only alternate hierarchy.
-- Theme selection remains a compact labelled icon button in the header; its menu
-  exposes Light, Dark, and System.
-- Only one controlled peer section is expanded. Escape closes the drawer and
-  restores focus to its trigger.
-- The shell, header, and content stay within the layout viewport. The context
-  row and wide tables may scroll inside their own contained regions. iOS safe
-  areas are applied without disabling accessibility zoom.
-
-## Menu interaction convention
-
-Desktop primary and administration menus share one controlled state model.
-
-```text
-mouse enters trigger        -> open and close any peer
-mouse enters popover        -> cancel pending close
-mouse leaves trigger+menu   -> close after 180ms
-click/touch disclosure      -> open or close
-Arrow/Home/End              -> move menu-item focus
-Escape                      -> close and focus disclosure
-focus leaves / outside click -> close
-```
-
-The delay bridges the intentional trigger-to-popover gap without leaving stale
-menus open. Timers belong to the shell state model, not individual menu items.
-Mobile disclosures use the same labels and peer-closing rule but never require
-hover.
-
-## Administration menu
-
-Lower-frequency controller administration:
-
-- Users
-- Operational Status
-- HA Operations
-
-`/ha/operations` is the fleet-level lifecycle surface: verified DNS capacity,
-API/convergence/maintenance counts, certificate/version warnings, upgrade
-history, notification configuration, and HA events. `/ha/nodes/{nodeId}` is the
-node lifecycle detail for probe settings, preflight, maintenance, return checks,
-certificate/version state, guided upgrades, and node-attributed history. The
-existing `/ha/nodes` page remains infrastructure inventory and links to detail.
-- Audit Log
-- System Settings
-- Backups
-- About
-- Sign Out
-
-Users, Audit Log, Operational Status, System Settings, Backup & Restore,
-Updates, and About are current administration surfaces. Setup Guide remains in primary navigation
-and derives checks from enabled nodes, observations, draft, immutable revisions,
-successful deployment, Statistics, Query Log, and HA state. No completed check
-is based solely on visiting a route.
-
-The approved Atlas V3 angled-gap mark and light/dark Atlas DNS lockups appear in
-the login and shell as the final Atlas DNS Controller identity.
-Browser favicon, Apple touch icon, approved 192/512 PWA
-icons, and `manifest.webmanifest` use the reconciled Atlas asset family;
-manifest application naming remains Atlas DNS Controller. No service worker or
-offline data cache is introduced. See `theme-brand-and-pwa.md`.
-
-## Configuration Control purpose
-
-`/ha/configuration` is not another settings editor.
-
-It should provide:
-
-- complete draft summary;
-- validation status;
-- links to authoring pages;
-- active revision summary;
-- observation and import/adoption workflow;
-- publication;
-- deployment preview;
-- a persistent link to the exact published revision and links to Deployments.
-
-The current implementation removes stale schema-v1 wording and the narrow
-duplicate DNS/filter editor.
-
-## HA Controller page responsibilities
-
-- `/ha/nodes`: managed node identity, health, compatibility, availability,
-  observation freshness, applied revision, and convergence indicators.
-- `/ha/configuration`: forward-looking draft review, validation, publication,
-  and advanced observation/import/adoption only.
-- `/ha/revisions`: immutable revision history, adjacent inline detail,
-  semantic comparison, deployment preview/confirmation, and deployment of a
-  historical revision as rollback.
-- `/ha/deployments`: one unified durable execution table, active progress, ordered
-  per-node tasks, safe errors, cancellation, and verification.
-- `/ha/drift`: current convergence summary, semantic desired-versus-observed
-  incidents, policy, restore, adopt, and maintenance.
-
-`/ha/history` redirects to `/ha/revisions` while preserving its query string
-and fragment.
+Node inventory is the essential dashboard source and uses the shared retryable
+error state. Supplementary source failures retain available dashboard data and
+show an explicit partial-source warning. Unavailable statistics remain an em
+dash or unavailable panel rather than zero. Audit summaries use safe action and
+resource labels only; metadata and secrets are never rendered.

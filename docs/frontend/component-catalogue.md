@@ -73,18 +73,18 @@ without changing the corresponding desired policy.
 
 ## Shell
 
-The shell uses `ThemeProvider`, `ThemeControl`, and the shared `AtlasBrand`
-renderer. Desktop navigation dropdowns and Administration use one controlled
-open-menu state with centralized delayed leave, peer switching, outside click,
-keyboard focus movement, and Escape return. Mobile groups are controlled peer
-disclosures. Theme and asset behavior is documented in
-`theme-brand-and-pwa.md`.
+The shell uses `ThemeProvider`, `ThemeControl`, the shared `AtlasBrand`
+renderer, and one project-owned `Icon` renderer. Desktop navigation is a
+collapsible left rail with controlled group disclosures, active/open ancestry,
+labelled collapsed icons, and arrow-key entry into child links. Mobile uses the
+same hierarchy in a controlled modal drawer. Theme and asset behavior is
+documented in `theme-brand-and-pwa.md`.
 
-- `AppHeader`
+- `ApplicationSidebar`
 - `PrimaryNavigation`
-- `NavigationDropdown`
+- `NavigationGroup`
 - `MobileNavigationDrawer`
-- `ContextBar`
+- `UtilityTopBar`
 - `ClusterSelector`
 - `ScopeSelector`
 - `ActiveRevisionIndicator`
@@ -150,11 +150,10 @@ rows retain their own vertical rhythm; ordinary panel content, tables, nested
 forms, and action groups use the padded mode. `panel-form` bounds nested forms,
 and the shared `row-actions` treatment wraps actions with token spacing.
 
-Dashboard's two larger summary panels remain feature compositions because they
-combine headings, aggregate status, descriptive failure/partial-state copy,
-four inset definition-list values, and route-specific actions. They use the
-shared card, eyebrow, heading, status, and button treatments and one symmetric
-layout; they are not replacements for `MetricCard` or `StatusBadge`.
+Dashboard's five health cards, DNS activity chart/KPIs, attention and recent
+change lists, node table, and domain rankings remain feature compositions. They
+reuse shared cards, feedback, status, table, heading, icon, and button
+treatments while preserving the semantics and failure state of each source.
 
 `DataTable` optionally renders one expanded record as an adjacent table row.
 Feature code owns the record-specific disclosure button and operational detail;

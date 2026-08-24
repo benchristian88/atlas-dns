@@ -21,6 +21,7 @@ import { HAOperationsPage } from "./features/ha-operations/HAOperationsPage";
 import { NodeLifecyclePage } from "./features/ha-operations/NodeLifecyclePage";
 import { RevisionsPage } from "./features/history/HistoryPage";
 import { NodesPage } from "./features/nodes/NodesPage";
+import { NotificationsPage } from "./features/notifications/NotificationsPage";
 import { OperationalStatusPage } from "./features/operational-status/OperationalStatusPage";
 import { QueryLogPage } from "./features/query-log/QueryLogPage";
 import { RewritesPage } from "./features/rewrites/RewritesPage";
@@ -196,6 +197,9 @@ function Application({ user, onLogout }: { user: User; onLogout: () => void }) {
         break;
       case "ha-operations":
         content = <HAOperationsPage cluster={selected} />;
+        break;
+      case "notifications":
+        content = <NotificationsPage cluster={selected} />;
         break;
       case "node-lifecycle":
         content = (
