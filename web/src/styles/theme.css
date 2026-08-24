@@ -667,7 +667,6 @@ th[data-align="right"], td[data-align="right"] { text-align: right; }
 .onboarding-progress li.is-complete span { border-color: var(--atlas-success); background: var(--atlas-success-soft); color: var(--atlas-success); }
 .onboarding-step { display: grid; gap: var(--atlas-space-4); padding: clamp(var(--atlas-space-4), 4vw, var(--atlas-space-6)); }
 .onboarding-step > h2 { margin: 0; }
-.onboarding-cluster-form { width: 100%; margin: 0; text-align: left; }
 .onboarding-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--atlas-space-3); margin: 0; }
 .onboarding-summary div { min-width: 0; padding: var(--atlas-space-3); border: 1px solid var(--border); border-radius: var(--atlas-radius-card); }
 .onboarding-summary dt { color: var(--text-muted); font-size: .75rem; }

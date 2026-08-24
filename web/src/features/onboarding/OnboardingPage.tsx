@@ -6,7 +6,12 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Banner, ErrorState, Loading } from "../../components/Feedback";
+import {
+  Banner,
+  EmptyState,
+  ErrorState,
+  Loading,
+} from "../../components/Feedback";
 import { PageHeader } from "../../components/Page";
 import { api } from "../../lib/api";
 import type {
@@ -98,24 +103,24 @@ export function OnboardingPage({
 
   if (!cluster) {
     return (
-      <div className="onboarding-page">
-        <PageHeader
-          eyebrow="First-run onboarding"
-          title="Name your DNS cluster"
-          description="A cluster groups the AdGuard Home nodes that provide one resilient DNS service."
-        />
+      <EmptyState title="Name your DNS cluster">
+        <p>
+          A cluster groups the AdGuard Home nodes that provide one resilient DNS
+          service.
+        </p>
         {error !== undefined && <ErrorState error={error} />}
         <ClusterCreate
-          layout="onboarding"
           onCreated={(created) => {
             onClusterCreated?.(created);
             window.history.replaceState({}, "", "/onboarding");
           }}
         />
-        <a className="button button--quiet" href="/">
-          Exit onboarding
-        </a>
-      </div>
+        <p>
+          <a className="button button--quiet" href="/">
+            Exit onboarding
+          </a>
+        </p>
+      </EmptyState>
     );
   }
 

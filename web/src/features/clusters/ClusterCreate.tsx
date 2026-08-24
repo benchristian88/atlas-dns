@@ -5,10 +5,8 @@ import type { Cluster } from "../../lib/types";
 
 export function ClusterCreate({
   onCreated,
-  layout = "compact",
 }: {
   onCreated: (cluster: Cluster) => void;
-  layout?: "compact" | "onboarding";
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -33,7 +31,7 @@ export function ClusterCreate({
 
   return (
     <form
-      className={`card form-stack ${layout === "compact" ? "compact-form" : "onboarding-step onboarding-cluster-form"}`}
+      className="card form-stack compact-form"
       onSubmit={(event) => void submit(event)}
     >
       <h2>Create a cluster</h2>

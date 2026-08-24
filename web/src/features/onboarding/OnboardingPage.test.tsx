@@ -53,7 +53,7 @@ function status(overrides: Partial<OnboardingStatus> = {}): OnboardingStatus {
 }
 
 describe("OnboardingPage", () => {
-  it("uses the full onboarding card width for initial cluster creation", async () => {
+  it("matches the compact empty state for initial cluster creation", async () => {
     vi.spyOn(api, "onboardingStatus").mockResolvedValue(status());
     render(<OnboardingPage />);
 
@@ -61,8 +61,8 @@ describe("OnboardingPage", () => {
       name: "Create a cluster",
     });
     const form = heading.closest("form");
-    expect(form?.classList.contains("onboarding-cluster-form")).toBe(true);
-    expect(form?.classList.contains("compact-form")).toBe(false);
+    expect(form?.classList.contains("compact-form")).toBe(true);
+    expect(form?.closest(".empty-state")).not.toBeNull();
   });
 
   it("resumes at the first node and blocks an old AdGuard version before storage", async () => {
