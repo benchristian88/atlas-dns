@@ -5,12 +5,20 @@ node management, desired configuration, deployments, drift, Statistics, Query
 Log, and HA operations. Browser actions always go to the controller API; the
 browser never calls an AdGuard Home node directly.
 
+Desktop navigation uses a collapsible left rail. On tablets and phones the same
+hierarchy opens in a navigation drawer. Monitoring contains Statistics, Query
+Log, and Operational Status. Settings and Filters contain only AdGuard Home
+configuration; Atlas functions live under HA Controller or Administration.
+Setup Guide remains available near the bottom of the rail as reference/help.
+
 ## Dashboard
 
-The Dashboard summarizes node availability, controller health, recent DNS
-activity, and safety interventions. A healthy controller summary does not imply
-that every node is serving DNS, and partial collector coverage is shown rather
-than averaged away. Use the links on each panel for the authoritative detail.
+The Dashboard summarizes verified DNS serving, management API reachability, HA
+state, collection health, current attention, recent safe changes, DNS activity,
+node state, and top queried/blocked domains. A healthy controller summary does
+not imply that every node is serving DNS, and partial collector coverage is
+shown rather than averaged away. Use the links on each panel for the
+authoritative detail.
 
 ## Statistics
 
@@ -119,9 +127,15 @@ and Request ID instead of treating it as a successful exit.
 ## HA Operations
 
 HA Operations presents serving capacity, DNS probe evidence, certificate and
-version warnings, lifecycle event history, webhook channels, and guided upgrade
-history. A guided upgrade records operator progress and validation; it never
-runs host or node package commands.
+version warnings, lifecycle event history, notification delivery outcomes, and
+guided upgrade history. A guided upgrade records operator progress and
+validation; it never runs host or node package commands.
+
+## Notifications
+
+Notifications is an Atlas HA Controller function, not an AdGuard Home setting.
+It manages the existing HA lifecycle webhook channels. Delivery outcomes remain
+in HA Operations history.
 
 Webhook endpoints are write-only secrets. The list shows only a safe
 scheme/host summary. Administrators can add, edit, pause, resume, test, or delete

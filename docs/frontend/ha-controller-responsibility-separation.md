@@ -2,13 +2,15 @@
 
 ## Outcome
 
-Implemented on 3 August 2026. The approved HA Controller navigation retains
-the same five canonical routes, but each route now renders a distinct task
-surface:
+The v1.1 HA Controller navigation contains seven canonical destinations. The
+five configuration-lifecycle routes retain distinct task surfaces, while HA
+Operations and Notifications expose existing controller lifecycle capability:
 
 | Route | Responsibility |
 |---|---|
 | `/ha/nodes` | Managed infrastructure, health, compatibility, capabilities, observation freshness, applied revision, latency, convergence, and node actions |
+| `/ha/operations` | DNS capacity, maintenance, certificates, guided upgrades, and retained operational history |
+| `/ha/notifications` | Atlas HA lifecycle webhook channels; encrypted write-only destinations and bounded tests |
 | `/ha/configuration` | Forward-looking schema-v2 draft/change review, whole-draft validation, immutable publication, and advanced observation/import/adoption |
 | `/ha/revisions` | Immutable revision list and adjacent inline detail, revision comparison, deployment status, preview/confirmation, and deployment-based rollback |
 | `/ha/deployments` | One unified active and historical execution table with inline ordered per-node tasks, safe failure detail, verification, request correlation, and cancellation |
@@ -21,7 +23,7 @@ fragments.
 ## Architecture boundary
 
 This is an information-architecture and presentation change. It does not add a
-database migration or controller endpoint. The pages reuse existing typed
+database migration, notification policy, or controller endpoint. The pages reuse existing typed
 controller APIs and the shared semantic-diff/status primitives. Schema-v2
 desired state, optimistic draft concurrency, immutable revisions and hashes,
 capability-aware preflight, durable sequential stop-on-failure deployment,

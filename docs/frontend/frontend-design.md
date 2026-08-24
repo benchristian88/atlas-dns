@@ -34,10 +34,10 @@ Current detailed references are:
 
 ## Application shell
 
-Desktop uses a horizontal header. Mobile uses a drawer with the same labels,
-grouping, and route ownership. A persistent context row shows the selected
-cluster, cluster or node scope, active revision, health, and active deployment
-when present.
+Desktop uses a persistent, collapsible left rail. Mobile uses a modal drawer
+with the same labels, grouping, and route ownership. A thin utility top bar
+shows the selected cluster, cluster or node scope, active revision, health,
+refresh state, and active deployment when present.
 
 The shell owns navigation, theme selection, user actions, and shared context.
 Feature pages do not reproduce primary navigation or maintain a competing scope
@@ -50,13 +50,20 @@ notices own unsaved state and page-specific capability impact.
 
 The primary product areas are:
 
-- Dashboard, Statistics, and Query Log;
+- Dashboard;
+- Monitoring for Statistics, Query Log, and Operational Status;
 - Settings for General, DNS, Encryption, Clients, and DHCP;
 - Filters for blocklists, allowlists, rewrites, blocked services, and custom
   rules;
-- HA Controller for Nodes, Configuration Control, Revisions, Deployments, and
-  Drift;
-- Setup Guide and lower-frequency administration surfaces.
+- HA Controller for Nodes, HA Operations, Notifications, Configuration
+  Control, Revisions, Deployments, and Drift;
+- Administration for users, audit, controller settings, backups, updates, and
+  About; and
+- Setup Guide as a help/reference utility.
+
+Settings and Filters are exclusively AdGuard Home desired configuration.
+Notifications is an Atlas controller function and must not appear under
+Settings. There is no general Integrations destination.
 
 The canonical route table, compatibility redirects, route ownership, and menu
 behavior are defined in [UI Navigation](ui-navigation.md) and
@@ -90,13 +97,17 @@ state, visible frontend state, diagnostics, or exports.
 ## Dashboard model
 
 Dashboard is a concise cluster-health overview, not a replacement for detailed
-feature pages. It presents:
+feature pages. It presents five evidence-backed primary cards where data is
+available—DNS Serving, API Reachable, HA Status, Collection, and Attention—and:
 
 - node health and HA redundancy;
 - controller subsystem state for API, Statistics, and Query Log;
 - DNS activity summaries for queries, blocked percentage, safety interventions,
   and query-weighted average processing time;
-- active revision, drift, deployments, and recent operational activity.
+- actionable operational/HA, drift, deployment, certificate, and update state;
+- recent safe revision, deployment, and audit summaries;
+- compact node DNS/API/version/freshness/update state; and
+- top queried and blocked domains.
 
 Statistics and Query Log summaries preserve freshness, coverage, partial-input
 state, and source-node attribution. Detailed coverage and investigation remain
@@ -124,7 +135,9 @@ and node attribution must remain visible.
 
 The mobile drawer is an alternate presentation of the same hierarchy, not a
 different information architecture. Controls must not rely on hover, and
-closing a drawer or dialog restores focus to its trigger.
+closing a drawer or dialog restores focus to its trigger. Dashboard layouts
+reflow at large-desktop, laptop, tablet, and phone widths; wide node/query
+tables retain local scrolling.
 
 The authenticated shell has an explicit inline-size containment contract. It
 does not depend on document-level overflow clipping; context and data tables own

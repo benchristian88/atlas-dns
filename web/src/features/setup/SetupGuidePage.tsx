@@ -115,7 +115,7 @@ export function SetupGuidePage({ cluster }: { cluster: Cluster }) {
     void load();
   }, [load]);
   return (
-    <PageContainer size="standard">
+    <PageContainer size="wide">
       <PageHeader
         eyebrow="Getting started"
         title="Setup Guide"

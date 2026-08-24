@@ -31,7 +31,7 @@ export function SystemSettingsPage() {
     }
   }
   return (
-    <PageContainer size="standard">
+    <PageContainer size="wide">
       <PageHeader
         eyebrow="System"
         title="System Settings"

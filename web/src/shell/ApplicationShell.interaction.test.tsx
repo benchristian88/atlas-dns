@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 
 import {
-  act,
   cleanup,
-  fireEvent,
   render,
   screen,
   waitFor,
@@ -27,13 +25,18 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  vi.useRealTimers();
   window.localStorage.clear();
 });
 
 beforeEach(() => installMatchMedia());
 
-function ShellTest({ children = <p>Page</p> }: { children?: ReactNode }) {
+function ShellTest({
+  children = <p>Page</p>,
+  pathname = "/settings/dns",
+}: {
+  children?: ReactNode;
+  pathname?: string;
+}) {
   return (
     <ThemeProvider>
       <ApplicationShell
@@ -44,7 +47,7 @@ function ShellTest({ children = <p>Page</p> }: { children?: ReactNode }) {
           role: "administrator",
         }}
         clusters={[]}
-        pathname="/settings/dns"
+        pathname={pathname}
         onSelectCluster={() => undefined}
         onLogout={() => undefined}
       >
@@ -54,108 +57,97 @@ function ShellTest({ children = <p>Page</p> }: { children?: ReactNode }) {
   );
 }
 
-describe("shell menu keyboard behavior", () => {
-  it("opens a desktop menu and the mobile drawer from the keyboard", async () => {
-    const user = userEvent.setup();
+describe("v1.1 application shell", () => {
+  it("keeps the active child current and its owning sidebar group open", () => {
     render(<ShellTest />);
-
-    const settingsButton = screen.getByRole("button", { name: /Settings/ });
-    await user.click(settingsButton);
-    expect(settingsButton.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("menu", { name: /Settings/ })).toBeTruthy();
-
-    const drawerButton = screen.getByRole("button", {
-      name: "Open navigation",
+    const primary = screen.getByRole("navigation", {
+      name: "Primary navigation",
     });
-    drawerButton.focus();
-    await user.keyboard("{Enter}");
     expect(
-      screen.getByRole("navigation", { name: "Mobile navigation" }),
-    ).not.toBeNull();
-    const mobileNavigation = screen.getByRole("navigation", {
+      within(primary)
+        .getByRole("button", { name: "Settings" })
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(
+      within(primary)
+        .getByRole("link", { name: "DNS" })
+        .getAttribute("aria-current"),
+    ).toBe("page");
+    expect(screen.getByRole("link", { name: "Setup Guide" })).toBeTruthy();
+  });
+
+  it("expands groups and moves keyboard focus into the first child", async () => {
+    const interaction = userEvent.setup();
+    render(<ShellTest />);
+    const filters = screen.getByRole("button", { name: "Filters" });
+    filters.focus();
+    await interaction.keyboard("{ArrowDown}");
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toBe("DNS Blocklists"),
+    );
+    expect(filters.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("collapses to labelled icons and expands when a group is selected", async () => {
+    const interaction = userEvent.setup();
+    const { container } = render(<ShellTest />);
+    await interaction.click(
+      screen.getByRole("button", { name: "Collapse sidebar" }),
+    );
+    expect(
+      container
+        .querySelector(".app-shell")
+        ?.getAttribute("data-sidebar-collapsed"),
+    ).toBe("true");
+    expect(window.localStorage.getItem("atlas-dns.sidebar-collapsed")).toBe(
+      "true",
+    );
+    const filters = screen.getByRole("button", { name: "Filters" });
+    expect(filters.getAttribute("title")).toBe("Filters");
+    await interaction.click(filters);
+    expect(
+      container
+        .querySelector(".app-shell")
+        ?.hasAttribute("data-sidebar-collapsed"),
+    ).toBe(false);
+    expect(filters.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("uses the same hierarchy in the mobile drawer and restores trigger focus", async () => {
+    const interaction = userEvent.setup();
+    render(<ShellTest />);
+    const trigger = screen.getByRole("button", { name: "Open navigation" });
+    await interaction.click(trigger);
+    const drawer = screen.getByRole("dialog", { name: "Navigation drawer" });
+    const mobileNavigation = within(drawer).getByRole("navigation", {
       name: "Mobile navigation",
     });
-    const mobileSettings = mobileNavigation.querySelector(
-      '.mobile-nav-group[data-open="true"]',
-    );
-    expect(mobileSettings?.textContent).toContain("DNS");
-    await user.click(
-      within(mobileNavigation).getByRole("button", { name: "Filters" }),
-    );
     expect(
       within(mobileNavigation)
         .getByRole("button", { name: "Settings" })
         .getAttribute("aria-expanded"),
-    ).toBe("false");
+    ).toBe("true");
+    await interaction.click(
+      within(mobileNavigation).getByRole("button", { name: "Filters" }),
+    );
     expect(
       within(mobileNavigation)
         .getByRole("button", { name: "Filters" })
         .getAttribute("aria-expanded"),
     ).toBe("true");
-    await user.keyboard("{Escape}");
     expect(
-      screen.queryByRole("navigation", { name: "Mobile navigation" }),
+      within(mobileNavigation)
+        .getByRole("button", { name: "Settings" })
+        .getAttribute("aria-expanded"),
+    ).toBe("false");
+    await interaction.keyboard("{Escape}");
+    expect(
+      screen.queryByRole("dialog", { name: "Navigation drawer" }),
     ).toBeNull();
-    await waitFor(() => expect(document.activeElement).toBe(drawerButton));
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 
-  it("coordinates hover, peer switching, delayed leave, and touch clicks", async () => {
-    vi.useFakeTimers();
-    render(<ShellTest />);
-    const settings = screen.getByRole("button", { name: /Settings/ });
-    const filters = screen.getByRole("button", { name: /Filters/ });
-
-    fireEvent.mouseEnter(settings.parentElement as HTMLElement);
-    expect(settings.getAttribute("aria-expanded")).toBe("true");
-
-    fireEvent.mouseEnter(filters.parentElement as HTMLElement);
-    expect(filters.getAttribute("aria-expanded")).toBe("true");
-    expect(settings.getAttribute("aria-expanded")).toBe("false");
-
-    const filtersRoot = filters.parentElement as HTMLElement;
-    fireEvent.mouseLeave(filtersRoot);
-    act(() => vi.advanceTimersByTime(179));
-    expect(filters.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.mouseEnter(screen.getByRole("menu"));
-    act(() => vi.advanceTimersByTime(1));
-    expect(filters.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.mouseLeave(filtersRoot);
-    act(() => vi.advanceTimersByTime(180));
-    expect(filters.getAttribute("aria-expanded")).toBe("false");
-
-    fireEvent.click(settings);
-    expect(settings.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.click(settings);
-    expect(settings.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.pointerEnter(settings.parentElement as HTMLElement, {
-      pointerType: "touch",
-    });
-    expect(settings.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(settings);
-    expect(settings.getAttribute("aria-expanded")).toBe("true");
-    vi.useRealTimers();
-  });
-
-  it("closes outside, restores trigger focus on Escape, and moves menu focus", async () => {
-    const user = userEvent.setup();
-    render(<ShellTest />);
-    const settings = screen.getByRole("button", { name: /Settings/ });
-
-    settings.focus();
-    await user.keyboard("{ArrowDown}");
-    await waitFor(() =>
-      expect(document.activeElement?.textContent).toBe("General"),
-    );
-    await user.keyboard("{Escape}");
-    expect(settings.getAttribute("aria-expanded")).toBe("false");
-    expect(document.activeElement).toBe(settings);
-
-    await user.click(settings);
-    fireEvent.pointerDown(screen.getByLabelText("Controller context"));
-    expect(settings.getAttribute("aria-expanded")).toBe("false");
-  });
-
-  it("shows cluster, scope, revision, health, and active-deployment context", async () => {
+  it("shows cluster, scope, revision, health, refresh, and deployment context", async () => {
     const cluster = {
       id: "cluster-1",
       name: "Home DNS",
@@ -180,7 +172,7 @@ describe("shell menu keyboard behavior", () => {
     } as Deployment;
     vi.spyOn(api, "nodes").mockResolvedValue({
       items: [node],
-      refreshedAt: "2026-08-02T00:00:00Z",
+      refreshedAt: "2026-08-24T07:00:00Z",
       staleAfterSeconds: 60,
     });
     vi.spyOn(api, "configurationRevisions").mockResolvedValue({
@@ -210,12 +202,24 @@ describe("shell menu keyboard behavior", () => {
     );
 
     await waitFor(() => expect(screen.getByText("#24")).toBeTruthy());
-    expect(screen.getByRole("option", { name: "Home DNS" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "Entire Cluster" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "Primary" })).toBeTruthy();
-    expect(screen.getByText("Healthy")).toBeTruthy();
+    const context = screen.getByRole("region", { name: "Controller context" });
     expect(
-      screen.getByRole("link", { name: /deployme · applying Primary/ }),
+      within(context).getByRole("option", { name: "Home DNS" }),
     ).toBeTruthy();
+    expect(
+      within(context).getByRole("option", { name: "Entire Cluster" }),
+    ).toBeTruthy();
+    expect(
+      within(context).getByRole("option", { name: "Primary" }),
+    ).toBeTruthy();
+    expect(within(context).getByText("Healthy")).toBeTruthy();
+    expect(
+      within(context).getByRole("link", { name: "applying Primary" }),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getAllByRole("link", { name: "Notifications" })
+        .some((link) => link.classList.contains("topbar-icon-button")),
+    ).toBe(true);
   });
 });

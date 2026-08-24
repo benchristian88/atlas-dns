@@ -1,5 +1,4 @@
 import {
-  type FocusEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   useCallback,
@@ -9,6 +8,7 @@ import {
   useState,
 } from "react";
 import { AtlasBrand } from "../components/Brand";
+import { Icon } from "../components/Icon";
 import { StatusBadge } from "../components/StatusBadge";
 import { api } from "../lib/api";
 import { clusterHealth } from "../lib/freshness";
@@ -21,12 +21,14 @@ import type {
 } from "../lib/types";
 import { ThemeControl } from "../theme/ThemeControl";
 import {
-  ADMINISTRATION_NAVIGATION,
+  groupForPath,
   isGroupActive,
+  isLinkActive,
   isNavigationGroup,
   type NavigationGroup,
   type NavigationLink,
   PRIMARY_NAVIGATION,
+  UTILITY_NAVIGATION,
 } from "./navigation";
 import { ScopeProvider } from "./ScopeContext";
 
@@ -40,12 +42,7 @@ interface ApplicationShellProps {
   children: ReactNode;
 }
 
-type DesktopMenuID =
-  | "settings"
-  | "filters"
-  | "ha-controller"
-  | "administration";
-const MENU_CLOSE_DELAY_MS = 180;
+const SIDEBAR_STORAGE_KEY = "atlas-dns.sidebar-collapsed";
 
 export function ApplicationShell({
   user,
@@ -56,99 +53,35 @@ export function ApplicationShell({
   onLogout,
   children,
 }: ApplicationShellProps) {
+  const activeGroup = groupForPath(pathname);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [openMobileMenu, setOpenMobileMenu] = useState<
-    DesktopMenuID | undefined
-  >(() => activeMobileMenu(pathname));
+  const [collapsed, setCollapsed] = useState(readCollapsedPreference);
+  const [openGroups, setOpenGroups] = useState<Set<string>>(
+    () => new Set(activeGroup ? [activeGroup.id] : []),
+  );
+  const [mobileGroup, setMobileGroup] = useState(activeGroup?.id);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [revisions, setRevisions] = useState<ConfigurationRevision[]>([]);
   const [activeDeployment, setActiveDeployment] = useState<Deployment>();
+  const [refreshedAt, setRefreshedAt] = useState<string>();
   const [contextAvailable, setContextAvailable] = useState(true);
   const [scopeNodeID, setScopeNodeID] = useState("");
-  const [openMenu, setOpenMenu] = useState<DesktopMenuID>();
-  const closeTimer = useRef<number | undefined>(undefined);
-  const hoverOpenedMenu = useRef<DesktopMenuID | undefined>(undefined);
-  const menuTriggers = useRef(new Map<DesktopMenuID, HTMLButtonElement>());
-  const drawerTrigger = useRef<HTMLButtonElement | null>(null);
+  const drawerTrigger = useRef<HTMLButtonElement>(null);
+  const drawerClose = useRef<HTMLButtonElement>(null);
+  const accountRoot = useRef<HTMLDivElement>(null);
 
-  const closeDrawer = useCallback((restoreFocus = false) => {
+  const closeDrawer = useCallback(() => {
     setDrawerOpen(false);
-    if (restoreFocus) {
-      window.requestAnimationFrame(() => drawerTrigger.current?.focus());
-    }
+    window.requestAnimationFrame(() => drawerTrigger.current?.focus());
   }, []);
-
-  const cancelMenuClose = useCallback(() => {
-    if (closeTimer.current !== undefined) {
-      window.clearTimeout(closeTimer.current);
-      closeTimer.current = undefined;
-    }
-  }, []);
-
-  const closeDesktopMenu = useCallback(
-    (restoreFocus = false) => {
-      cancelMenuClose();
-      hoverOpenedMenu.current = undefined;
-      setOpenMenu((current) => {
-        if (restoreFocus && current !== undefined) {
-          menuTriggers.current.get(current)?.focus();
-        }
-        return undefined;
-      });
-    },
-    [cancelMenuClose],
-  );
-
-  const openDesktopMenu = useCallback(
-    (menu: DesktopMenuID) => {
-      cancelMenuClose();
-      setOpenMenu(menu);
-    },
-    [cancelMenuClose],
-  );
-
-  const openDesktopMenuFromHover = useCallback(
-    (menu: DesktopMenuID) => {
-      hoverOpenedMenu.current = menu;
-      openDesktopMenu(menu);
-    },
-    [openDesktopMenu],
-  );
-
-  const toggleDesktopMenu = useCallback(
-    (menu: DesktopMenuID) => {
-      cancelMenuClose();
-      setOpenMenu((current) => {
-        if (current === menu) {
-          if (hoverOpenedMenu.current === menu) {
-            hoverOpenedMenu.current = undefined;
-            return current;
-          }
-          return undefined;
-        }
-        hoverOpenedMenu.current = undefined;
-        return menu;
-      });
-    },
-    [cancelMenuClose],
-  );
-
-  const scheduleDesktopMenuClose = useCallback(
-    (menu: DesktopMenuID) => {
-      cancelMenuClose();
-      closeTimer.current = window.setTimeout(() => {
-        setOpenMenu((current) => (current === menu ? undefined : current));
-        closeTimer.current = undefined;
-      }, MENU_CLOSE_DELAY_MS);
-    },
-    [cancelMenuClose],
-  );
 
   const loadContext = useCallback(async () => {
     if (selected === undefined) {
       setNodes([]);
       setRevisions([]);
       setActiveDeployment(undefined);
+      setRefreshedAt(undefined);
       return;
     }
     try {
@@ -164,6 +97,7 @@ export function ApplicationShell({
       );
       const detailed = active ? await api.deployment(active.id) : undefined;
       setNodes(nodeResult.items);
+      setRefreshedAt(nodeResult.refreshedAt);
       setRevisions(revisionResult.items);
       setActiveDeployment(detailed);
       setContextAvailable(true);
@@ -180,34 +114,52 @@ export function ApplicationShell({
   }, [loadContext]);
 
   useEffect(() => {
+    const group = groupForPath(pathname);
+    setMobileGroup(group?.id);
+    if (group !== undefined)
+      setOpenGroups((current) => new Set([...current, group.id]));
+  }, [pathname]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
+    } catch {
+      // Browser-local presentation state must never block the shell.
+    }
+  }, [collapsed]);
+
+  useEffect(() => {
     if (!drawerOpen) return;
+    drawerClose.current?.focus();
     const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeDrawer(true);
+      if (event.key === "Escape") {
+        setDrawerOpen(false);
+        window.requestAnimationFrame(() => drawerTrigger.current?.focus());
+      }
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [closeDrawer, drawerOpen]);
-
-  useEffect(() => setOpenMobileMenu(activeMobileMenu(pathname)), [pathname]);
+  }, [drawerOpen]);
 
   useEffect(() => {
-    if (openMenu === undefined) return;
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      const target = event.target;
-      const owner =
-        target instanceof Element
-          ? target.closest<HTMLElement>("[data-desktop-menu]")
-          : null;
-      if (owner?.dataset.desktopMenu !== openMenu) {
-        closeDesktopMenu();
-      }
+    if (!accountOpen) return;
+    const close = (event: PointerEvent) => {
+      if (
+        event.target instanceof globalThis.Node &&
+        !accountRoot.current?.contains(event.target)
+      )
+        setAccountOpen(false);
     };
-    document.addEventListener("pointerdown", closeOnOutsidePointer);
-    return () =>
-      document.removeEventListener("pointerdown", closeOnOutsidePointer);
-  }, [closeDesktopMenu, openMenu]);
-
-  useEffect(() => () => cancelMenuClose(), [cancelMenuClose]);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAccountOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [accountOpen]);
 
   const activeRevision = revisions.find(
     (revision) => revision.active || revision.id === selected?.activeRevisionId,
@@ -220,112 +172,60 @@ export function ApplicationShell({
     [nodes],
   );
 
+  const toggleGroup = (group: NavigationGroup) => {
+    if (collapsed) {
+      setCollapsed(false);
+      setOpenGroups((current) => new Set([...current, group.id]));
+      return;
+    }
+    setOpenGroups((current) => {
+      const next = new Set(current);
+      if (next.has(group.id) && !isGroupActive(group, pathname))
+        next.delete(group.id);
+      else next.add(group.id);
+      return next;
+    });
+  };
+
   return (
-    <div className="app-shell">
-      <header className="app-header">
+    <div className="app-shell" data-sidebar-collapsed={collapsed || undefined}>
+      <aside className="app-sidebar" aria-label="Application sidebar">
         <a
-          className="brand"
+          className="sidebar-brand"
           href="/"
           aria-label="Atlas DNS Controller dashboard"
         >
           <AtlasBrand placement="header" />
         </a>
-        <nav className="desktop-navigation" aria-label="Primary navigation">
-          {PRIMARY_NAVIGATION.map((item) =>
-            isNavigationGroup(item) ? (
-              <DesktopGroup
-                key={item.label}
-                group={item}
-                pathname={pathname}
-                menuID={desktopMenuID(item)}
-                open={openMenu === desktopMenuID(item)}
-                triggerRef={(element) => {
-                  const menuID = desktopMenuID(item);
-                  if (element === null) menuTriggers.current.delete(menuID);
-                  else menuTriggers.current.set(menuID, element);
-                }}
-                onOpen={openDesktopMenu}
-                onOpenFromHover={openDesktopMenuFromHover}
-                onToggle={toggleDesktopMenu}
-                onClose={closeDesktopMenu}
-                onScheduleClose={scheduleDesktopMenuClose}
-                onCancelClose={cancelMenuClose}
-              />
-            ) : (
-              <ShellLink key={item.href} item={item} pathname={pathname} />
-            ),
-          )}
-        </nav>
-        <ThemeControl />
-        <fieldset
-          className="administration-menu"
-          data-desktop-menu="administration"
-          onMouseEnter={() => {
-            if (openMenu !== "administration")
-              openDesktopMenuFromHover("administration");
-          }}
-          onMouseLeave={() => scheduleDesktopMenuClose("administration")}
-          onFocus={cancelMenuClose}
-          onBlur={(event) => closeWhenFocusLeaves(event, closeDesktopMenu)}
-          onKeyDown={(event) =>
-            handleMenuKeyDown(
-              event,
-              openMenu === "administration",
-              () => openDesktopMenu("administration"),
-              closeDesktopMenu,
-            )
-          }
-        >
-          <legend className="visually-hidden">Administration menu</legend>
+        <SidebarNavigation
+          pathname={pathname}
+          collapsed={collapsed}
+          openGroups={openGroups}
+          onToggleGroup={toggleGroup}
+        />
+        <div className="sidebar-utility">
+          {UTILITY_NAVIGATION.map((item) => (
+            <SidebarLink
+              key={item.href}
+              item={item}
+              pathname={pathname}
+              collapsed={collapsed}
+            />
+          ))}
           <button
-            ref={(element) => {
-              if (element === null)
-                menuTriggers.current.delete("administration");
-              else menuTriggers.current.set("administration", element);
-            }}
-            className="administration-trigger"
-            id="administration-menu-trigger"
             type="button"
-            aria-haspopup="menu"
-            aria-expanded={openMenu === "administration"}
-            aria-controls="administration-menu"
-            onClick={() => toggleDesktopMenu("administration")}
+            className="sidebar-collapse"
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={() => setCollapsed((current) => !current)}
           >
-            <span className="administration-identity">
-              <strong>{user.displayName}</strong>
-              <small>Administration</small>
-            </span>
-            <span aria-hidden="true">▾</span>
+            <Icon name="collapse" />
+            <span>{collapsed ? "Expand" : "Collapse"}</span>
           </button>
-          {openMenu === "administration" && (
-            <div
-              className="nav-popover nav-popover--right"
-              id="administration-menu"
-              role="menu"
-              aria-labelledby="administration-menu-trigger"
-              onMouseEnter={cancelMenuClose}
-            >
-              <p className="menu-identity">{user.email}</p>
-              {ADMINISTRATION_NAVIGATION.map((item) => (
-                <ShellLink
-                  key={item.href}
-                  item={item}
-                  pathname={pathname}
-                  menuItem
-                  onSelect={() => closeDesktopMenu()}
-                />
-              ))}
-              <button
-                className="menu-action"
-                type="button"
-                role="menuitem"
-                onClick={onLogout}
-              >
-                Sign Out
-              </button>
-            </div>
-          )}
-        </fieldset>
+        </div>
+      </aside>
+
+      <header className="app-topbar">
         <button
           ref={drawerTrigger}
           className="drawer-toggle"
@@ -335,8 +235,115 @@ export function ApplicationShell({
           aria-label="Open navigation"
           onClick={() => setDrawerOpen(true)}
         >
-          <span aria-hidden="true">☰</span>
+          <Icon name="menu" />
         </button>
+        <a
+          className="topbar-brand"
+          href="/"
+          aria-label="Atlas DNS Controller dashboard"
+        >
+          <AtlasBrand placement="header" />
+        </a>
+        <section className="topbar-context" aria-label="Controller context">
+          <label className="topbar-select">
+            <span>Cluster</span>
+            <select
+              value={selected?.id ?? ""}
+              onChange={(event) => onSelectCluster(event.target.value)}
+              disabled={clusters.length === 0}
+            >
+              {clusters.map((cluster) => (
+                <option key={cluster.id} value={cluster.id}>
+                  {cluster.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="topbar-select topbar-select--scope">
+            <span>Scope</span>
+            <select
+              value={scopeNodeID}
+              onChange={(event) => setScopeNodeID(event.target.value)}
+              disabled={nodes.length === 0}
+            >
+              <option value="">Entire Cluster</option>
+              {nodes.map((node) => (
+                <option key={node.id} value={node.id}>
+                  {node.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="topbar-fact topbar-fact--revision">
+            <small>Revision</small>
+            <strong>
+              {contextAvailable
+                ? activeRevision
+                  ? `#${activeRevision.revisionNumber}`
+                  : "None"
+                : "Unavailable"}
+            </strong>
+          </span>
+          <span className="topbar-fact topbar-fact--health">
+            <small>Health</small>
+            {contextAvailable ? (
+              <StatusBadge status={clusterHealth(nodes)} />
+            ) : (
+              <strong>Unavailable</strong>
+            )}
+          </span>
+          {activeDeployment && (
+            <a className="topbar-deployment" href="/ha/deployments">
+              {activeTask
+                ? `${activeTask.status} ${nodeNames.get(activeTask.nodeId) ?? "node"}`
+                : activeDeployment.status}
+            </a>
+          )}
+        </section>
+        <span className="topbar-updated" title={formatDate(refreshedAt)}>
+          <Icon name="updates" />
+          <span>
+            {contextAvailable
+              ? formatRelative(refreshedAt)
+              : "Refresh unavailable"}
+          </span>
+        </span>
+        <ThemeControl />
+        <a
+          className="topbar-icon-button"
+          href="/ha/notifications"
+          aria-label="Notifications"
+          title="Notifications"
+        >
+          <Icon name="notifications" />
+        </a>
+        <div className="account-menu" ref={accountRoot}>
+          <button
+            type="button"
+            className="account-trigger"
+            aria-expanded={accountOpen}
+            aria-haspopup="menu"
+            aria-controls="account-menu"
+            onClick={() => setAccountOpen((current) => !current)}
+          >
+            <span className="account-avatar" aria-hidden="true">
+              {initials(user.displayName)}
+            </span>
+            <span className="account-identity">
+              <strong>{user.displayName}</strong>
+              <small>{user.role}</small>
+            </span>
+            <Icon name="chevron" />
+          </button>
+          {accountOpen && (
+            <div className="account-popover" id="account-menu" role="menu">
+              <p>{user.email}</p>
+              <button type="button" role="menuitem" onClick={onLogout}>
+                Sign Out
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
       {drawerOpen && (
@@ -345,16 +352,23 @@ export function ApplicationShell({
             className="drawer-backdrop"
             type="button"
             aria-label="Close navigation"
-            onClick={() => closeDrawer(true)}
+            onClick={closeDrawer}
           />
-          <aside className="mobile-drawer" id="mobile-navigation">
+          <aside
+            className="mobile-drawer"
+            id="mobile-navigation"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation drawer"
+          >
             <div className="drawer-heading">
-              <strong>Navigation</strong>
+              <AtlasBrand placement="header" />
               <button
+                ref={drawerClose}
                 className="drawer-close"
                 type="button"
                 aria-label="Close navigation"
-                onClick={() => closeDrawer(true)}
+                onClick={closeDrawer}
               >
                 ×
               </button>
@@ -363,97 +377,42 @@ export function ApplicationShell({
               {PRIMARY_NAVIGATION.map((item) =>
                 isNavigationGroup(item) ? (
                   <MobileGroup
-                    key={item.label}
+                    key={item.id}
                     group={item}
                     pathname={pathname}
-                    menuID={desktopMenuID(item)}
-                    open={openMobileMenu === desktopMenuID(item)}
-                    onToggle={(menuID) =>
-                      setOpenMobileMenu((current) =>
-                        current === menuID ? undefined : menuID,
+                    open={mobileGroup === item.id}
+                    onToggle={() =>
+                      setMobileGroup((current) =>
+                        current === item.id && !isGroupActive(item, pathname)
+                          ? undefined
+                          : item.id,
                       )
                     }
                   />
                 ) : (
-                  <ShellLink key={item.href} item={item} pathname={pathname} />
+                  <SidebarLink
+                    key={item.href}
+                    item={item}
+                    pathname={pathname}
+                  />
                 ),
               )}
             </nav>
-            <div className="drawer-administration">
-              <p className="nav-label">Administration</p>
-              {ADMINISTRATION_NAVIGATION.map((item) => (
-                <ShellLink key={item.href} item={item} pathname={pathname} />
+            <div className="drawer-utility">
+              {UTILITY_NAVIGATION.map((item) => (
+                <SidebarLink key={item.href} item={item} pathname={pathname} />
               ))}
-              <button className="menu-action" type="button" onClick={onLogout}>
+              <button
+                className="drawer-signout"
+                type="button"
+                onClick={onLogout}
+              >
                 Sign Out · {user.displayName}
               </button>
             </div>
           </aside>
         </>
       )}
-
-      <section className="context-row" aria-label="Controller context">
-        <label className="context-select">
-          <span>Cluster</span>
-          <select
-            value={selected?.id ?? ""}
-            onChange={(event) => onSelectCluster(event.target.value)}
-            disabled={clusters.length === 0}
-          >
-            {clusters.map((cluster) => (
-              <option key={cluster.id} value={cluster.id}>
-                {cluster.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="context-select">
-          <span>Scope</span>
-          <select
-            value={scopeNodeID}
-            onChange={(event) => setScopeNodeID(event.target.value)}
-            disabled={nodes.length === 0}
-          >
-            <option value="">Entire Cluster</option>
-            {nodes.map((node) => (
-              <option key={node.id} value={node.id}>
-                {node.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="context-fact">
-          <small>Active revision</small>
-          <strong>
-            {contextAvailable
-              ? activeRevision
-                ? `#${activeRevision.revisionNumber}`
-                : "None"
-              : "Unavailable"}
-          </strong>
-        </span>
-        <span className="context-fact">
-          <small>Cluster health</small>
-          {contextAvailable ? (
-            <StatusBadge status={clusterHealth(nodes)} />
-          ) : (
-            <strong>Unavailable</strong>
-          )}
-        </span>
-        <span className="context-deployment" aria-live="polite">
-          <small>Active deployment</small>
-          {contextAvailable && activeDeployment ? (
-            <a href="/ha/deployments">
-              {activeDeployment.id.slice(0, 8)} ·{" "}
-              {activeTask
-                ? `${activeTask.status} ${nodeNames.get(activeTask.nodeId) ?? "node"}`
-                : activeDeployment.status}
-            </a>
-          ) : (
-            <strong>{contextAvailable ? "None" : "Unavailable"}</strong>
-          )}
-        </span>
-      </section>
 
       <ScopeProvider value={{ nodeId: scopeNodeID, nodes }}>
         <main className="content">{children}</main>
@@ -462,111 +421,98 @@ export function ApplicationShell({
   );
 }
 
-function DesktopGroup({
-  group,
+function SidebarNavigation({
   pathname,
-  menuID,
-  open,
-  triggerRef,
-  onOpen,
-  onOpenFromHover,
-  onToggle,
-  onClose,
-  onScheduleClose,
-  onCancelClose,
+  collapsed,
+  openGroups,
+  onToggleGroup,
 }: {
-  group: NavigationGroup;
   pathname: string;
-  menuID: DesktopMenuID;
-  open: boolean;
-  triggerRef: (element: HTMLButtonElement | null) => void;
-  onOpen: (menu: DesktopMenuID) => void;
-  onOpenFromHover: (menu: DesktopMenuID) => void;
-  onToggle: (menu: DesktopMenuID) => void;
-  onClose: (restoreFocus?: boolean) => void;
-  onScheduleClose: (menu: DesktopMenuID) => void;
-  onCancelClose: () => void;
+  collapsed: boolean;
+  openGroups: ReadonlySet<string>;
+  onToggleGroup: (group: NavigationGroup) => void;
 }) {
-  const active = isGroupActive(group, pathname);
   return (
-    <fieldset
-      className="nav-menu"
-      data-desktop-menu={menuID}
-      onMouseEnter={() => {
-        if (!open) onOpenFromHover(menuID);
-      }}
-      onMouseLeave={() => onScheduleClose(menuID)}
-      onFocus={onCancelClose}
-      onBlur={(event) => closeWhenFocusLeaves(event, onClose)}
-      onKeyDown={(event) =>
-        handleMenuKeyDown(event, open, () => onOpen(menuID), onClose)
-      }
-    >
-      <legend className="visually-hidden">{group.label} menu</legend>
-      <button
-        ref={triggerRef}
-        id={`desktop-menu-trigger-${menuID}`}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={`desktop-menu-${menuID}`}
-        className={active ? "nav-parent nav-parent--current" : "nav-parent"}
-        onClick={() => onToggle(menuID)}
-      >
-        {group.label} <span aria-hidden="true">▾</span>
-      </button>
-      {open && (
-        <div
-          className="nav-popover"
-          id={`desktop-menu-${menuID}`}
-          role="menu"
-          aria-labelledby={`desktop-menu-trigger-${menuID}`}
-          onMouseEnter={onCancelClose}
-        >
-          {group.children.map((item) => (
-            <ShellLink
-              key={item.href}
-              item={item}
-              pathname={pathname}
-              menuItem
-              onSelect={() => onClose()}
-            />
-          ))}
-        </div>
+    <nav className="sidebar-navigation" aria-label="Primary navigation">
+      {PRIMARY_NAVIGATION.map((item) =>
+        isNavigationGroup(item) ? (
+          <SidebarGroup
+            key={item.id}
+            group={item}
+            pathname={pathname}
+            collapsed={collapsed}
+            open={openGroups.has(item.id)}
+            onToggle={() => onToggleGroup(item)}
+          />
+        ) : (
+          <SidebarLink
+            key={item.href}
+            item={item}
+            pathname={pathname}
+            collapsed={collapsed}
+          />
+        ),
       )}
-    </fieldset>
+    </nav>
   );
 }
 
-function MobileGroup({
+function SidebarGroup({
   group,
   pathname,
-  menuID,
+  collapsed,
   open,
   onToggle,
 }: {
   group: NavigationGroup;
   pathname: string;
-  menuID: DesktopMenuID;
+  collapsed: boolean;
   open: boolean;
-  onToggle: (menu: DesktopMenuID) => void;
+  onToggle: () => void;
 }) {
   const active = isGroupActive(group, pathname);
+  const expanded = open && !collapsed;
+  const trigger = useRef<HTMLButtonElement>(null);
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (["ArrowDown", "ArrowRight"].includes(event.key)) {
+      event.preventDefault();
+      if (!expanded) onToggle();
+      window.requestAnimationFrame(() => {
+        document
+          .getElementById(`sidebar-group-${group.id}`)
+          ?.querySelector<HTMLElement>("a")
+          ?.focus();
+      });
+    }
+    if (event.key === "Escape" && expanded) {
+      event.preventDefault();
+      trigger.current?.focus();
+    }
+  };
   return (
-    <div className="mobile-nav-group" data-open={open || undefined}>
+    <div className="sidebar-group" data-active={active || undefined}>
       <button
+        ref={trigger}
         type="button"
-        aria-expanded={open}
-        aria-controls={`mobile-menu-${menuID}`}
-        className={active ? "nav-parent nav-parent--current" : "nav-parent"}
-        onClick={() => onToggle(menuID)}
+        className="sidebar-group__trigger"
+        aria-expanded={expanded}
+        aria-controls={`sidebar-group-${group.id}`}
+        aria-label={collapsed ? group.label : undefined}
+        title={collapsed ? group.label : undefined}
+        onClick={onToggle}
+        onKeyDown={handleKeyDown}
       >
-        {group.label}
+        <Icon name={group.icon} />
+        <span>{group.label}</span>
+        <Icon className="sidebar-chevron" name="chevron" />
       </button>
-      {open && (
-        <div className="mobile-nav-children" id={`mobile-menu-${menuID}`}>
+      {expanded && (
+        <div
+          className="sidebar-group__children"
+          id={`sidebar-group-${group.id}`}
+        >
           {group.children.map((item) => (
-            <ShellLink key={item.href} item={item} pathname={pathname} />
+            <SidebarLink key={item.href} item={item} pathname={pathname} />
           ))}
         </div>
       )}
@@ -574,86 +520,103 @@ function MobileGroup({
   );
 }
 
-function ShellLink({
+function MobileGroup({
+  group,
+  pathname,
+  open,
+  onToggle,
+}: {
+  group: NavigationGroup;
+  pathname: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="mobile-nav-group" data-open={open || undefined}>
+      <button
+        type="button"
+        className="sidebar-group__trigger"
+        aria-expanded={open}
+        aria-controls={`mobile-group-${group.id}`}
+        onClick={onToggle}
+      >
+        <Icon name={group.icon} />
+        <span>{group.label}</span>
+        <Icon className="sidebar-chevron" name="chevron" />
+      </button>
+      {open && (
+        <div
+          className="sidebar-group__children"
+          id={`mobile-group-${group.id}`}
+        >
+          {group.children.map((item) => (
+            <SidebarLink key={item.href} item={item} pathname={pathname} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SidebarLink({
   item,
   pathname,
-  menuItem = false,
-  onSelect,
+  collapsed = false,
 }: {
   item: NavigationLink;
   pathname: string;
-  menuItem?: boolean;
-  onSelect?: () => void;
+  collapsed?: boolean;
 }) {
-  const current = item.href === pathname;
+  const current = isLinkActive(item, pathname);
   return (
     <a
       href={item.href}
-      className={current ? "nav-link nav-link--current" : "nav-link"}
+      className={
+        current ? "sidebar-link sidebar-link--current" : "sidebar-link"
+      }
       aria-current={current ? "page" : undefined}
-      role={menuItem ? "menuitem" : undefined}
-      onClick={onSelect}
+      aria-label={collapsed ? item.label : undefined}
+      title={collapsed ? item.label : undefined}
     >
-      {item.label}
+      <Icon name={item.icon} />
+      <span>{item.label}</span>
     </a>
   );
 }
 
-function desktopMenuID(group: NavigationGroup): DesktopMenuID {
-  if (group.label === "Settings") return "settings";
-  if (group.label === "Filters") return "filters";
-  return "ha-controller";
-}
-
-function activeMobileMenu(pathname: string): DesktopMenuID | undefined {
-  const active = PRIMARY_NAVIGATION.find(
-    (item): item is NavigationGroup =>
-      isNavigationGroup(item) && isGroupActive(item, pathname),
-  );
-  return active === undefined ? undefined : desktopMenuID(active);
-}
-
-function closeWhenFocusLeaves(
-  event: FocusEvent<HTMLElement>,
-  close: (restoreFocus?: boolean) => void,
-) {
-  const next = event.relatedTarget;
-  if (!(next instanceof Node) || !event.currentTarget.contains(next)) close();
-}
-
-function handleMenuKeyDown(
-  event: ReactKeyboardEvent<HTMLElement>,
-  open: boolean,
-  openMenu: () => void,
-  closeMenu: (restoreFocus?: boolean) => void,
-) {
-  if (event.key === "Escape" && open) {
-    event.preventDefault();
-    closeMenu(true);
-    return;
+function readCollapsedPreference() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
+  } catch {
+    return false;
   }
+}
 
-  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
-  event.preventDefault();
-  if (!open) {
-    const menuRoot = event.currentTarget as HTMLElement;
-    openMenu();
-    window.requestAnimationFrame(() => {
-      const root = menuRoot.querySelector<HTMLElement>('[role="menuitem"]');
-      root?.focus();
-    });
-    return;
-  }
+function formatDate(value?: string) {
+  if (!value) return "Not refreshed yet";
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf())
+    ? "Refresh time unavailable"
+    : date.toLocaleString();
+}
 
-  const items = Array.from(
-    event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+function formatRelative(value?: string) {
+  if (!value) return "Waiting for refresh";
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return "Refresh time unavailable";
+  const seconds = Math.max(0, Math.round((Date.now() - date.valueOf()) / 1000));
+  if (seconds < 60) return "Updated just now";
+  const minutes = Math.round(seconds / 60);
+  return `Updated ${minutes}m ago`;
+}
+
+function initials(name: string) {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "A"
   );
-  if (items.length === 0) return;
-  const current = items.indexOf(document.activeElement as HTMLElement);
-  let next = event.key === "ArrowUp" ? current - 1 : current + 1;
-  if (event.key === "Home") next = 0;
-  if (event.key === "End") next = items.length - 1;
-  if (next < 0) next = items.length - 1;
-  if (next >= items.length) next = 0;
-  items[next]?.focus();
 }

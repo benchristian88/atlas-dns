@@ -29,7 +29,7 @@ export function UpdatesPage() {
     void load();
   }, [load]);
   return (
-    <PageContainer size="standard">
+    <PageContainer size="wide">
       <PageHeader
         eyebrow="System"
         title="Updates"

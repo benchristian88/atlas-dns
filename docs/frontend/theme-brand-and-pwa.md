@@ -49,8 +49,8 @@ theme colours.
 
 ## Theme control and artwork
 
-The compact 44px theme icon button is immediately before the desktop
-administration menu and remains available beside the mobile drawer button. Its
+The compact theme icon button is in the utility top bar beside notification and
+account actions and remains available beside the mobile drawer button. Its
 icon and accessible name reflect the selected preference. Activating it opens a
 three-option menu for Light, Dark, and System with checked state, arrow/Home/End
 navigation, Escape close/focus return, outside-click close, and ordinary touch

@@ -5,6 +5,39 @@ All notable changes to Atlas DNS Controller are documented in this file.
 The stable 1.x line follows Semantic Versioning for documented public
 interfaces.
 
+## 1.1.0 - Unreleased
+
+### Added
+
+- Added the responsive v1.1 application shell with a collapsible desktop left
+  rail, equivalent mobile drawer, project-owned line icons, utility-focused top
+  bar, and accessible active/open navigation ancestry.
+- Added the dedicated HA Controller → Notifications presentation route for the
+  existing encrypted webhook capability.
+- Redesigned Dashboard around evidence-backed DNS Serving, API Reachable, HA,
+  Collection, and Attention cards plus DNS activity, current attention, recent
+  safe changes, compact node state, and top-domain rankings.
+- Added ADR-0034 and canonical navigation, shell, dashboard, responsive, and
+  route-ownership documentation.
+
+### Changed
+
+- Moved Statistics, Query Log, and Operational Status into the Monitoring
+  navigation group while retaining every stable route.
+- Kept Settings and Filters exclusive to managed AdGuard Home configuration;
+  Atlas controller behavior now has explicit HA Controller or Administration
+  ownership. Setup Guide is a bottom-rail help/reference utility.
+- Standardized every canonical authenticated page on the Dashboard's wide
+  content frame, including Operational Status, Administration, and Setup Guide.
+
+### Fixed
+
+- Preserved explicit unavailable and partial-source states on Dashboard instead
+  of presenting missing operational data as zero.
+- Added regression coverage for route/menu mapping, active and nested
+  navigation, collapsed and mobile shells, keyboard behavior, Dashboard
+  loading/error/empty/success states, and structural accessibility.
+
 ## 1.0.2 - Unreleased
 
 ### Added
