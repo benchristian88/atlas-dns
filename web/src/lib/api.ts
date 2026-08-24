@@ -142,6 +142,17 @@ export interface NodePayload {
   recordVersion?: number;
 }
 
+type MutableSystemSettings = Pick<
+  SystemSettings,
+  | "updateChecksEnabled"
+  | "recordVersion"
+  | "nodeHealthIntervalSeconds"
+  | "statisticsPollIntervalSeconds"
+  | "queryLogCollectionEnabled"
+  | "queryLogPollIntervalSeconds"
+  | "queryLogRetentionSeconds"
+>;
+
 export const api = {
   setupStatus: () =>
     request<{
@@ -258,10 +269,21 @@ export const api = {
     }),
   versionInfo: () => request<VersionInfo>("/api/v1/system/version"),
   systemSettings: () => request<SystemSettings>("/api/v1/system/settings"),
-  updateSystemSettings: (settings: SystemSettings) =>
+  updateSystemSettings: (settings: MutableSystemSettings) =>
     request<SystemSettings>("/api/v1/system/settings", {
       method: "PATCH",
-      body: JSON.stringify(settings),
+      // The GET representation also contains read-only display values. Keep
+      // the strict PATCH contract at this boundary so those fields never get
+      // reflected back to the server.
+      body: JSON.stringify({
+        updateChecksEnabled: settings.updateChecksEnabled,
+        recordVersion: settings.recordVersion,
+        nodeHealthIntervalSeconds: settings.nodeHealthIntervalSeconds,
+        statisticsPollIntervalSeconds: settings.statisticsPollIntervalSeconds,
+        queryLogCollectionEnabled: settings.queryLogCollectionEnabled,
+        queryLogPollIntervalSeconds: settings.queryLogPollIntervalSeconds,
+        queryLogRetentionSeconds: settings.queryLogRetentionSeconds,
+      }),
     }),
   clusters: () => request<{ items: Cluster[] }>("/api/v1/clusters"),
   createCluster: (input: { name: string; description: string }) =>
