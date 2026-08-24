@@ -467,10 +467,8 @@ Use for:
 
 ### Standard
 
-Use for:
-
-- Setup Guide.
-- All System administration routes.
+Available for bounded embedded content and focused compositions, but no
+canonical authenticated application route currently uses this width.
 
 ### Wide
 
@@ -485,16 +483,19 @@ Use for:
 - Revisions.
 - Deployments.
 - Drift.
+- Setup Guide.
+- All System administration routes.
 
 ### Full
 
 Reserved for a future route whose content demonstrably requires the complete
 available desktop width. No current canonical route uses Full.
 
-Dashboard, Statistics, and Query Log share the Wide primary-application
-measure. Filters are one Wide family. All System administration pages,
-including Audit Log and Operational Status, use Standard consistently. Mobile
-always uses the available inline size regardless of the desktop maximum.
+Every canonical authenticated application route shares the Dashboard's Wide
+primary-application measure. This keeps Monitoring, Settings, Filters, HA
+Controller, Administration, and Setup Guide aligned as operators move between
+sections. Mobile always uses the available inline size regardless of the
+desktop maximum.
 
 ### Canonical route assignment
 
@@ -506,8 +507,8 @@ always uses the available inline size regardless of the desktop maximum.
 | `/filters/blocklists`, `/filters/allowlists`, `/filters/rewrites`, `/filters/blocked-services`, `/filters/custom-rules` | Wide | One coherent Filters family with tables, catalogues, and editors. |
 | `/query-log` | Wide | Matches Dashboard while its investigation table scrolls locally when required. |
 | `/ha/nodes`, `/ha/nodes/{nodeId}`, `/ha/operations`, `/ha/notifications`, `/ha/configuration`, `/ha/revisions`, `/ha/deployments`, `/ha/drift` | Wide | Operational tables, comparisons, grids, and lifecycle controls. |
-| `/setup-guide` | Standard | Linear state-derived reference checklist. |
-| `/system/users`, `/system/audit`, `/system/operational-status`, `/system/settings`, `/system/backups`, `/system/updates`, `/system/about` | Standard | One coherent administration measure; dense tables remain locally scrollable. |
+| `/setup-guide` | Wide | Aligns reference/help with the primary application frame. |
+| `/system/users`, `/system/audit`, `/system/operational-status`, `/system/settings`, `/system/backups`, `/system/updates`, `/system/about` | Wide | Aligns Administration and Monitoring with Dashboard; dense tables remain locally scrollable. |
 
 ---
 

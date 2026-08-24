@@ -27,6 +27,8 @@ interfaces.
 - Kept Settings and Filters exclusive to managed AdGuard Home configuration;
   Atlas controller behavior now has explicit HA Controller or Administration
   ownership. Setup Guide is a bottom-rail help/reference utility.
+- Standardized every canonical authenticated page on the Dashboard's wide
+  content frame, including Operational Status, Administration, and Setup Guide.
 
 ### Fixed
 

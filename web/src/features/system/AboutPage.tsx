@@ -20,7 +20,7 @@ export function AboutPage() {
     void load();
   }, [load]);
   return (
-    <PageContainer size="standard">
+    <PageContainer size="wide">
       <PageHeader
         eyebrow="System"
         title="About Atlas DNS Controller"

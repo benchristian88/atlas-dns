@@ -199,15 +199,6 @@ export function resolveRoute(pathname: string): RouteResolution {
 
 export function routePageWidth(route: RouteResolution): RoutePageWidth {
   switch (route.kind) {
-    case "audit":
-    case "operational-status":
-    case "setup-guide":
-    case "users":
-    case "backups":
-    case "updates":
-    case "system-settings":
-    case "about":
-      return "standard";
     case "not-found":
     case "redirect":
       return "narrow";
