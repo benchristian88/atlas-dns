@@ -28,13 +28,44 @@ require the existing same-origin CSRF token.
   manifest and offline restore plan. Restore execution has no web endpoint.
 - `GET /api/v1/system/update` returns cached controller release status and host-guided
   update instructions; `POST /api/v1/system/update/check` forces a bounded refresh.
-- `GET/PATCH /api/v1/system/settings` exposes the justified persisted release-check
-  setting plus read-only retention and installation facts with optimistic
-  `recordVersion`.
+- `GET/PATCH /api/v1/system/settings` exposes the persisted release-check,
+  node-health interval, Statistics interval, Query Log collection/interval,
+  and Query Log retention settings plus read-only installation facts with
+  optimistic `recordVersion`. PATCH retains omitted monitoring values for
+  compatibility with the earlier release-check-only payload.
 - `GET /api/v1/system/version` returns application version, commit, build time,
   development state, and current database schema version.
 
 Every response includes `X-Request-ID`. API responses use `Cache-Control: no-store` and standard browser security headers.
+
+## Guided onboarding
+
+All onboarding routes require an administrator session. PATCH/POST also require
+the normal CSRF token. Status derives nodes, observations, capabilities,
+revisions, System Settings, and safe notification counts from their canonical
+services; it never returns credentials or webhook destinations.
+
+```text
+GET   /api/v1/onboarding/status?clusterId={clusterId}
+PATCH /api/v1/clusters/{clusterId}/onboarding
+POST  /api/v1/clusters/{clusterId}/onboarding/finish
+POST  /api/v1/clusters/{clusterId}/nodes/validate
+```
+
+Status returns `setupRequired`, `completed`, `resumeStep`, controller identity,
+topology facts, the first qualifying schema-v2 revision, monitoring settings,
+notification count, and `canFinish`. Progress accepts the current onboarding
+`recordVersion` plus optional `redundancySkipped`, `monitoringReviewed`, and
+`notificationsSkipped` booleans. Finish fails with conflict until the
+server-derived prerequisites are satisfied. After recording completion, Finish
+runs one cluster-scoped node-health, DNS-health, Statistics, and Query Log pass
+concurrently with a 20-second overall limit. Collection failures do not roll
+back completion and remain visible through the normal operational endpoints.
+
+Node candidate validation accepts the normal node-creation payload, applies the
+same SSRF/TLS/credential/status probe without storing it, and adds
+`onboardingCompatibility`. The guided floor is v0.107.78 in the v0.107 API
+generation. Normal node creation probes again before encrypting credentials.
 
 ## Authentication and CSRF
 
@@ -443,11 +474,18 @@ POST /api/v1/nodes/{nodeId}/upgrades
 POST /api/v1/upgrades/{upgradeId}/validate
 ```
 
-Notification create accepts `name`, `enabled`, and an HTTPS `destination`.
-Lists return `destinationSummary` (scheme and host only), `subscribedEvents`,
-state, and created/updated timestamps; they never return the encrypted or clear
-destination. PATCH updates supported metadata and preserves the stored
-destination by default. Destination replacement requires both
+Notification create/update payloads include `subscribedCategories`, a non-empty
+subset of `dns`, `redundancy`, `certificates`, `versions`, `maintenance`, and
+`upgrades`. Existing channels migrate to all categories. Delivery is queued
+only when the event's server-owned category is subscribed. For v1 API
+compatibility, an omitted field selects all categories on create and preserves
+the current categories on update; an explicitly empty array is rejected.
+
+Notification create accepts `name`, `enabled`, an HTTPS `destination`, and the
+selected categories. Lists return `destinationSummary` (scheme and host only),
+`subscribedCategories`, state, and created/updated timestamps; they never return
+the encrypted or clear destination. PATCH updates supported metadata and
+preserves the stored destination by default. Destination replacement requires both
 `replaceDestination: true` and a new `destination`; blank/implicit replacement
 is rejected.
 

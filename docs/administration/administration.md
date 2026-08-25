@@ -4,14 +4,19 @@ All current users are local administrators. The server authorizes every
 mutation, applies CSRF protection to browser requests, and records security- and
 control-plane-sensitive actions in Audit.
 
-## Initial setup and Setup Guide
+## Initial setup, onboarding, and Setup Guide
 
 When no user exists, the application offers **Create your administrator**. The
 setup transaction creates the first administrator and session; subsequent setup
-attempts are rejected. Create a cluster, register nodes, test connectivity,
-import desired configuration, publish a revision, and verify the first
-deployment. Setup Guide derives its steps from actual controller state and can
-be revisited at any time.
+attempts are rejected. Atlas then offers `/onboarding`, which guides cluster
+identity, compatible node registration, topology observation, explicit initial
+source selection, immutable revision publication, monitoring settings, and
+optional notifications. See [Guided Onboarding](../getting-started/onboarding.md).
+
+Onboarding and Setup Guide consume the same server-derived status. Onboarding
+performs the work with the operator; Setup Guide remains reference and follow-up
+guidance. Either can be revisited. Exiting the wizard preserves completed valid
+work and a completed installation opens in non-destructive review mode.
 
 A cluster with no nodes is a valid first-run state. Setup Guide renders its
 checklist, marks node-dependent work incomplete, and links to Add first node;
@@ -29,7 +34,8 @@ available, preserving audit attribution and the current authorization boundary.
 
 HA → HA Operations owns the single notification-channel subsystem.
 
-- **Add webhook** accepts a unique name, enabled state, and HTTPS destination.
+- **Add webhook** accepts a unique name, enabled state, HTTPS destination, and
+  one or more event categories.
 - **Edit webhook** can rename or change enabled state while retaining the hidden
   destination. Select **Replace destination secret** only for a deliberate
   replacement.
@@ -95,10 +101,15 @@ untrusted display data. Back up and preflight before following host instructions
 
 ## System Settings
 
-System → Settings controls supported persistent controller settings such as
-release checks. Collector intervals, retention, database connectivity, secrets,
-and listener settings remain deployment configuration unless the UI explicitly
-states otherwise. Use Operational Status to verify effective worker behavior.
+System → Settings controls persistent release checks plus node-health cadence,
+Statistics polling cadence, Query Log collection, Query Log polling cadence,
+and central Query Log retention. Changes use optimistic concurrency, are
+audited, and update collector scheduling without restart. Database connectivity,
+secrets, listener settings, and the public origin remain protected deployment
+configuration. API and DNS freshness deadlines expand with the selected node
+health cadence; an explicit probe failure still takes effect immediately. Use
+Operational Status to verify effective worker behavior and the next scheduled
+run.
 
 ## About
 

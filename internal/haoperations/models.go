@@ -244,17 +244,17 @@ type ReleaseCache struct {
 }
 
 type NotificationChannel struct {
-	ID                 string    `json:"id"`
-	ClusterID          string    `json:"clusterId"`
-	Name               string    `json:"name"`
-	ChannelType        string    `json:"channelType"`
-	Enabled            bool      `json:"enabled"`
-	DestinationSet     bool      `json:"destinationSet"`
-	DestinationSummary string    `json:"destinationSummary"`
-	SubscribedEvents   []string  `json:"subscribedEvents"`
-	RecordVersion      int       `json:"recordVersion"`
-	CreatedAt          time.Time `json:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt"`
+	ID                   string    `json:"id"`
+	ClusterID            string    `json:"clusterId"`
+	Name                 string    `json:"name"`
+	ChannelType          string    `json:"channelType"`
+	Enabled              bool      `json:"enabled"`
+	DestinationSet       bool      `json:"destinationSet"`
+	DestinationSummary   string    `json:"destinationSummary"`
+	SubscribedCategories []string  `json:"subscribedCategories"`
+	RecordVersion        int       `json:"recordVersion"`
+	CreatedAt            time.Time `json:"createdAt"`
+	UpdatedAt            time.Time `json:"updatedAt"`
 }
 
 type NotificationChannelRecord struct {

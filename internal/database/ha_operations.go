@@ -176,7 +176,8 @@ func insertHAEvent(ctx context.Context, tx pgx.Tx, value haoperations.Event) err
 	if err != nil {
 		return fmt.Errorf("insert HA event: %w", err)
 	}
-	rows, err := tx.Query(ctx, `SELECT id FROM notification_channels WHERE cluster_id=$1 AND enabled`, value.ClusterID)
+	category := haoperations.NotificationCategoryForEvent(value.EventType)
+	rows, err := tx.Query(ctx, `SELECT id FROM notification_channels WHERE cluster_id=$1 AND enabled AND $2=ANY(subscribed_categories)`, value.ClusterID, category)
 	if err != nil {
 		return fmt.Errorf("list event notification channels: %w", err)
 	}

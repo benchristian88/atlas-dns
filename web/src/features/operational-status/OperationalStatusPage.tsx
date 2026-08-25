@@ -6,6 +6,7 @@ import {
   SummaryTileGrid,
 } from "../../components/DataDisplay";
 import { Banner, ErrorState, Loading } from "../../components/Feedback";
+import { PageHeader } from "../../components/Page";
 import { SettingsGroup } from "../../components/Settings";
 import { StatusBadge, type StatusKind } from "../../components/StatusBadge";
 import { api } from "../../lib/api";
@@ -42,16 +43,12 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
 
   return (
     <>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Administration</p>
-          <h1>Operational Status</h1>
-          <p>
-            Health of the controller, collectors, storage, and background work.
-          </p>
-        </div>
-        <StatusBadge status={badge(status.summary.state)} />
-      </header>
+      <PageHeader
+        eyebrow="Administration"
+        title="Operational Status"
+        description="Health of the controller, collectors, storage, and background work."
+        primaryAction={<StatusBadge status={badge(status.summary.state)} />}
+      />
       {error !== undefined && (
         <Banner tone="warning" title="Status refresh failed">
           The last successful operational snapshot remains visible.

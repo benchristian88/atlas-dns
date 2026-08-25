@@ -130,6 +130,13 @@ describe("OperationalStatusPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Operational Status" }),
     ).not.toBeNull();
+    expect(
+      screen
+        .getByText(
+          "Health of the controller, collectors, storage, and background work.",
+        )
+        .closest(".page-header__description"),
+    ).not.toBeNull();
     expect(screen.getByText("dns-secondary")).not.toBeNull();
     expect(screen.getByText("QUERY_LOG_NODE_RETENTION_GAP")).not.toBeNull();
     expect(screen.getByText("query log collection")).not.toBeNull();

@@ -42,6 +42,24 @@ func TestLoadRejectsUnsafeQueryLogBounds(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsUnsafePersistedMonitoringFallbackBounds(t *testing.T) {
+	for name, value := range map[string]string{
+		"NODE_HEALTH_INTERVAL":     "2s",
+		"STATISTICS_POLL_INTERVAL": "25h",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("PUBLIC_BASE_URL", "http://localhost:8080")
+			t.Setenv("DATABASE_URL", "postgres://example.invalid/test")
+			t.Setenv("SESSION_SECRET", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("s", 48))))
+			t.Setenv("CREDENTIAL_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString([]byte("12345678901234567890123456789012")))
+			t.Setenv(name, value)
+			if _, err := Load(); err == nil {
+				t.Fatalf("Load accepted unsafe %s=%s", name, value)
+			}
+		})
+	}
+}
+
 func TestLoadRejectsPlaceholderCredentialKey(t *testing.T) {
 	t.Setenv("PUBLIC_BASE_URL", "http://localhost:8080")
 	t.Setenv("DATABASE_URL", "postgres://example.invalid/test")

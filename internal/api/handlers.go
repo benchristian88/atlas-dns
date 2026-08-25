@@ -191,10 +191,17 @@ func (s *Server) handleListNodes(response http.ResponseWriter, request *http.Req
 		s.writeError(response, request, err)
 		return
 	}
-	staleAfterSeconds := max(int64(s.healthInterval/time.Second)*3, 1)
 	writeJSON(response, http.StatusOK, map[string]any{
-		"items": nodes, "refreshedAt": time.Now().UTC(), "staleAfterSeconds": staleAfterSeconds,
+		"items": nodes, "refreshedAt": time.Now().UTC(), "staleAfterSeconds": s.nodeStaleAfterSeconds(),
 	})
+}
+
+func (s *Server) nodeStaleAfterSeconds() int64 {
+	healthInterval := s.healthInterval
+	if s.runtime != nil {
+		healthInterval = s.runtime.RuntimeSettings().NodeHealthInterval
+	}
+	return max(int64(healthInterval/time.Second)*3, 1)
 }
 
 func (s *Server) handleCreateNode(response http.ResponseWriter, request *http.Request) {

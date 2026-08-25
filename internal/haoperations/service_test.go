@@ -10,6 +10,7 @@ import (
 	"github.com/benchristian88/atlas-dns/internal/configuration"
 	"github.com/benchristian88/atlas-dns/internal/domain"
 	"github.com/benchristian88/atlas-dns/internal/inventory"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 )
 
 const (
@@ -273,6 +274,98 @@ func TestSummaryReportsAllDNSFailedAtRisk(t *testing.T) {
 	summary, err := service.Summary(context.Background(), serviceClusterID)
 	if err != nil || summary.State != "at_risk" || summary.ServingDNSNodes != 0 {
 		t.Fatalf("summary=%#v err=%v", summary, err)
+	}
+}
+
+func TestExplicitDNSFailureRemainsFailedAfterFreshnessWindow(t *testing.T) {
+	now := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	repository := &serviceRepositoryFake{
+		nodes:    []domain.Node{healthyNode(serviceNodeA)},
+		probes:   []DNSProbeResult{{NodeID: serviceNodeA, Status: "failed", ProbedAt: now.Add(-20 * time.Minute), ErrorCode: "DNS_PROBE_UNREACHABLE"}},
+		settings: map[string]NodeSettings{},
+	}
+	service := NewService(repository, nil, nil, nil, nil, nil)
+	service.now = func() time.Time { return now }
+
+	summary, err := service.Summary(context.Background(), serviceClusterID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Nodes[0].DNSStatus != "failed" || summary.ServingDNSNodes != 0 {
+		t.Fatalf("aged explicit failure summary=%#v", summary)
+	}
+}
+
+func TestSummaryUsesLiveRuntimeIntervalForSuccessfulDNSProbeFreshness(t *testing.T) {
+	now := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	probedAt := now.Add(-5 * time.Minute)
+	repository := &serviceRepositoryFake{
+		nodes: []domain.Node{healthyNode(serviceNodeA), healthyNode(serviceNodeB)},
+		probes: []DNSProbeResult{
+			{NodeID: serviceNodeA, Status: "healthy", UDPStatus: "healthy", TCPStatus: "healthy", ProbedAt: probedAt},
+			{NodeID: serviceNodeB, Status: "healthy", UDPStatus: "healthy", TCPStatus: "healthy", ProbedAt: probedAt},
+		},
+		settings: map[string]NodeSettings{},
+	}
+	runtime := systemsettings.NewRuntimeStore(systemsettings.RuntimeSettings{NodeHealthInterval: 6 * time.Minute})
+	service := NewService(repository, nil, nil, nil, nil, nil)
+	service.SetRuntimeSettings(runtime)
+	service.now = func() time.Time { return now }
+
+	summary, err := service.Summary(context.Background(), serviceClusterID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.State != "healthy" || summary.ServingDNSNodes != 2 || summary.Nodes[0].DNSStatus != "healthy" {
+		t.Fatalf("six-minute interval summary=%#v", summary)
+	}
+
+	runtime.Update(systemsettings.RuntimeSettings{NodeHealthInterval: 30 * time.Second})
+	summary, err = service.Summary(context.Background(), serviceClusterID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.State != "at_risk" || summary.ServingDNSNodes != 0 || summary.Nodes[0].DNSStatus != "stale" {
+		t.Fatalf("live 30-second interval summary=%#v", summary)
+	}
+}
+
+func TestMaintenancePreflightUsesSameRuntimeDNSFreshnessWindow(t *testing.T) {
+	now := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	probedAt := now.Add(-5 * time.Minute)
+	repository := &serviceRepositoryFake{
+		nodes: []domain.Node{healthyNode(serviceNodeA), healthyNode(serviceNodeB)},
+		probes: []DNSProbeResult{
+			{NodeID: serviceNodeA, Status: "healthy", ProbedAt: probedAt},
+			{NodeID: serviceNodeB, Status: "healthy", ProbedAt: probedAt},
+		},
+		settings: map[string]NodeSettings{},
+	}
+	runtime := systemsettings.NewRuntimeStore(systemsettings.RuntimeSettings{NodeHealthInterval: 6 * time.Minute})
+	service := NewService(repository, nil, nil, nil, nil, nil)
+	service.SetRuntimeSettings(runtime)
+	service.now = func() time.Time { return now }
+
+	preflight, err := service.MaintenancePreflight(context.Background(), serviceNodeA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preflight.HealthyDNSNodesRemaining != 1 || preflight.BreakGlassRequired {
+		t.Fatalf("long-interval preflight=%#v", preflight)
+	}
+	for _, check := range preflight.Checks {
+		if check.Name == "target_dns" && check.Status != "pass" {
+			t.Fatalf("target DNS check=%#v", check)
+		}
+	}
+}
+
+func TestDNSFreshnessWindowIncludesScheduleGrace(t *testing.T) {
+	if got := DNSFreshnessWindow(30 * time.Second); got != 2*time.Minute {
+		t.Fatalf("default freshness window=%s", got)
+	}
+	if got := DNSFreshnessWindow(6 * time.Minute); got != 18*time.Minute {
+		t.Fatalf("long freshness window=%s", got)
 	}
 }
 

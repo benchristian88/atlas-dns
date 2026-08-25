@@ -36,7 +36,7 @@ func TestProtectedRouteInventoryRequiresAuthentication(t *testing.T) {
 
 	protectedPattern := regexp.MustCompile(`s\.mux\.Handle\("([A-Z]+) ([^"]+)", s\.(authenticated|administrator)\(`)
 	protected := protectedPattern.FindAllSubmatch(source, -1)
-	if got, want := len(protected), 87; got != want {
+	if got, want := len(protected), 91; got != want {
 		t.Fatalf("protected route inventory contains %d routes, want %d; review every route before changing this gate", got, want)
 	}
 	if got := bytes.Count(source, []byte("s.mux.Handle(")); got != len(protected) {

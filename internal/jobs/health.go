@@ -33,6 +33,16 @@ type HealthPoller struct {
 	logger      *slog.Logger
 	now         func() time.Time
 	health      *operationalhealth.Tracker
+	settings    RuntimeSettingsProvider
+}
+
+func (p *HealthPoller) SetRuntimeSettings(provider RuntimeSettingsProvider) { p.settings = provider }
+
+func (p *HealthPoller) currentInterval() time.Duration {
+	if p.settings != nil {
+		return p.settings.RuntimeSettings().NodeHealthInterval
+	}
+	return p.interval
 }
 
 func NewHealthPoller(store HealthStore, decrypter CredentialDecrypter, probe StatusProbe, interval time.Duration, logger *slog.Logger, trackers ...*operationalhealth.Tracker) *HealthPoller {
@@ -48,13 +58,13 @@ func NewHealthPoller(store HealthStore, decrypter CredentialDecrypter, probe Sta
 
 func (p *HealthPoller) Run(ctx context.Context) {
 	p.poll(ctx)
-	ticker := time.NewTicker(p.interval)
-	defer ticker.Stop()
 	for {
+		timer := time.NewTimer(p.currentInterval())
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			p.poll(ctx)
 		}
 	}
@@ -74,21 +84,35 @@ func (p *HealthPoller) PollNow(ctx context.Context, nodeID string) error {
 	return domain.NewError(domain.ErrorNotFound, "node was not found or is disabled")
 }
 
+// PollClusterNow refreshes every enabled node in one cluster using the same
+// durable health path as the scheduled worker.
+func (p *HealthPoller) PollClusterNow(ctx context.Context, clusterID string) error {
+	return p.pollCluster(ctx, clusterID)
+}
+
 func (p *HealthPoller) poll(ctx context.Context) {
+	_ = p.pollCluster(ctx, "")
+}
+
+func (p *HealthPoller) pollCluster(ctx context.Context, clusterID string) error {
+	interval := p.currentInterval()
 	if p.health != nil {
-		p.health.Start("node_connectivity", p.now().UTC().Add(p.interval))
+		p.health.Start("node_connectivity", p.now().UTC().Add(interval))
 	}
 	records, err := p.store.PollableNodes(ctx)
 	if err != nil {
-		p.logger.Error("node health polling could not load nodes", "subsystem", "node_connectivity", "error", err, "retry_in", p.interval)
+		p.logger.Error("node health polling could not load nodes", "subsystem", "node_connectivity", "error", err, "retry_in", interval)
 		if p.health != nil {
-			p.health.Failure("node_connectivity", "NODE_LIST_FAILED", p.now().UTC().Add(p.interval))
+			p.health.Failure("node_connectivity", "NODE_LIST_FAILED", p.now().UTC().Add(interval))
 		}
-		return
+		return err
 	}
 	semaphore := make(chan struct{}, p.concurrency)
 	var group sync.WaitGroup
 	for _, record := range records {
+		if clusterID != "" && record.Node.ClusterID != clusterID {
+			continue
+		}
 		record := record
 		group.Add(1)
 		go func() {
@@ -104,8 +128,9 @@ func (p *HealthPoller) poll(ctx context.Context) {
 	}
 	group.Wait()
 	if p.health != nil {
-		p.health.Success("node_connectivity", p.now().UTC().Add(p.interval))
+		p.health.Success("node_connectivity", p.now().UTC().Add(interval))
 	}
+	return nil
 }
 
 func (p *HealthPoller) pollNode(ctx context.Context, record domain.NodeRecord) {

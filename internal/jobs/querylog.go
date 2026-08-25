@@ -41,6 +41,16 @@ type QueryLogPoller struct {
 	logger      *slog.Logger
 	now         func() time.Time
 	health      *operationalhealth.Tracker
+	settings    RuntimeSettingsProvider
+}
+
+func (p *QueryLogPoller) SetRuntimeSettings(provider RuntimeSettingsProvider) { p.settings = provider }
+func (p *QueryLogPoller) currentSettings() (bool, time.Duration, time.Duration) {
+	if p.settings != nil {
+		value := p.settings.RuntimeSettings()
+		return value.QueryLogCollection, value.QueryLogPollInterval, value.QueryLogRetention
+	}
+	return true, p.interval, p.retention
 }
 
 func NewQueryLogPoller(store QueryLogStore, decrypter CredentialDecrypter, reader QueryLogReader, interval, timeout, retention time.Duration, logger *slog.Logger, trackers ...*operationalhealth.Tracker) *QueryLogPoller {
@@ -58,33 +68,57 @@ func NewQueryLogPoller(store QueryLogStore, decrypter CredentialDecrypter, reade
 
 func (p *QueryLogPoller) Run(ctx context.Context) {
 	p.poll(ctx)
-	ticker := time.NewTicker(p.interval)
-	defer ticker.Stop()
 	for {
+		_, interval, _ := p.currentSettings()
+		timer := time.NewTimer(interval)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			p.poll(ctx)
 		}
 	}
 }
 
+// PollClusterNow performs an immediate bounded collection for one cluster.
+// Disabled Query Log collection remains an intentional paused state.
+func (p *QueryLogPoller) PollClusterNow(ctx context.Context, clusterID string) error {
+	return p.pollCluster(ctx, clusterID, false)
+}
+
 func (p *QueryLogPoller) poll(ctx context.Context) {
-	if p.health != nil {
-		p.health.Start("query_log_collection", p.now().UTC().Add(p.interval))
+	_ = p.pollCluster(ctx, "", true)
+}
+
+func (p *QueryLogPoller) pollCluster(ctx context.Context, clusterID string, cleanup bool) error {
+	enabled, interval, retention := p.currentSettings()
+	if p.health != nil && enabled {
+		p.health.Start("query_log_collection", p.now().UTC().Add(interval))
+	}
+	if !enabled {
+		if p.health != nil {
+			p.health.Pause("query_log_collection", p.now().UTC().Add(interval))
+		}
+		if cleanup {
+			p.cleanup(ctx, interval, retention)
+		}
+		return nil
 	}
 	records, err := p.store.PollableNodes(ctx)
 	if err != nil {
-		p.logger.Error("query-log polling could not load nodes", "subsystem", "query_log_collection", "error", err, "retry_in", p.interval)
+		p.logger.Error("query-log polling could not load nodes", "subsystem", "query_log_collection", "error", err, "retry_in", interval)
 		if p.health != nil {
-			p.health.Failure("query_log_collection", "QUERY_LOG_NODE_LIST_FAILED", p.now().UTC().Add(p.interval))
+			p.health.Failure("query_log_collection", "QUERY_LOG_NODE_LIST_FAILED", p.now().UTC().Add(interval))
 		}
-		return
+		return err
 	}
 	semaphore := make(chan struct{}, p.concurrency)
 	var group sync.WaitGroup
 	for _, record := range records {
+		if clusterID != "" && record.Node.ClusterID != clusterID {
+			continue
+		}
 		record := record
 		group.Add(1)
 		go func() {
@@ -100,20 +134,27 @@ func (p *QueryLogPoller) poll(ctx context.Context) {
 	}
 	group.Wait()
 	if p.health != nil {
-		p.health.Success("query_log_collection", p.now().UTC().Add(p.interval))
+		p.health.Success("query_log_collection", p.now().UTC().Add(interval))
 	}
+	if cleanup {
+		p.cleanup(ctx, interval, retention)
+	}
+	return nil
+}
+
+func (p *QueryLogPoller) cleanup(ctx context.Context, interval, retention time.Duration) {
 	if p.health != nil {
-		p.health.Start("query_log_retention", p.now().UTC().Add(p.interval))
+		p.health.Start("query_log_retention", p.now().UTC().Add(interval))
 	}
-	if _, err := p.store.CleanupQueryLog(ctx, p.now().UTC(), p.retention, 10_000); err != nil {
-		p.logger.Error("query-log retention cleanup failed", "subsystem", "query_log_retention", "error", err, "retry_in", p.interval)
+	if _, err := p.store.CleanupQueryLog(ctx, p.now().UTC(), retention, 10_000); err != nil {
+		p.logger.Error("query-log retention cleanup failed", "subsystem", "query_log_retention", "error", err, "retry_in", interval)
 		if p.health != nil {
-			p.health.Failure("query_log_retention", "QUERY_LOG_RETENTION_FAILED", p.now().UTC().Add(p.interval))
+			p.health.Failure("query_log_retention", "QUERY_LOG_RETENTION_FAILED", p.now().UTC().Add(interval))
 		}
 		return
 	}
 	if p.health != nil {
-		p.health.Success("query_log_retention", p.now().UTC().Add(p.interval))
+		p.health.Success("query_log_retention", p.now().UTC().Add(interval))
 	}
 }
 

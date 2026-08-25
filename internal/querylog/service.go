@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/benchristian88/atlas-dns/internal/domain"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 )
 
 var queryTypePattern = regexp.MustCompile(`^[A-Z][A-Z0-9-]{0,31}$`)
@@ -30,6 +31,15 @@ type Service struct {
 	collectionEnabled bool
 	retention         time.Duration
 	now               func() time.Time
+	settings          interface {
+		RuntimeSettings() systemsettings.RuntimeSettings
+	}
+}
+
+func (s *Service) SetRuntimeSettings(provider interface {
+	RuntimeSettings() systemsettings.RuntimeSettings
+}) {
+	s.settings = provider
 }
 
 type Options struct {
@@ -198,11 +208,16 @@ func (s *Service) Detail(ctx context.Context, clusterID, eventID string) (Event,
 }
 
 func (s *Service) coverage(nodes []domain.Node, checkpoints []Checkpoint, nodeID string) Coverage {
-	staleAfter := 3 * s.pollInterval
+	pollInterval, collectionEnabled, retention := s.pollInterval, s.collectionEnabled, s.retention
+	if s.settings != nil {
+		current := s.settings.RuntimeSettings()
+		pollInterval, collectionEnabled, retention = current.QueryLogPollInterval, current.QueryLogCollection, current.QueryLogRetention
+	}
+	staleAfter := 3 * pollInterval
 	if staleAfter < 2*time.Minute {
 		staleAfter = 2 * time.Minute
 	}
-	result := Coverage{Status: "complete", CollectionEnabled: s.collectionEnabled, RetentionSeconds: int64(s.retention.Seconds()), StaleAfterSeconds: int64(staleAfter.Seconds()), Nodes: []NodeCoverage{}}
+	result := Coverage{Status: "complete", CollectionEnabled: collectionEnabled, RetentionSeconds: int64(retention.Seconds()), StaleAfterSeconds: int64(staleAfter.Seconds()), Nodes: []NodeCoverage{}}
 	byNode := make(map[string]Checkpoint, len(checkpoints))
 	for _, checkpoint := range checkpoints {
 		byNode[checkpoint.NodeID] = checkpoint
@@ -219,7 +234,7 @@ func (s *Service) coverage(nodes []domain.Node, checkpoints []Checkpoint, nodeID
 			continue
 		}
 		result.ExpectedNodes++
-		if !s.collectionEnabled {
+		if !collectionEnabled {
 			coverage.Status, coverage.ReasonCode = "collection_disabled", "QUERY_LOG_COLLECTION_DISABLED"
 			result.DisabledNodes++
 			result.Nodes = append(result.Nodes, coverage)

@@ -11,6 +11,15 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { api } from "../../lib/api";
 import type { Cluster, NotificationChannel } from "../../lib/types";
 
+const notificationCategories = [
+  ["dns", "DNS service"],
+  ["redundancy", "Redundancy"],
+  ["certificates", "Certificates"],
+  ["versions", "Versions"],
+  ["maintenance", "Maintenance"],
+  ["upgrades", "Upgrades"],
+] as const;
+
 export function NotificationsPage({ cluster }: { cluster: Cluster }) {
   const [channels, setChannels] = useState<NotificationChannel[]>();
   const [error, setError] = useState<unknown>();
@@ -20,6 +29,9 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
   const [destination, setDestination] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [replaceDestination, setReplaceDestination] = useState(false);
+  const [categories, setCategories] = useState<string[]>(
+    notificationCategories.map(([value]) => value),
+  );
   const [busy, setBusy] = useState("");
   const [feedback, setFeedback] = useState<{
     tone: "success" | "warning";
@@ -132,8 +144,31 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
               />{" "}
               Enabled
             </label>
+            <fieldset className="notification-categories">
+              <legend>Notification events</legend>
+              {notificationCategories.map(([value, label]) => (
+                <label className="checkbox" key={value}>
+                  <input
+                    type="checkbox"
+                    checked={categories.includes(value)}
+                    onChange={(event) =>
+                      setCategories((current) =>
+                        event.target.checked
+                          ? [...current, value]
+                          : current.filter((item) => item !== value),
+                      )
+                    }
+                  />{" "}
+                  {label}
+                </label>
+              ))}
+            </fieldset>
             <div className="row-actions row-actions--start">
-              <button className="button" type="submit" disabled={busy !== ""}>
+              <button
+                className="button"
+                type="submit"
+                disabled={busy !== "" || categories.length === 0}
+              >
                 {busy === "save"
                   ? "Saving…"
                   : editing
@@ -190,7 +225,7 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
                         label={channel.enabled ? "Enabled" : "Disabled"}
                       />
                     </td>
-                    <td>All HA transitions</td>
+                    <td>{channel.subscribedCategories.join(", ")}</td>
                     <td>{formatTime(channel.updatedAt)}</td>
                     <td>
                       <div className="row-actions">
@@ -251,12 +286,14 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
           name,
           destination,
           enabled,
+          subscribedCategories: categories,
         });
       else
         await api.updateNotificationChannel(editing.id, {
           name,
           enabled,
           recordVersion: editing.recordVersion,
+          subscribedCategories: categories,
           ...(replaceDestination
             ? { destination, replaceDestination: true }
             : {}),
@@ -281,6 +318,7 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
     setDestination("");
     setEnabled(true);
     setReplaceDestination(false);
+    setCategories(notificationCategories.map(([value]) => value));
     setShowEditor(true);
   }
   function edit(channel: NotificationChannel) {
@@ -289,6 +327,7 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
     setDestination("");
     setEnabled(channel.enabled);
     setReplaceDestination(false);
+    setCategories(channel.subscribedCategories);
     setShowEditor(true);
   }
   function closeEditor() {
@@ -306,6 +345,7 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
         name: channel.name,
         enabled: !channel.enabled,
         recordVersion: channel.recordVersion,
+        subscribedCategories: channel.subscribedCategories,
       });
       setFeedback({
         tone: "success",

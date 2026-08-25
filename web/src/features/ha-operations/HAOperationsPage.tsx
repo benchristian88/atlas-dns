@@ -38,6 +38,14 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
   const [webhookName, setWebhookName] = useState("");
   const [webhookURL, setWebhookURL] = useState("");
   const [webhookEnabled, setWebhookEnabled] = useState(true);
+  const [webhookCategories, setWebhookCategories] = useState<string[]>([
+    "dns",
+    "redundancy",
+    "certificates",
+    "versions",
+    "maintenance",
+    "upgrades",
+  ]);
   const [replaceDestination, setReplaceDestination] = useState(false);
   const [webhookBusy, setWebhookBusy] = useState("");
   const [webhookFeedback, setWebhookFeedback] = useState<{
@@ -391,6 +399,32 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
               />{" "}
               Enabled
             </label>
+            <fieldset className="checkbox-grid">
+              <legend>Notification categories</legend>
+              {[
+                "dns",
+                "redundancy",
+                "certificates",
+                "versions",
+                "maintenance",
+                "upgrades",
+              ].map((category) => (
+                <label key={category}>
+                  <input
+                    type="checkbox"
+                    checked={webhookCategories.includes(category)}
+                    onChange={(event) =>
+                      setWebhookCategories((current) =>
+                        event.target.checked
+                          ? [...current, category]
+                          : current.filter((value) => value !== category),
+                      )
+                    }
+                  />{" "}
+                  {category}
+                </label>
+              ))}
+            </fieldset>
             <div className="row-actions row-actions--start">
               <button
                 className="button"
@@ -601,12 +635,14 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
           name: webhookName,
           destination: webhookURL,
           enabled: webhookEnabled,
+          subscribedCategories: webhookCategories,
         });
       } else {
         await api.updateNotificationChannel(editingChannel.id, {
           name: webhookName,
           enabled: webhookEnabled,
           recordVersion: editingChannel.recordVersion,
+          subscribedCategories: webhookCategories,
           ...(replaceDestination
             ? { destination: webhookURL, replaceDestination: true }
             : {}),
@@ -631,6 +667,14 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
     setWebhookName("");
     setWebhookURL("");
     setWebhookEnabled(true);
+    setWebhookCategories([
+      "dns",
+      "redundancy",
+      "certificates",
+      "versions",
+      "maintenance",
+      "upgrades",
+    ]);
     setReplaceDestination(false);
     setShowWebhook(true);
   }
@@ -640,6 +684,7 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
     setWebhookName(channel.name);
     setWebhookURL("");
     setWebhookEnabled(channel.enabled);
+    setWebhookCategories(channel.subscribedCategories);
     setReplaceDestination(false);
     setShowWebhook(true);
   }
@@ -659,6 +704,7 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
         name: channel.name,
         enabled: !channel.enabled,
         recordVersion: channel.recordVersion,
+        subscribedCategories: channel.subscribedCategories,
       });
       setWebhookFeedback({
         tone: "success",

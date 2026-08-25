@@ -409,14 +409,23 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
   }
 }
 
-function NodeForm({
+export function NodeForm({
   cluster,
   node,
   onSaved,
+  requireOnboardingCompatibility = false,
+  onValidated,
 }: {
   cluster: Cluster;
   node?: Node;
   onSaved: () => void;
+  requireOnboardingCompatibility?: boolean;
+  onValidated?: (result: {
+    version: string;
+    compatibility: string;
+    running: boolean;
+    latencyMs: number;
+  }) => void;
 }) {
   const [name, setName] = useState(node?.name ?? "");
   const [baseUrl, setBaseUrl] = useState(node?.baseUrl ?? "https://");
@@ -448,6 +457,15 @@ function NodeForm({
       if (node === undefined) {
         if (payload.credentials === undefined)
           throw new Error("Username and password are required for a new node.");
+        const result = await api.validateNodeCandidate(cluster.id, payload);
+        onValidated?.(result);
+        if (
+          requireOnboardingCompatibility &&
+          result.onboardingCompatibility !== "supported"
+        )
+          throw new Error(
+            `AdGuard Home ${result.version || "version unknown"} is below the v1.1 onboarding minimum of 0.107.78 or outside the compatible 0.107 API generation.`,
+          );
         await api.createNode(cluster.id, payload);
       } else {
         await api.updateNode(node.id, payload);

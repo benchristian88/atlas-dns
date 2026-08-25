@@ -190,6 +190,22 @@ func VersionCompatibility(version string) domain.Compatibility {
 	return ConfigurationCompatibility(version)
 }
 
+// OnboardingCompatibility applies the v1.1 guided-onboarding baseline without
+// withdrawing the compatibility contract for nodes already managed by Atlas.
+func OnboardingCompatibility(version string) domain.Compatibility {
+	major, minor, patch, ok := configurationVersion(version)
+	if !ok {
+		return domain.CompatibilityUnknown
+	}
+	if major == 0 && minor == 107 && patch >= 78 {
+		return domain.CompatibilitySupported
+	}
+	if major == 0 && (minor < 107 || (minor == 107 && patch < 78)) {
+		return domain.CompatibilityUnsupported
+	}
+	return domain.CompatibilityUnknown
+}
+
 func ConfigurationCompatibility(version string) domain.Compatibility {
 	major, minor, patch, ok := configurationVersion(version)
 	if !ok {

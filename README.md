@@ -37,7 +37,8 @@ if Atlas DNS Controller or PostgreSQL is unavailable.
 - Operational Status, audit history, encrypted webhook administration, and
   bounded data retention.
 - Multiple local administrators, encrypted credentials, passphrase-encrypted
-  backups, offline recovery, update awareness, and first-run guidance.
+  backups, offline recovery, update awareness, and resumable guided onboarding
+  through the normal schema-v2 immutable revision workflow.
 - Accessible responsive System/Light/Dark interface and installable PWA
   metadata.
 
@@ -134,6 +135,9 @@ who intentionally build locally use `compose.dev.yaml`.
 - AdGuard Home v0.107.52 and later patches in the v0.107 API generation,
   subject to explicit capabilities. v0.107.78 and v0.107.79 are release-tested;
   newer v0.107 patches are provisionally compatible after contract validation.
+- New v1.1 guided onboarding requires v0.107.78 or later in the v0.107 API
+  generation; this stricter establishment floor does not withdraw existing
+  managed-node compatibility.
 - PostgreSQL 17.
 - Debian 13 with systemd.
 - Docker Engine with Compose v2 and Portainer Stack deployment.
@@ -157,7 +161,8 @@ passphrase. Restore is offline into a new empty database. See [backup and restor
 ## Upgrades and support
 
 Release 1.0.0 is the stable database baseline for supported 1.x upgrades. The
-1.0.1 patch is schema-neutral; 1.0.2 appends the notification-history migration.
+1.0.1 patch is schema-neutral; 1.0.2 appends the notification-history migration;
+1.1 appends onboarding, persisted monitoring, and notification-category state.
 Database migrations are ordered, checksum-verified, append-only, and
 forward-only unless a release explicitly documents otherwise.
 

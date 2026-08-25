@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, api } from "./api";
-import type { Node } from "./types";
+import type { Node, SystemSettings } from "./types";
 
 const maintenanceNode = {
   id: "22222222-2222-4222-8222-222222222222",
@@ -68,5 +68,45 @@ describe("maintenance API contract", () => {
       message:
         "node remains in maintenance because required return-to-service checks failed: api, dns",
     });
+  });
+});
+
+describe("system settings API contract", () => {
+  it("omits read-only presentation fields from monitoring updates", async () => {
+    const settings: SystemSettings = {
+      updateChecksEnabled: true,
+      recordVersion: 7,
+      nodeHealthIntervalSeconds: 30,
+      statisticsPollIntervalSeconds: 3600,
+      queryLogCollectionEnabled: true,
+      queryLogPollIntervalSeconds: 30,
+      queryLogRetentionSeconds: 604800,
+      queryLogRetention: "168h0m0s",
+      statisticsRetention: "32 days detailed; 400 days daily",
+      installationType: "docker",
+    };
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(settings), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetch);
+
+    await api.updateSystemSettings(settings);
+
+    const options = fetch.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(options.body))).toEqual({
+      updateChecksEnabled: true,
+      recordVersion: 7,
+      nodeHealthIntervalSeconds: 30,
+      statisticsPollIntervalSeconds: 3600,
+      queryLogCollectionEnabled: true,
+      queryLogPollIntervalSeconds: 30,
+      queryLogRetentionSeconds: 604800,
+    });
+    expect(String(options.body)).not.toContain('queryLogRetention"');
+    expect(String(options.body)).not.toContain("statisticsRetention");
+    expect(String(options.body)).not.toContain("installationType");
   });
 });

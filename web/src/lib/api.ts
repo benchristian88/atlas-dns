@@ -142,6 +142,17 @@ export interface NodePayload {
   recordVersion?: number;
 }
 
+type MutableSystemSettings = Pick<
+  SystemSettings,
+  | "updateChecksEnabled"
+  | "recordVersion"
+  | "nodeHealthIntervalSeconds"
+  | "statisticsPollIntervalSeconds"
+  | "queryLogCollectionEnabled"
+  | "queryLogPollIntervalSeconds"
+  | "queryLogRetentionSeconds"
+>;
+
 export const api = {
   setupStatus: () =>
     request<{
@@ -156,6 +167,35 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  onboardingStatus: (clusterId = "") => {
+    const query = clusterId
+      ? `?${new URLSearchParams({ clusterId }).toString()}`
+      : "";
+    return request<import("./types").OnboardingStatus>(
+      `/api/v1/onboarding/status${query}`,
+    );
+  },
+  updateOnboardingProgress: (
+    clusterId: string,
+    recordVersion: number,
+    input: {
+      redundancySkipped?: boolean;
+      monitoringReviewed?: boolean;
+      notificationsSkipped?: boolean;
+    },
+  ) =>
+    request<import("./types").OnboardingStatus>(
+      `/api/v1/clusters/${clusterId}/onboarding`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ ...input, recordVersion }),
+      },
+    ),
+  finishOnboarding: (clusterId: string, recordVersion: number) =>
+    request<import("./types").OnboardingStatus>(
+      `/api/v1/clusters/${clusterId}/onboarding/finish`,
+      { method: "POST", body: JSON.stringify({ recordVersion }) },
+    ),
   login: (input: { email: string; password: string }) =>
     request<AuthResponse>("/api/v1/auth/login", {
       method: "POST",
@@ -229,15 +269,20 @@ export const api = {
     }),
   versionInfo: () => request<VersionInfo>("/api/v1/system/version"),
   systemSettings: () => request<SystemSettings>("/api/v1/system/settings"),
-  updateSystemSettings: (
-    settings: SystemSettings,
-    updateChecksEnabled: boolean,
-  ) =>
+  updateSystemSettings: (settings: MutableSystemSettings) =>
     request<SystemSettings>("/api/v1/system/settings", {
       method: "PATCH",
+      // The GET representation also contains read-only display values. Keep
+      // the strict PATCH contract at this boundary so those fields never get
+      // reflected back to the server.
       body: JSON.stringify({
-        updateChecksEnabled,
+        updateChecksEnabled: settings.updateChecksEnabled,
         recordVersion: settings.recordVersion,
+        nodeHealthIntervalSeconds: settings.nodeHealthIntervalSeconds,
+        statisticsPollIntervalSeconds: settings.statisticsPollIntervalSeconds,
+        queryLogCollectionEnabled: settings.queryLogCollectionEnabled,
+        queryLogPollIntervalSeconds: settings.queryLogPollIntervalSeconds,
+        queryLogRetentionSeconds: settings.queryLogRetentionSeconds,
       }),
     }),
   clusters: () => request<{ items: Cluster[] }>("/api/v1/clusters"),
@@ -346,6 +391,7 @@ export const api = {
       name: string;
       destination: string;
       enabled: boolean;
+      subscribedCategories: string[];
     },
   ) =>
     request<NotificationChannel>(
@@ -361,6 +407,7 @@ export const api = {
       name: string;
       enabled: boolean;
       recordVersion: number;
+      subscribedCategories: string[];
       destination?: string;
       replaceDestination?: boolean;
     },
@@ -419,6 +466,17 @@ export const api = {
     ),
   createNode: (clusterId: string, input: NodePayload) =>
     request<Node>(`/api/v1/clusters/${clusterId}/nodes`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  validateNodeCandidate: (clusterId: string, input: NodePayload) =>
+    request<{
+      version: string;
+      compatibility: string;
+      onboardingCompatibility: string;
+      running: boolean;
+      latencyMs: number;
+    }>(`/api/v1/clusters/${clusterId}/nodes/validate`, {
       method: "POST",
       body: JSON.stringify(input),
     }),

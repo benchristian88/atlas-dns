@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/benchristian88/atlas-dns/internal/domain"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 	"github.com/benchristian88/atlas-dns/internal/updates"
 )
 
@@ -40,14 +41,15 @@ func TestRelease09UserLifecycleAndSettingsPersistence(t *testing.T) {
 		t.Fatal("final enabled administrator was disabled")
 	}
 
-	checksEnabled, recordVersion, err := store.SystemSettings(ctx)
-	if err != nil || !checksEnabled || recordVersion != 1 {
-		t.Fatalf("default settings enabled=%v version=%d err=%v", checksEnabled, recordVersion, err)
+	settings, err := store.InitializeRuntimeSettings(ctx, systemsettings.Recommended())
+	if err != nil || !settings.UpdateChecksEnabled || settings.RecordVersion != 1 {
+		t.Fatalf("default settings=%#v err=%v", settings, err)
 	}
 	settingsEvent := domain.AuditEvent{ID: "90000000-0000-4000-8000-000000000006", ActorType: "user", ActorUserID: stringPointer09(secondID), Action: "system_settings.updated", ResourceType: "system_settings", RequestID: "release-0.9-test", Metadata: map[string]any{"updateChecksEnabled": false}, CreatedAt: now}
-	checksEnabled, recordVersion, err = store.UpdateSystemSettings(ctx, false, 1, now, settingsEvent)
-	if err != nil || checksEnabled || recordVersion != 2 {
-		t.Fatalf("updated settings enabled=%v version=%d err=%v", checksEnabled, recordVersion, err)
+	settings.UpdateChecksEnabled = false
+	settings, err = store.UpdateSystemSettings(ctx, settings, 1, now, settingsEvent)
+	if err != nil || settings.UpdateChecksEnabled || settings.RecordVersion != 2 {
+		t.Fatalf("updated settings=%#v err=%v", settings, err)
 	}
 
 	cache := updates.Cache{Version: "v0.9.1", ReleaseURL: "https://github.com/benchristian88/atlas-dns/releases/tag/v0.9.1", ReleaseNotes: "Security fixes", CheckedAt: now, ExpiresAt: now.Add(6 * time.Hour)}
