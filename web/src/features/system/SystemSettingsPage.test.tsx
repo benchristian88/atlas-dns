@@ -52,9 +52,7 @@ describe("SystemSettingsPage", () => {
       .mockResolvedValue({} as OnboardingStatus);
 
     render(<SystemSettingsPage cluster={cluster} />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Save runtime settings" }),
-    );
+    fireEvent.click(await firstSaveButton());
 
     await vi.waitFor(() =>
       expect(progress).toHaveBeenCalledWith(cluster.id, 2, {
@@ -79,9 +77,7 @@ describe("SystemSettingsPage", () => {
     const progress = vi.spyOn(api, "updateOnboardingProgress");
 
     render(<SystemSettingsPage cluster={cluster} />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Save runtime settings" }),
-    );
+    fireEvent.click(await firstSaveButton());
 
     await vi.waitFor(() => expect(api.onboardingStatus).toHaveBeenCalled());
     expect(progress).not.toHaveBeenCalled();
@@ -99,7 +95,7 @@ describe("SystemSettingsPage", () => {
       "Node Monitoring",
       "Statistics Collection",
       "Query Log Collection",
-      "Operational History",
+      "Operational History retention",
     ]) {
       expect(await screen.findByRole("heading", { name: group })).toBeTruthy();
     }
@@ -120,4 +116,44 @@ describe("SystemSettingsPage", () => {
       "Audit Log entries were retained",
     );
   });
+
+  it("groups editable runtime settings and keeps contextual data with its collection", async () => {
+    vi.spyOn(api, "systemSettings").mockResolvedValue(settings);
+
+    render(<SystemSettingsPage />);
+
+    const runtimeHeading = await screen.findByRole("heading", {
+      name: "Runtime configuration",
+    });
+    const runtimeCard = runtimeHeading.closest("section");
+    expect(runtimeCard).not.toBeNull();
+    expect(screen.queryByRole("heading", { name: "Data" })).toBeNull();
+    expect(runtimeCard?.textContent).toContain("Stored statistics");
+    expect(runtimeCard?.textContent).toContain(
+      "32 days detailed; 400 days daily",
+    );
+    expect(runtimeCard?.textContent).toContain("Current central retention");
+    expect(runtimeCard?.textContent).toContain("168h0m0s");
+    expect(
+      runtimeCard?.contains(
+        screen.getByRole("heading", { name: "Clear Operational History" }),
+      ),
+    ).toBe(true);
+    expect(
+      runtimeCard?.contains(
+        screen.getByRole("button", { name: "Use recommended defaults" }),
+      ),
+    ).toBe(true);
+    expect(
+      screen.getAllByRole("button", { name: "Save runtime settings" }),
+    ).toHaveLength(2);
+  });
 });
+
+async function firstSaveButton() {
+  const [button] = await screen.findAllByRole("button", {
+    name: "Save runtime settings",
+  });
+  if (!button) throw new Error("expected a Save runtime settings button");
+  return button;
+}
