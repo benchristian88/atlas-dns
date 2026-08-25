@@ -43,7 +43,8 @@ restore/adopt/reconciliation. Query Log and Drift now link to exact Node Detail
 routes.
 
 Operational Status is labelled Monitoring and uses compact accessible section
-headers plus a Dashboard-style responsive health summary. System Settings
-removes non-setting General, Backup & Restore, Operations, and Security cards
-while retaining every runtime setting and the release-check control. About
-Atlas Project now precedes technical build data.
+headers plus a Dashboard-style responsive health summary. HA Operations, Nodes,
+and Node Detail use the same compact health-card anatomy for their top-level
+evidence. System Settings removes non-setting General, Backup & Restore,
+Operations, and Security cards while retaining every runtime setting and the
+release-check control. About Atlas Project now precedes technical build data.

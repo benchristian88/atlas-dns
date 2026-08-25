@@ -231,7 +231,10 @@ describe("HA operations", () => {
     const summary = container.querySelector(
       '[aria-label="HA redundancy summary"]',
     );
-    expect(summary?.querySelectorAll(":scope > .metric-card")).toHaveLength(4);
+    expect(
+      summary?.querySelectorAll(":scope > .health-summary-card"),
+    ).toHaveLength(4);
+    expect(summary?.querySelector(".metric-card")).toBeNull();
     expect(summary?.querySelector(".metric")).toBeNull();
     expect(screen.getByText("DNS certificate")).toBeTruthy();
     expect(screen.getAllByText("DNS failed")).toHaveLength(2);
@@ -436,6 +439,11 @@ describe("HA operations", () => {
       await screen.findByRole("heading", { name: "Maintenance and DHCP" }),
     ).toBeTruthy();
     expect(container.querySelector(".page-container--wide")).toBeTruthy();
+    const lifecycleSummary = screen.getByLabelText("Node lifecycle status");
+    expect(
+      lifecycleSummary.querySelectorAll(":scope > .health-summary-card"),
+    ).toHaveLength(4);
+    expect(lifecycleSummary.querySelector(".metric-card")).toBeNull();
     expect(
       container.querySelectorAll(".settings-group").length,
     ).toBeGreaterThanOrEqual(7);

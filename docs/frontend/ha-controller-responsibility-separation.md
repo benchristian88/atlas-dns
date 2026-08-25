@@ -17,6 +17,11 @@ Operations and Notifications expose existing controller lifecycle capability:
 | `/ha/deployments` | One unified active and historical execution table with inline ordered per-node tasks, safe failure detail, verification, request correlation, and cancellation |
 | `/ha/drift` | Current convergence summary and inline semantic incidents, restore/adopt, maintenance state, exact Node Detail links, related resources, and separated cluster policy |
 
+HA Operations, Nodes, and Node Detail use the compact icon/value/status health
+summary established by Dashboard and Operational Status. The treatment changes
+presentation only: fleet and per-node evidence, actions, partial-source failure
+behavior, and canonical page ownership remain unchanged.
+
 `/ha/history` redirects to `/ha/revisions`. Unknown paths continue
 to render Not Found, and trailing-slash redirects retain query strings and
 fragments.

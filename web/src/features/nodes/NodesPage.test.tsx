@@ -63,15 +63,18 @@ function nodeResponse(value: Node) {
 }
 
 describe("Nodes page ownership", () => {
-  it("uses the Nodes-only five-card summary layout", async () => {
+  it("uses the compact five-card fleet summary layout", async () => {
     mockSupportingRequests();
     vi.spyOn(api, "nodes").mockResolvedValue(nodeResponse(node));
 
     render(<NodesPage cluster={cluster} />);
 
     const summary = await screen.findByLabelText("Cluster node summary");
-    expect(summary.classList.contains("convergence-summary--five")).toBe(true);
-    expect(summary.querySelectorAll("dl > div")).toHaveLength(5);
+    expect(summary.classList.contains("health-summary-grid--five")).toBe(true);
+    expect(
+      summary.querySelectorAll(":scope > .health-summary-card"),
+    ).toHaveLength(5);
+    expect(summary.querySelector(".convergence-summary")).toBeNull();
   });
 
   it("routes existing-node operational work to exact Node Detail", async () => {

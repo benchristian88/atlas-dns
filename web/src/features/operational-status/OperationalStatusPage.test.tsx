@@ -145,7 +145,7 @@ describe("OperationalStatusPage", () => {
     );
     expect(overallHealth).not.toBeNull();
     expect(
-      overallHealth?.querySelectorAll(".operational-health-card"),
+      overallHealth?.querySelectorAll(".health-summary-card"),
     ).toHaveLength(6);
     expect(overallHealth?.querySelector(".metric-card")).toBeNull();
     expect(

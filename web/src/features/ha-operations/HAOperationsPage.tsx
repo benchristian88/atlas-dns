@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { MetricCard, Pagination } from "../../components/DataDisplay";
+import { HealthSummaryCard, Pagination } from "../../components/DataDisplay";
 import {
   Banner,
   EmptyState,
@@ -151,22 +151,40 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
       )}
 
       {summary && (
-        <section className="metrics" aria-label="HA redundancy summary">
-          <MetricCard
+        <section
+          className="health-summary-grid health-summary-grid--four"
+          aria-label="HA redundancy summary"
+        >
+          <HealthSummaryCard
+            icon="dns"
             label="DNS serving"
             value={`${summary.servingDnsNodes} / ${summary.totalNodes}`}
+            status={coverageStatus(summary.servingDnsNodes, summary.totalNodes)}
+            detail="nodes serving DNS"
           />
-          <MetricCard
+          <HealthSummaryCard
+            icon="nodes"
             label="API reachable"
             value={`${summary.apiReachableNodes} / ${summary.totalNodes}`}
+            status={coverageStatus(
+              summary.apiReachableNodes,
+              summary.totalNodes,
+            )}
+            detail="management APIs responding"
           />
-          <MetricCard
+          <HealthSummaryCard
+            icon="revisions"
             label="Converged"
             value={`${summary.convergedNodes} / ${summary.totalNodes}`}
+            status={coverageStatus(summary.convergedNodes, summary.totalNodes)}
+            detail="nodes on desired revision"
           />
-          <MetricCard
+          <HealthSummaryCard
+            icon="system"
             label="Maintenance"
             value={String(summary.maintenanceNodes)}
+            status={summary.maintenanceNodes === 0 ? "healthy" : "maintenance"}
+            detail="nodes out of service"
           />
         </section>
       )}
@@ -487,6 +505,12 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
       </section>
     </>
   );
+}
+
+function coverageStatus(current: number, expected: number) {
+  if (expected === 0) return "unknown" as const;
+  if (current >= expected) return "healthy" as const;
+  return current === 0 ? ("failed" as const) : ("degraded" as const);
 }
 
 function SourceWarning({

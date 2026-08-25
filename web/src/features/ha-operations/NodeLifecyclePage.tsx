@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { MetricCard } from "../../components/DataDisplay";
+import { HealthSummaryCard } from "../../components/DataDisplay";
 import { Banner, ErrorState, Loading } from "../../components/Feedback";
 import { PageContainer, PageHeader } from "../../components/Page";
 import { Field, SettingsGroup } from "../../components/Settings";
-import { StatusBadge } from "../../components/StatusBadge";
+import { StatusBadge, type StatusKind } from "../../components/StatusBadge";
 import { api } from "../../lib/api";
 import type {
   Cluster,
@@ -122,25 +122,40 @@ export function NodeLifecyclePage({
             : "The operation could not be completed."}
         </Banner>
       )}
-      <section className="metrics" aria-label="Node lifecycle status">
-        <MetricCard
+      <section
+        className="health-summary-grid health-summary-grid--four"
+        aria-label="Node lifecycle status"
+      >
+        <HealthSummaryCard
+          icon="nodes"
           label="API"
           value={node.healthStatus.replaceAll("_", " ")}
+          status={node.healthStatus}
+          detail="controller connection"
           valueClassName="operational-value"
         />
-        <MetricCard
+        <HealthSummaryCard
+          icon="dns"
           label="DNS"
           value={(lifecycle.dns?.status ?? "unknown").replaceAll("_", " ")}
+          status={lifecycle.dns?.status ?? "unknown"}
+          detail="last active probe"
           valueClassName="operational-value"
         />
-        <MetricCard
+        <HealthSummaryCard
+          icon="revisions"
           label="Configuration"
           value={node.convergenceStatus.replaceAll("_", " ")}
+          status={convergenceStatus(node.convergenceStatus)}
+          detail="desired-state position"
           valueClassName="operational-value"
         />
-        <MetricCard
+        <HealthSummaryCard
+          icon="updates"
           label="Version"
           value={(node.version ?? "unknown").replaceAll("_", " ")}
+          status={compatibilityStatus(node.compatibilityStatus)}
+          detail={`${node.compatibilityStatus.replaceAll("_", " ")} compatibility`}
         />
       </section>
 
@@ -689,6 +704,17 @@ export function NodeLifecyclePage({
       setBusy("");
     }
   }
+}
+
+function convergenceStatus(status: Node["convergenceStatus"]): StatusKind {
+  return status === "apply_failed" || status === "observation_failed"
+    ? "failed"
+    : status;
+}
+
+function compatibilityStatus(status: Node["compatibilityStatus"]): StatusKind {
+  if (status === "supported") return "healthy";
+  return status === "unsupported" ? "incompatible" : "unknown";
 }
 function formatTime(value?: string) {
   return value ? new Date(value).toLocaleString() : "—";

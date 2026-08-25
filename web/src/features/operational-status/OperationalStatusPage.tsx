@@ -2,10 +2,10 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   DataTable,
   type DataTableColumn,
+  HealthSummaryCard,
   SummaryTileGrid,
 } from "../../components/DataDisplay";
 import { Banner, ErrorState, Loading } from "../../components/Feedback";
-import { Icon, type IconName } from "../../components/Icon";
 import { PageHeader } from "../../components/Page";
 import { StatusBadge, type StatusKind } from "../../components/StatusBadge";
 import { api } from "../../lib/api";
@@ -60,31 +60,32 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
       )}
 
       <section
-        className="operational-health-grid"
+        className="health-summary-grid"
         aria-label="Overall controller health"
       >
-        <OperationalHealthCard
+        <HealthSummaryCard
           icon="system"
           label="Controller"
           value={status.summary.state.replaceAll("_", " ")}
           status={badge(status.summary.state)}
           detail={status.summary.message}
+          valueClassName="operational-value"
         />
-        <OperationalHealthCard
+        <HealthSummaryCard
           icon="ha"
           label="HA redundancy"
           value={`${status.ha.servingDnsNodes} / ${status.ha.totalNodes}`}
           status={haBadge(status.ha.state)}
           detail="nodes serving DNS"
         />
-        <OperationalHealthCard
+        <HealthSummaryCard
           icon="dns"
           label="DNS service"
           value={`${status.dnsService.currentNodes} / ${status.dnsService.expectedNodes}`}
           status={badge(status.dnsService.state)}
           detail="nodes current"
         />
-        <OperationalHealthCard
+        <HealthSummaryCard
           icon="nodes"
           label="Nodes"
           value={`${status.summary.healthyNodes} / ${status.summary.expectedNodes}`}
@@ -94,14 +95,14 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
           )}
           detail="healthy APIs"
         />
-        <OperationalHealthCard
+        <HealthSummaryCard
           icon="statistics"
           label="Statistics"
           value={`${status.statistics.currentNodes} / ${status.statistics.expectedNodes}`}
           status={badge(status.statistics.state)}
           detail="collectors current"
         />
-        <OperationalHealthCard
+        <HealthSummaryCard
           icon="activity"
           label="Query Log"
           value={`${status.queryLog.currentNodes} / ${status.queryLog.expectedNodes}`}
@@ -214,36 +215,6 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
         summaries; detailed diagnostics remain in controller logs.
       </p>
     </div>
-  );
-}
-
-function OperationalHealthCard({
-  icon,
-  label,
-  value,
-  status,
-  detail,
-}: {
-  icon: IconName;
-  label: string;
-  value: string;
-  status: StatusKind;
-  detail: string;
-}) {
-  return (
-    <article className="operational-health-card" aria-label={label}>
-      <span className={`operational-health-card__icon status-tone--${status}`}>
-        <Icon name={icon} />
-      </span>
-      <span className="operational-health-card__body">
-        <small>{label}</small>
-        <strong className="operational-value">{value}</strong>
-        <span>
-          <StatusBadge status={status} />
-          <em title={detail}>{detail}</em>
-        </span>
-      </span>
-    </article>
   );
 }
 

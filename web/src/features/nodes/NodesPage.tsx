@@ -5,6 +5,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { HealthSummaryCard } from "../../components/DataDisplay";
 import { EmptyState, ErrorState, Loading } from "../../components/Feedback";
 import { PageHeader } from "../../components/Page";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -70,6 +71,24 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
       ),
     [drift],
   );
+  const currentNodes = nodes ?? [];
+  const healthyNodes = currentNodes.filter(
+    (node) => node.healthStatus === "healthy",
+  ).length;
+  const degradedNodes = currentNodes.filter(
+    (node) => node.enabled && node.healthStatus === "unknown",
+  ).length;
+  const unreachableNodes = currentNodes.filter(
+    (node) => node.healthStatus === "unreachable",
+  ).length;
+  const incompatibleNodes = currentNodes.filter(
+    (node) =>
+      node.healthStatus === "incompatible" ||
+      node.compatibilityStatus === "unsupported",
+  ).length;
+  const latestObservation = latestTime(
+    snapshots.map((snapshot) => snapshot.observedAt),
+  );
 
   return (
     <>
@@ -123,74 +142,53 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
       {nodes !== undefined && nodes.length > 0 && (
         <>
           <section
-            className="convergence-summary convergence-summary--five"
+            className="health-summary-grid health-summary-grid--five"
             aria-label="Cluster node summary"
           >
-            <div>
-              <StatusBadge
-                status={
-                  nodes.every(
-                    (node) =>
-                      node.healthStatus === "healthy" ||
-                      node.healthStatus === "disabled",
-                  )
-                    ? "healthy"
-                    : "degraded"
-                }
-              />
-              <strong>
-                {nodes.filter((node) => node.healthStatus === "healthy").length}{" "}
-                of {nodes.length} nodes healthy
-              </strong>
-            </div>
-            <dl>
-              <div>
-                <dt>Healthy</dt>
-                <dd>
-                  {
-                    nodes.filter((node) => node.healthStatus === "healthy")
-                      .length
-                  }
-                </dd>
-              </div>
-              <div>
-                <dt>Degraded</dt>
-                <dd>
-                  {
-                    nodes.filter(
-                      (node) => node.enabled && node.healthStatus === "unknown",
-                    ).length
-                  }
-                </dd>
-              </div>
-              <div>
-                <dt>Unreachable</dt>
-                <dd>
-                  {
-                    nodes.filter((node) => node.healthStatus === "unreachable")
-                      .length
-                  }
-                </dd>
-              </div>
-              <div>
-                <dt>Incompatible</dt>
-                <dd>
-                  {
-                    nodes.filter(
-                      (node) =>
-                        node.healthStatus === "incompatible" ||
-                        node.compatibilityStatus === "unsupported",
-                    ).length
-                  }
-                </dd>
-              </div>
-              <div>
-                <dt>Last observation</dt>
-                <dd>
-                  {latestTime(snapshots.map((snapshot) => snapshot.observedAt))}
-                </dd>
-              </div>
-            </dl>
+            <HealthSummaryCard
+              icon="ha"
+              label="Fleet health"
+              value={`${healthyNodes} / ${nodes.length}`}
+              status={
+                nodes.every(
+                  (node) =>
+                    node.healthStatus === "healthy" ||
+                    node.healthStatus === "disabled",
+                )
+                  ? "healthy"
+                  : "degraded"
+              }
+              detail="nodes healthy"
+            />
+            <HealthSummaryCard
+              icon="attention"
+              label="Degraded"
+              value={degradedNodes}
+              status={degradedNodes === 0 ? "healthy" : "degraded"}
+              detail="enabled nodes unknown"
+            />
+            <HealthSummaryCard
+              icon="nodes"
+              label="Unreachable"
+              value={unreachableNodes}
+              status={unreachableNodes === 0 ? "healthy" : "unreachable"}
+              detail="nodes unreachable"
+            />
+            <HealthSummaryCard
+              icon="updates"
+              label="Incompatible"
+              value={incompatibleNodes}
+              status={incompatibleNodes === 0 ? "healthy" : "incompatible"}
+              detail="unsupported nodes"
+            />
+            <HealthSummaryCard
+              icon="activity"
+              label="Last observation"
+              value={latestObservation}
+              status={snapshots.length === 0 ? "unknown" : "success"}
+              statusLabel={snapshots.length === 0 ? undefined : "Recorded"}
+              detail="latest inventory snapshot"
+            />
           </section>
           <div className="table-wrap">
             <table>
