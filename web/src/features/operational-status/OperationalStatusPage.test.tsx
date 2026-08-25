@@ -140,6 +140,17 @@ describe("OperationalStatusPage", () => {
     expect(
       screen.getByText("Monitoring", { selector: ".eyebrow" }),
     ).not.toBeNull();
+    const overallHealth = container.querySelector(
+      '[aria-label="Overall controller health"]',
+    );
+    expect(overallHealth).not.toBeNull();
+    expect(
+      overallHealth?.querySelectorAll(".operational-health-card"),
+    ).toHaveLength(6);
+    expect(overallHealth?.querySelector(".metric-card")).toBeNull();
+    expect(
+      screen.getByRole("article", { name: "Query Log" }).textContent,
+    ).toContain("1 / 2");
     expect(screen.getByText("dns-secondary")).not.toBeNull();
     expect(screen.getByText("QUERY_LOG_NODE_RETENTION_GAP")).not.toBeNull();
     expect(screen.getByText("query log collection")).not.toBeNull();

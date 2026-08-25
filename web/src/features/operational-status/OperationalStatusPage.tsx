@@ -2,10 +2,10 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   DataTable,
   type DataTableColumn,
-  MetricCard,
   SummaryTileGrid,
 } from "../../components/DataDisplay";
 import { Banner, ErrorState, Loading } from "../../components/Feedback";
+import { Icon, type IconName } from "../../components/Icon";
 import { PageHeader } from "../../components/Page";
 import { StatusBadge, type StatusKind } from "../../components/StatusBadge";
 import { api } from "../../lib/api";
@@ -59,36 +59,54 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
         </Banner>
       )}
 
-      <section className="metrics" aria-label="Overall controller health">
-        <MetricCard
+      <section
+        className="operational-health-grid"
+        aria-label="Overall controller health"
+      >
+        <OperationalHealthCard
+          icon="system"
           label="Controller"
           value={status.summary.state.replaceAll("_", " ")}
-          valueClassName="operational-value"
+          status={badge(status.summary.state)}
+          detail={status.summary.message}
         />
-        <MetricCard
+        <OperationalHealthCard
+          icon="ha"
           label="HA redundancy"
-          value={status.ha.state.replaceAll("_", " ")}
-          valueClassName="operational-value"
+          value={`${status.ha.servingDnsNodes} / ${status.ha.totalNodes}`}
+          status={haBadge(status.ha.state)}
+          detail="nodes serving DNS"
         />
-        <MetricCard
+        <OperationalHealthCard
+          icon="dns"
           label="DNS service"
-          value={status.dnsService.state.replaceAll("_", " ")}
-          valueClassName="operational-value"
+          value={`${status.dnsService.currentNodes} / ${status.dnsService.expectedNodes}`}
+          status={badge(status.dnsService.state)}
+          detail="nodes current"
         />
-        <MetricCard
+        <OperationalHealthCard
+          icon="nodes"
           label="Nodes"
-          value={`${status.summary.healthyNodes} / ${status.summary.expectedNodes} healthy`}
-          valueClassName="operational-value"
+          value={`${status.summary.healthyNodes} / ${status.summary.expectedNodes}`}
+          status={coverageBadge(
+            status.summary.healthyNodes,
+            status.summary.expectedNodes,
+          )}
+          detail="healthy APIs"
         />
-        <MetricCard
+        <OperationalHealthCard
+          icon="statistics"
           label="Statistics"
-          value={status.statistics.state.replaceAll("_", " ")}
-          valueClassName="operational-value"
+          value={`${status.statistics.currentNodes} / ${status.statistics.expectedNodes}`}
+          status={badge(status.statistics.state)}
+          detail="collectors current"
         />
-        <MetricCard
+        <OperationalHealthCard
+          icon="activity"
           label="Query Log"
-          value={status.queryLog.state.replaceAll("_", " ")}
-          valueClassName="operational-value"
+          value={`${status.queryLog.currentNodes} / ${status.queryLog.expectedNodes}`}
+          status={badge(status.queryLog.state)}
+          detail="collectors current"
         />
       </section>
 
@@ -196,6 +214,36 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
         summaries; detailed diagnostics remain in controller logs.
       </p>
     </div>
+  );
+}
+
+function OperationalHealthCard({
+  icon,
+  label,
+  value,
+  status,
+  detail,
+}: {
+  icon: IconName;
+  label: string;
+  value: string;
+  status: StatusKind;
+  detail: string;
+}) {
+  return (
+    <article className="operational-health-card" aria-label={label}>
+      <span className={`operational-health-card__icon status-tone--${status}`}>
+        <Icon name={icon} />
+      </span>
+      <span className="operational-health-card__body">
+        <small>{label}</small>
+        <strong className="operational-value">{value}</strong>
+        <span>
+          <StatusBadge status={status} />
+          <em title={detail}>{detail}</em>
+        </span>
+      </span>
+    </article>
   );
 }
 
@@ -342,6 +390,14 @@ const workerColumns: readonly DataTableColumn<
 
 function badge(state: OperationalStatus["api"]): StatusKind {
   return state;
+}
+function haBadge(state: OperationalStatus["ha"]["state"]): StatusKind {
+  return state === "at_risk" ? "warning" : state;
+}
+function coverageBadge(current: number, expected: number): StatusKind {
+  if (expected === 0) return "unknown";
+  if (current >= expected) return "healthy";
+  return current === 0 ? "failed" : "degraded";
 }
 function formatNumber(value: number) {
   return new Intl.NumberFormat().format(value);

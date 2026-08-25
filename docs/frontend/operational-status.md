@@ -13,12 +13,15 @@ and retention bounds. It uses existing badges, banners, loading/error states,
 cards, and responsive data tables. Error codes are safe stable summaries.
 
 Operational Status uses the Monitoring page category while retaining its stable
-route. Compact semantic section headers separate Core Services, DNS service,
-node observation, Statistics, Query Log, background workers, and storage without
-the taller settings-card header treatment. Status/count context can remain at
-the right and wraps below the title on narrow screens. Its diagnostic grids
-reflow and its node/subsystem tables own contained horizontal scrolling instead
-of widening the page.
+route. Its top-level controller, HA, DNS, node, Statistics, and Query Log
+readings use the same compact icon/value/status anatomy as Dashboard health
+cards. The six-column wide-screen summary reflows to three, two, and one column
+without changing its diagnostic content. Compact semantic section headers
+separate Core Services, DNS service, node observation, Statistics, Query Log,
+background workers, and storage without the taller settings-card header
+treatment. Status/count context can remain at the right and wraps below the
+title on narrow screens. Its node/subsystem tables own contained horizontal
+scrolling instead of widening the page.
 
 Dashboard contains only a compact controller/Statistics/Query Log summary and
 links to the page. Statistics and Query Log retain their established coverage

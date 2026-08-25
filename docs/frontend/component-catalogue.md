@@ -135,10 +135,11 @@ documented in `theme-brand-and-pwa.md`.
 - `ProgressTimeline`
 - `PartialSuccessPanel`
 
-`MetricCard` is the single summary/stat tile for Dashboard, Statistics,
-Operational Status, HA Operations, and Node Lifecycle. It owns the primary
-surface, label/value gap, optional supporting detail, and responsive wrapping;
-feature pages provide content only.
+`MetricCard` is the shared general-purpose summary/stat tile for Statistics, HA
+Operations, and Node Lifecycle. It owns the primary surface, label/value gap,
+optional supporting detail, and responsive wrapping; feature pages provide
+content only. Dashboard and Operational Status use their denser health-card
+anatomy where several live health readings must remain visible together.
 
 `SummaryTileGrid` is the shared definition-list treatment for two-by-two inset
 status/value summaries. Dashboard controller/DNS summaries and Operational
