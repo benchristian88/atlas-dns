@@ -111,6 +111,8 @@ type HAOperationsService interface {
 }
 
 type NotificationSettingsService interface {
+	Policy(context.Context) (haoperations.NotificationPolicy, error)
+	UpdatePolicy(context.Context, domain.Actor, []string, int) (haoperations.NotificationPolicy, error)
 	List(context.Context, string) ([]haoperations.NotificationChannel, error)
 	Create(context.Context, domain.Actor, string, string, string, bool, []string) (haoperations.NotificationChannel, error)
 	Update(context.Context, domain.Actor, string, string, *string, bool, int, []string) (haoperations.NotificationChannel, error)
@@ -136,6 +138,7 @@ type ControllerUpdateService interface {
 type SystemSettingsService interface {
 	Get(context.Context) (systemsettings.Settings, error)
 	Update(context.Context, domain.Actor, systemsettings.Settings, int) (systemsettings.Settings, error)
+	ClearOperationalHistory(context.Context, domain.Actor, string) (systemsettings.ClearOperationalHistoryResult, error)
 }
 
 type OnboardingService interface {
@@ -241,6 +244,7 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/v1/system/update/check", s.administrator(true, http.HandlerFunc(s.handleCheckControllerUpdate)))
 	s.mux.Handle("GET /api/v1/system/settings", s.administrator(false, http.HandlerFunc(s.handleSystemSettings)))
 	s.mux.Handle("PATCH /api/v1/system/settings", s.administrator(true, http.HandlerFunc(s.handleUpdateSystemSettings)))
+	s.mux.Handle("DELETE /api/v1/system/operational-history", s.administrator(true, http.HandlerFunc(s.handleClearOperationalHistory)))
 	s.mux.Handle("GET /api/v1/onboarding/status", s.administrator(false, http.HandlerFunc(s.handleOnboardingStatus)))
 	s.mux.Handle("PATCH /api/v1/clusters/{clusterId}/onboarding", s.administrator(true, http.HandlerFunc(s.handleOnboardingProgress)))
 	s.mux.Handle("POST /api/v1/clusters/{clusterId}/onboarding/finish", s.administrator(true, http.HandlerFunc(s.handleFinishOnboarding)))
@@ -261,6 +265,8 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/v1/clusters/{clusterId}/versions", s.authenticated(false, http.HandlerFunc(s.handleVersions)))
 	s.mux.Handle("GET /api/v1/clusters/{clusterId}/upgrades", s.authenticated(false, http.HandlerFunc(s.handleUpgrades)))
 	s.mux.Handle("GET /api/v1/clusters/{clusterId}/notification-channels", s.authenticated(false, http.HandlerFunc(s.handleNotificationChannels)))
+	s.mux.Handle("GET /api/v1/system/notification-policy", s.administrator(false, http.HandlerFunc(s.handleNotificationPolicy)))
+	s.mux.Handle("PATCH /api/v1/system/notification-policy", s.administrator(true, http.HandlerFunc(s.handleUpdateNotificationPolicy)))
 	s.mux.Handle("POST /api/v1/clusters/{clusterId}/notification-channels", s.administrator(true, http.HandlerFunc(s.handleCreateNotificationChannel)))
 	s.mux.Handle("GET /api/v1/nodes/{nodeId}", s.authenticated(false, http.HandlerFunc(s.handleGetNode)))
 	s.mux.Handle("GET /api/v1/nodes/{nodeId}/lifecycle", s.authenticated(false, http.HandlerFunc(s.handleNodeLifecycle)))

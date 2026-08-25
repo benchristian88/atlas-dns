@@ -53,6 +53,13 @@ func (p *QueryLogPoller) currentSettings() (bool, time.Duration, time.Duration) 
 	return true, p.interval, p.retention
 }
 
+func (p *QueryLogPoller) currentTimeout() time.Duration {
+	if p.settings != nil {
+		return p.settings.RuntimeSettings().NodeRequestTimeout
+	}
+	return p.timeout
+}
+
 func NewQueryLogPoller(store QueryLogStore, decrypter CredentialDecrypter, reader QueryLogReader, interval, timeout, retention time.Duration, logger *slog.Logger, trackers ...*operationalhealth.Tracker) *QueryLogPoller {
 	overlap := 2 * interval
 	if overlap < 2*time.Minute {
@@ -75,6 +82,10 @@ func (p *QueryLogPoller) Run(ctx context.Context) {
 		case <-ctx.Done():
 			timer.Stop()
 			return
+		case <-runtimeSettingsChanged(p.settings):
+			timer.Stop()
+			p.poll(ctx)
+			continue
 		case <-timer.C:
 			p.poll(ctx)
 		}
@@ -213,7 +224,7 @@ func (p *QueryLogPoller) pollNode(ctx context.Context, record domain.NodeRecord)
 	}
 	request := domain.NodeProbeRequest{BaseURL: record.Node.BaseURL, CertificatePolicy: record.Node.CertificatePolicy,
 		CustomCAPEM: record.Secrets.CustomCAPEM, Credentials: credentials}
-	requestContext, cancel := context.WithTimeout(ctx, p.timeout)
+	requestContext, cancel := context.WithTimeout(ctx, p.currentTimeout())
 	config, err := p.reader.ReadQueryLogConfig(requestContext, request, record.Node.Version)
 	cancel()
 	if err != nil {
@@ -234,7 +245,7 @@ func (p *QueryLogPoller) pollNode(ctx context.Context, record domain.NodeRecord)
 	exhausted, crossedOverlap, cursorStalled := false, false, false
 	olderThan := ""
 	for pageIndex := 0; pageIndex < queryLogMaxPages; pageIndex++ {
-		requestContext, cancel = context.WithTimeout(ctx, p.timeout)
+		requestContext, cancel = context.WithTimeout(ctx, p.currentTimeout())
 		page, readErr := p.reader.ReadQueryLog(requestContext, request, olderThan, queryLogPageSize)
 		cancel()
 		if readErr != nil {

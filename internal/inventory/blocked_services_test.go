@@ -37,7 +37,7 @@ func catalogueNode(id, name, version, baseURL string) (domain.Node, domain.NodeR
 
 func TestBlockedServicesCatalogueMergesNodeSupportAndPreservesPartialState(t *testing.T) {
 	nodeA, recordA, profileA := catalogueNode("22222222-2222-4222-8222-222222222222", "Primary", "v0.107.78", "http://primary.test")
-	nodeB, recordB, profileB := catalogueNode("33333333-3333-4333-8333-333333333333", "Secondary", "v0.107.61", "http://secondary.test")
+	nodeB, recordB, profileB := catalogueNode("33333333-3333-4333-8333-333333333333", "Secondary", "v0.107.78", "http://secondary.test")
 	repository := &fakeRepository{
 		nodes: []domain.Node{nodeA, nodeB}, profiles: []CapabilityProfile{profileA, profileB},
 		nodeRecords: map[string]domain.NodeRecord{nodeA.ID: recordA, nodeB.ID: recordB},
@@ -67,7 +67,7 @@ func TestBlockedServicesCatalogueMergesNodeSupportAndPreservesPartialState(t *te
 }
 
 func TestBlockedServicesCatalogueCacheRefreshesForVersionAndFallsBackAsStale(t *testing.T) {
-	node, record, profile := catalogueNode("22222222-2222-4222-8222-222222222222", "Primary", "v0.107.61", "http://primary.test")
+	node, record, profile := catalogueNode("22222222-2222-4222-8222-222222222222", "Primary", "v0.107.78", "http://primary.test")
 	repository := &fakeRepository{nodes: []domain.Node{node}, profiles: []CapabilityProfile{profile}, nodeRecords: map[string]domain.NodeRecord{node.ID: record}}
 	reader := &catalogueReaderFake{byURL: map[string]NodeBlockedServicesCatalogue{record.Node.BaseURL: {Services: []BlockedServiceMetadata{{ID: "youtube", Name: "YouTube"}}}}}
 	service := NewService(repository, unusedCredentials{}, reader)

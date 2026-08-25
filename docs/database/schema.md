@@ -89,6 +89,9 @@ than cascading operational history. HA event and audit records are unaffected.
 - `system_settings` — singleton optimistic release-check and runtime monitoring
   settings. A one-time initialization marker distinguishes upgraded environment
   defaults from deliberate persisted values.
+- `notification_policy` — singleton optimistic exact-event notification
+  allowlist. Runtime settings also include session duration, node request
+  timeout, log level, and Operational History retention.
 
 Portable backup metadata is produced outside persistent product tables. Standard
 backup retains control-plane rows, including archive status; Full also retains
@@ -131,12 +134,13 @@ bootstrap, and recorded by version/name/SHA-256 in `schema_migrations`.
 | `000014_release_0_9_2_lifecycle_polish` | Revision/deployment archive metadata and retained webhook delivery identity. | Retain; final v1.0.0 schema and released checksum. |
 | `000015_release_1_0_2_notification_history` | Bounded webhook HTTP/failure diagnostics and delivery-history query index. | Append-only v1.0.2 upgrade. |
 | `000016_release_1_1_onboarding` | Canonical onboarding acknowledgements/completion, persisted runtime monitoring values, and notification category subscriptions. | Append-only v1.1 upgrade; established node+revision clusters are marked complete. |
+| `000017_release_1_1_runtime_policy_history` | Completes typed runtime settings, exact-event notification policy, and Operational History retention. | Append-only v1.1 upgrade; legacy environment values seed nullable settings once. |
 
 The complete chain is the physical v1.0.0 baseline. Pre-1.0 databases are not
 supported for in-place upgrade, but removing or squashing the chain would break
 empty-database creation and v1.0.0 checksum recognition. Release 1.0.1 uses the
 same schema and adds no migration. Release 1.0.2 appends `000015`; release 1.1
-appends `000016`. Future
+appends `000016` and `000017`. Future
 schema-changing 1.x releases append new immutable, never-renumbered forward
 migrations after the current highest version; schema-neutral patches do not add
 placeholders.

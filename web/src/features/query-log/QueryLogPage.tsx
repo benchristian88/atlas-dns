@@ -340,8 +340,8 @@ function CoverageNotice({ report }: { report: QueryEventPage }) {
   if (!coverage.collectionEnabled) {
     return (
       <Banner tone="warning" title="Central collection is disabled">
-        Existing retained events remain searchable. Set
-        QUERY_LOG_COLLECTION_ENABLED=true to resume ingestion.
+        Existing retained events remain searchable. Enable central Query Log
+        collection in System Settings to resume ingestion.
       </Banner>
     );
   }

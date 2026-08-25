@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/benchristian88/atlas-dns/internal/domain"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 )
 
 type Repository interface {
@@ -28,8 +29,24 @@ type Service struct {
 	tokens          *TokenManager
 	limiter         *LoginLimiter
 	sessionDuration time.Duration
-	dummyHash       string
-	now             func() time.Time
+	runtime         interface {
+		RuntimeSettings() systemsettings.RuntimeSettings
+	}
+	dummyHash string
+	now       func() time.Time
+}
+
+func (s *Service) SetRuntimeSettings(provider interface {
+	RuntimeSettings() systemsettings.RuntimeSettings
+}) {
+	s.runtime = provider
+}
+
+func (s *Service) currentSessionDuration() time.Duration {
+	if s.runtime != nil {
+		return s.runtime.RuntimeSettings().SessionDuration
+	}
+	return s.sessionDuration
 }
 
 type SessionResult struct {
@@ -185,7 +202,7 @@ func (s *Service) buildSession(user domain.User, requestID, sourceIP, userAgent 
 	now := s.now().UTC()
 	session := domain.Session{
 		ID: sessionID, UserID: user.ID, TokenHash: tokenHash, CSRFHash: csrfHash,
-		CreatedAt: now, ExpiresAt: now.Add(s.sessionDuration), LastSeenAt: now,
+		CreatedAt: now, ExpiresAt: now.Add(s.currentSessionDuration()), LastSeenAt: now,
 		IPMetadata: truncate(sourceIP, 128), UserAgent: truncate(userAgent, 512),
 	}
 	event, err := auditEvent("user", &user.ID, "auth.login.succeeded", "session", &sessionID, requestID, map[string]any{"sourceIp": session.IPMetadata}, now)

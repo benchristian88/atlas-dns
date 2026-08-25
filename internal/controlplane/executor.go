@@ -83,8 +83,11 @@ func (e *Executor) execute(ctx context.Context, id string) error {
 	for index := range deployment.Nodes {
 		task := deployment.Nodes[index]
 		record, err := e.repository.NodeRecordByID(ctx, task.NodeID)
-		if err != nil || !record.Node.Enabled || record.Node.MaintenanceMode {
+		if err != nil || !record.Node.Enabled || record.Node.MaintenanceMode || record.Node.CompatibilityStatus != domain.CompatibilitySupported {
 			return e.failBeforeMutation(ctx, &deployment, "TARGET_NOT_MUTABLE", errors.New("a target is disabled, unavailable, or in maintenance"))
+		}
+		if configuration.IsLegacyConverted(revision.Document.Unsupported) {
+			return e.failBeforeMutation(ctx, &deployment, "LEGACY_SCHEMA_NOT_DEPLOYABLE", errors.New("legacy schema-1 records must be imported and published as schema 2 before deployment"))
 		}
 		effective, err := configuration.Effective(revision.Document, task.NodeID)
 		if err != nil {

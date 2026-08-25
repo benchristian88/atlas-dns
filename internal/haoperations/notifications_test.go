@@ -13,11 +13,28 @@ import (
 
 type notificationRepositoryFake struct {
 	record    NotificationChannelRecord
+	policy    NotificationPolicy
 	delivery  NotificationDelivery
 	finished  NotificationDelivery
 	audits    []domain.AuditEvent
 	lastAudit domain.AuditEvent
 	testEvent Event
+}
+
+func (r *notificationRepositoryFake) NotificationPolicy(context.Context) (NotificationPolicy, error) {
+	if r.policy.RecordVersion == 0 {
+		r.policy = NotificationPolicy{EnabledEventTypes: RecommendedNotificationEventTypes(), RecordVersion: 1}
+	}
+	return r.policy, nil
+}
+func (r *notificationRepositoryFake) UpdateNotificationPolicy(_ context.Context, value NotificationPolicy, _ int, _ time.Time, event domain.AuditEvent) (NotificationPolicy, error) {
+	value.RecordVersion = r.policy.RecordVersion + 1
+	if value.RecordVersion == 1 {
+		value.RecordVersion = 2
+	}
+	r.policy = value
+	r.lastAudit = event
+	return value, nil
 }
 
 func (r *notificationRepositoryFake) ClusterByID(context.Context, string) (domain.Cluster, error) {
@@ -97,6 +114,45 @@ func TestNotificationCategoriesAreValidatedAndMappedFromOperationalEvents(t *tes
 		if got := NotificationCategoryForEvent(eventType); got != want {
 			t.Errorf("category for %q = %q, want %q", eventType, got, want)
 		}
+	}
+}
+
+func TestNotificationPolicyCatalogAndRecommendedDefaults(t *testing.T) {
+	groups := NotificationPolicyGroups()
+	if len(groups) != 5 {
+		t.Fatalf("groups = %#v", groups)
+	}
+	want := map[string]bool{
+		"dns.failed": true, "dns.recovered": true, "redundancy.degraded": true,
+		"redundancy.at_risk": true, "redundancy.restored": true,
+		"maintenance.return_validation_failed": true, "upgrade.validation_failed": true,
+	}
+	got := map[string]bool{}
+	for _, value := range RecommendedNotificationEventTypes() {
+		got[value] = true
+	}
+	if len(got) != len(want) {
+		t.Fatalf("recommended = %#v", got)
+	}
+	for value := range want {
+		if !got[value] {
+			t.Fatalf("recommended default %q missing", value)
+		}
+	}
+	if _, err := ValidateNotificationEventTypes([]string{"upgrade.failed"}); err == nil {
+		t.Fatal("non-event audit action was accepted as policy")
+	}
+}
+
+func TestNotificationPolicyUpdateIsAudited(t *testing.T) {
+	repository := &notificationRepositoryFake{policy: NotificationPolicy{EnabledEventTypes: RecommendedNotificationEventTypes(), RecordVersion: 1}}
+	service := NewNotificationService(repository, &payloadProtectorFake{})
+	updated, err := service.UpdatePolicy(context.Background(), domain.Actor{UserID: "22222222-2222-4222-8222-222222222222", RequestID: "request"}, []string{"dns.failed"}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.RecordVersion != 2 || len(updated.EnabledEventTypes) != 1 || updated.EnabledEventTypes[0] != "dns.failed" || repository.lastAudit.Action != "notification.policy_changed" {
+		t.Fatalf("updated=%#v audit=%#v", updated, repository.lastAudit)
 	}
 }
 

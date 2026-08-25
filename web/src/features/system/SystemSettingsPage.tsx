@@ -8,6 +8,8 @@ import type { Cluster, SystemSettings } from "../../lib/types";
 export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
   const [settings, setSettings] = useState<SystemSettings>();
   const [error, setError] = useState<unknown>();
+  const [clearConfirmation, setClearConfirmation] = useState("");
+  const [clearFeedback, setClearFeedback] = useState("");
   const load = useCallback(async () => {
     try {
       setSettings(await api.systemSettings());
@@ -53,6 +55,18 @@ export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
       setError(caught);
     }
   }
+  async function clearHistory() {
+    try {
+      const result = await api.clearOperationalHistory(clearConfirmation);
+      setClearFeedback(
+        `Cleared ${result.eventsDeleted} events and ${result.deliveriesDeleted} delivery records. Audit Log entries were retained.`,
+      );
+      setClearConfirmation("");
+      setError(undefined);
+    } catch (caught) {
+      setError(caught);
+    }
+  }
   return (
     <PageContainer size="wide">
       <PageHeader
@@ -70,8 +84,8 @@ export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
         <SettingRow title="Product name" control="Atlas DNS Controller" />
         <SettingRow
           title="Configuration source"
-          description="Runtime installation values remain in the protected environment file."
-          control="Environment"
+          description="Operational runtime policy is stored in PostgreSQL. Bootstrap, networking, and secrets remain external."
+          control="Database + bootstrap environment"
         />
       </SettingsGroup>
       <SettingsGroup title="Data">
@@ -82,11 +96,25 @@ export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
         />
         <SettingRow
           title="Query Log"
-          description="Central retention is persisted below and remains distinct from node policy; an upgrade initializes it once from QUERY_LOG_RETENTION."
+          description="Central retention is persisted below and remains distinct from node policy. A v1.0.x upgrade imports its legacy environment value once."
           control={settings?.queryLogRetention ?? "1 hour–90 days"}
         />
       </SettingsGroup>
-      <SettingsGroup title="Monitoring runtime" bodySpacing="padded">
+      <SettingsGroup title="Session & Security" bodySpacing="padded">
+        <div className="form-grid">
+          <SecondsSetting
+            label="Session duration"
+            min={900}
+            max={2592000}
+            value={settings?.sessionDurationSeconds}
+            onChange={(value) =>
+              settings &&
+              setSettings({ ...settings, sessionDurationSeconds: value })
+            }
+          />
+        </div>
+      </SettingsGroup>
+      <SettingsGroup title="Node Monitoring" bodySpacing="padded">
         <p className="muted">
           Changes are persisted, audited, and adopted by collector scheduling
           without restarting Atlas.
@@ -103,6 +131,20 @@ export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
             }
           />
           <SecondsSetting
+            label="Node request timeout"
+            min={1}
+            max={120}
+            value={settings?.nodeRequestTimeoutSeconds}
+            onChange={(value) =>
+              settings &&
+              setSettings({ ...settings, nodeRequestTimeoutSeconds: value })
+            }
+          />
+        </div>
+      </SettingsGroup>
+      <SettingsGroup title="Statistics Collection" bodySpacing="padded">
+        <div className="form-grid">
+          <SecondsSetting
             label="Statistics poll interval"
             min={60}
             max={86400}
@@ -112,6 +154,10 @@ export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
               setSettings({ ...settings, statisticsPollIntervalSeconds: value })
             }
           />
+        </div>
+      </SettingsGroup>
+      <SettingsGroup title="Query Log Collection" bodySpacing="padded">
+        <div className="form-grid">
           <SecondsSetting
             label="Query Log poll interval"
             min={5}
@@ -148,6 +194,78 @@ export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
           />{" "}
           Central Query Log collection enabled
         </label>
+      </SettingsGroup>
+      <SettingsGroup title="Logging" bodySpacing="padded">
+        <label>
+          Controller log level
+          <select
+            value={settings?.logLevel ?? "info"}
+            disabled={!settings}
+            onChange={(event) =>
+              settings &&
+              setSettings({
+                ...settings,
+                logLevel: event.target.value as SystemSettings["logLevel"],
+              })
+            }
+          >
+            <option value="debug">Debug</option>
+            <option value="info">Info</option>
+            <option value="warn">Warning</option>
+            <option value="error">Error</option>
+          </select>
+        </label>
+      </SettingsGroup>
+      <SettingsGroup title="Operational History" bodySpacing="padded">
+        <p className="muted">
+          Retention applies to HA lifecycle events and notification delivery
+          evidence. Audit Log, revisions, deployments, drift, upgrades, and DNS
+          probe records are separate.
+        </p>
+        <label>
+          Retention
+          <select
+            value={settings?.operationalHistoryRetentionDays ?? 90}
+            disabled={!settings}
+            onChange={(event) =>
+              settings &&
+              setSettings({
+                ...settings,
+                operationalHistoryRetentionDays: Number(
+                  event.target.value,
+                ) as SystemSettings["operationalHistoryRetentionDays"],
+              })
+            }
+          >
+            {[7, 14, 30, 90, 180, 365].map((days) => (
+              <option key={days} value={days}>
+                {days} days
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Type CLEAR OPERATIONAL HISTORY to remove retained operational events
+          <input
+            value={clearConfirmation}
+            onChange={(event) => setClearConfirmation(event.target.value)}
+          />
+        </label>
+        <button
+          className="button button--danger"
+          type="button"
+          disabled={clearConfirmation !== "CLEAR OPERATIONAL HISTORY"}
+          onClick={() => void clearHistory()}
+        >
+          Clear Operational History
+        </button>
+        {clearFeedback && (
+          <p className="muted" role="status">
+            {clearFeedback}
+          </p>
+        )}
+      </SettingsGroup>
+      <SettingsGroup title="Apply changes" bodySpacing="padded">
         <div className="row-actions row-actions--start">
           <button
             className="button"
@@ -155,7 +273,7 @@ export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
             disabled={!settings}
             onClick={() => void saveMonitoring()}
           >
-            Save monitoring settings
+            Save runtime settings
           </button>
           <button
             className="button button--secondary"
@@ -165,11 +283,15 @@ export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
               settings &&
               setSettings({
                 ...settings,
+                sessionDurationSeconds: 43200,
                 nodeHealthIntervalSeconds: 30,
+                nodeRequestTimeoutSeconds: 10,
                 statisticsPollIntervalSeconds: 3600,
                 queryLogCollectionEnabled: true,
                 queryLogPollIntervalSeconds: 30,
                 queryLogRetentionSeconds: 604800,
+                logLevel: "info",
+                operationalHistoryRetentionDays: 90,
               })
             }
           >

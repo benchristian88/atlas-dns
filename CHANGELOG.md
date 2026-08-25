@@ -20,9 +20,16 @@ interfaces.
   publication path. Publication remains separate from deployment.
 - Added persisted, audited runtime monitoring controls and encrypted webhook
   category subscriptions with bounded Test Webhook support during onboarding.
+- Added database-authoritative session, node timeout, collector, logging, and
+  Operational History retention settings with immediate worker adoption.
+- Added grouped exact-event notification policy with conservative defaults;
+  channel enablement and encrypted destination controls remain independent.
+- Added confirmed, audited Operational History clearing that preserves Audit
+  Log, revisions, deployments, drift, upgrades, and DNS probe evidence.
 - Added append-only migration `000016_release_1_1_onboarding`; established
   node+revision clusters are preserved as complete and existing webhooks retain
   all-category behavior.
+- Added append-only migration `000017_release_1_1_runtime_policy_history`.
 - Added the responsive v1.1 application shell with a collapsible desktop left
   rail, equivalent mobile drawer, project-owned line icons, utility-focused top
   bar, and accessible active/open navigation ancestry.
@@ -35,6 +42,10 @@ interfaces.
   route-ownership documentation.
 
 ### Changed
+
+- Raised the managed AdGuard Home floor to v0.107.78 and removed active
+  schema-1/older-adapter paths. Retained v1.0.x schema-1 rows are exposed only
+  through a one-way, non-deployable schema-2 read conversion.
 
 - Setup Guide is now reference/follow-up guidance backed by the same canonical
   onboarding status instead of maintaining a second definition of setup.
@@ -64,7 +75,7 @@ interfaces.
   navigation, collapsed and mobile shells, keyboard behavior, Dashboard
   loading/error/empty/success states, and structural accessibility.
 
-## 1.0.2 - Unreleased
+## 1.0.2 - Released 2026-08-22
 
 ### Added
 
@@ -127,7 +138,7 @@ interfaces.
   bounded delivery diagnostics and the delivery/event history query index. The
   released `000001`–`000014` baseline remains unchanged.
 
-## 1.0.1 - Unreleased
+## 1.0.1 - Released 2026-08-16
 
 ### Fixed
 

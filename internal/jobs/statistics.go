@@ -47,6 +47,13 @@ func (p *StatisticsPoller) currentInterval() time.Duration {
 	return p.interval
 }
 
+func (p *StatisticsPoller) currentTimeout() time.Duration {
+	if p.settings != nil {
+		return p.settings.RuntimeSettings().NodeRequestTimeout
+	}
+	return p.timeout
+}
+
 func NewStatisticsPoller(store StatisticsStore, decrypter CredentialDecrypter, reader StatisticsReader, interval, timeout time.Duration, logger *slog.Logger, trackers ...*operationalhealth.Tracker) *StatisticsPoller {
 	poller := &StatisticsPoller{store: store, decrypter: decrypter, reader: reader, interval: interval, timeout: timeout, concurrency: 4, logger: logger, now: time.Now}
 	if len(trackers) > 0 {
@@ -63,6 +70,9 @@ func (p *StatisticsPoller) Run(ctx context.Context) {
 		case <-ctx.Done():
 			timer.Stop()
 			return
+		case <-runtimeSettingsChanged(p.settings):
+			timer.Stop()
+			continue
 		case <-timer.C:
 			p.poll(ctx)
 		}
@@ -174,7 +184,7 @@ func (p *StatisticsPoller) pollNode(ctx context.Context, record domain.NodeRecor
 		return
 	}
 	request := domain.NodeProbeRequest{BaseURL: record.Node.BaseURL, CertificatePolicy: record.Node.CertificatePolicy, CustomCAPEM: record.Secrets.CustomCAPEM, Credentials: credentials}
-	requestContext, cancel := context.WithTimeout(ctx, p.timeout)
+	requestContext, cancel := context.WithTimeout(ctx, p.currentTimeout())
 	sourceConfig, err := p.reader.ReadStatisticsConfig(requestContext, request)
 	cancel()
 	if err != nil {
@@ -204,7 +214,7 @@ func (p *StatisticsPoller) pollNode(ctx context.Context, record domain.NodeRecor
 	}
 	snapshots := make([]telemetry.Snapshot, 0, attempt.ExpectedRanges)
 	for _, window := range eligibleRanges {
-		requestContext, cancel = context.WithTimeout(ctx, p.timeout)
+		requestContext, cancel = context.WithTimeout(ctx, p.currentTimeout())
 		source, readErr := p.reader.ReadStatistics(requestContext, request, window.Duration())
 		cancel()
 		if readErr != nil {

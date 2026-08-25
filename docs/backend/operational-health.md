@@ -26,10 +26,10 @@ maintenance subsystems remain explicit and do not alone declare the whole
 controller failed. Three consecutive process worker failures mark that worker
 failed; a successful run clears its streak and safe error code.
 
-Statistics staleness reuses `max(2 * STATISTICS_POLL_INTERVAL +
-NODE_REQUEST_TIMEOUT, 3h)`. Query Log staleness reuses
-`max(3 * QUERY_LOG_POLL_INTERVAL, 2m)`. Observation freshness uses
-`max(3 * NODE_HEALTH_INTERVAL + NODE_REQUEST_TIMEOUT, 2m)` and remains distinct
+Statistics staleness reuses `max(2 × configured Statistics interval +
+configured node timeout, 3h)`. Query Log staleness reuses
+`max(3 × configured Query Log interval, 2m)`. Observation freshness uses
+`max(3 × configured health interval + configured node timeout, 2m)` and remains distinct
 from the node connectivity timestamp.
 
 Statistics health is based on ranges eligible under each node's current

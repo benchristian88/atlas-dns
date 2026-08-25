@@ -9,7 +9,11 @@ import { PageHeader } from "../../components/Page";
 import { Field, SettingsGroup } from "../../components/Settings";
 import { StatusBadge } from "../../components/StatusBadge";
 import { api } from "../../lib/api";
-import type { Cluster, NotificationChannel } from "../../lib/types";
+import type {
+  Cluster,
+  NotificationChannel,
+  NotificationPolicy,
+} from "../../lib/types";
 
 const notificationCategories = [
   ["dns", "DNS service"],
@@ -22,6 +26,7 @@ const notificationCategories = [
 
 export function NotificationsPage({ cluster }: { cluster: Cluster }) {
   const [channels, setChannels] = useState<NotificationChannel[]>();
+  const [policy, setPolicy] = useState<NotificationPolicy>();
   const [error, setError] = useState<unknown>();
   const [showEditor, setShowEditor] = useState(false);
   const [editing, setEditing] = useState<NotificationChannel>();
@@ -41,7 +46,12 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
 
   const load = useCallback(async () => {
     try {
-      setChannels((await api.notificationChannels(cluster.id)).items);
+      const [loadedChannels, loadedPolicy] = await Promise.all([
+        api.notificationChannels(cluster.id),
+        api.notificationPolicy(),
+      ]);
+      setChannels(loadedChannels.items);
+      setPolicy(loadedPolicy);
       setError(undefined);
     } catch (caught) {
       setError(caught);
@@ -52,9 +62,9 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
     void load();
   }, [load]);
 
-  if (channels === undefined && error === undefined)
+  if ((channels === undefined || policy === undefined) && error === undefined)
     return <Loading label="Loading notifications…" />;
-  if (channels === undefined)
+  if (channels === undefined || policy === undefined)
     return <ErrorState error={error} retry={() => void load()} />;
 
   return (
@@ -85,6 +95,63 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
           {feedback.message}
         </Banner>
       )}
+      <SettingsGroup
+        title="Notification policy"
+        description="Choose the exact operational events delivered to every eligible channel. Recommended defaults focus on failures, recovery, and redundancy risk."
+        bodySpacing="padded"
+      >
+        {policy.groups.map((group) => (
+          <fieldset className="notification-categories" key={group.id}>
+            <legend>{group.label}</legend>
+            {group.events.map((item) => (
+              <label className="checkbox" key={item.eventType}>
+                <input
+                  type="checkbox"
+                  checked={policy.enabledEventTypes.includes(item.eventType)}
+                  onChange={(event) =>
+                    setPolicy({
+                      ...policy,
+                      enabledEventTypes: event.target.checked
+                        ? [...policy.enabledEventTypes, item.eventType]
+                        : policy.enabledEventTypes.filter(
+                            (value) => value !== item.eventType,
+                          ),
+                    })
+                  }
+                />{" "}
+                {item.label}
+              </label>
+            ))}
+          </fieldset>
+        ))}
+        <div className="row-actions row-actions--start">
+          <button
+            className="button"
+            type="button"
+            disabled={busy !== ""}
+            onClick={() => void savePolicy()}
+          >
+            {busy === "policy" ? "Saving…" : "Save notification policy"}
+          </button>
+          <button
+            className="button button--secondary"
+            type="button"
+            disabled={busy !== ""}
+            onClick={() =>
+              setPolicy({
+                ...policy,
+                enabledEventTypes: policy.groups.flatMap((group) =>
+                  group.events
+                    .filter((item) => item.defaultEnabled)
+                    .map((item) => item.eventType),
+                ),
+              })
+            }
+          >
+            Use recommended defaults
+          </button>
+        </div>
+      </SettingsGroup>
       <SettingsGroup
         title="Webhook channels"
         description="Destinations are encrypted and write-only. Atlas never returns the full URL."
@@ -357,6 +424,29 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
       await load();
     } catch (caught) {
       failure(caught);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function savePolicy() {
+    if (!policy) return;
+    setBusy("policy");
+    try {
+      setPolicy(
+        await api.updateNotificationPolicy(
+          policy.enabledEventTypes,
+          policy.recordVersion,
+        ),
+      );
+      setFeedback({
+        tone: "success",
+        title: "Notification policy saved",
+        message: "New operational events will use the updated policy.",
+      });
+      setError(undefined);
+    } catch (caught) {
+      setError(caught);
     } finally {
       setBusy("");
     }

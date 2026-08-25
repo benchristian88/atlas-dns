@@ -132,12 +132,11 @@ who intentionally build locally use `compose.dev.yaml`.
 
 ## Supported baseline
 
-- AdGuard Home v0.107.52 and later patches in the v0.107 API generation,
-  subject to explicit capabilities. v0.107.78 and v0.107.79 are release-tested;
+- AdGuard Home v0.107.78 and later patches in the v0.107 API generation.
+  v0.107.78 and v0.107.79 are release-tested;
   newer v0.107 patches are provisionally compatible after contract validation.
-- New v1.1 guided onboarding requires v0.107.78 or later in the v0.107 API
-  generation; this stricter establishment floor does not withdraw existing
-  managed-node compatibility.
+- Earlier AdGuard Home versions are unsupported and blocked before managed
+  configuration reads or writes.
 - PostgreSQL 17.
 - Debian 13 with systemd.
 - Docker Engine with Compose v2 and Portainer Stack deployment.
@@ -162,7 +161,8 @@ passphrase. Restore is offline into a new empty database. See [backup and restor
 
 Release 1.0.0 is the stable database baseline for supported 1.x upgrades. The
 1.0.1 patch is schema-neutral; 1.0.2 appends the notification-history migration;
-1.1 appends onboarding, persisted monitoring, and notification-category state.
+1.1 appends onboarding plus runtime settings, notification policy, and history
+retention state. See the [1.1 upgrade notes](docs/operations/release-1.1.0.md).
 Database migrations are ordered, checksum-verified, append-only, and
 forward-only unless a release explicitly documents otherwise.
 

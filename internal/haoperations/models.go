@@ -262,6 +262,24 @@ type NotificationChannelRecord struct {
 	Destination domain.EncryptedPayload
 }
 
+type NotificationPolicyEvent struct {
+	EventType      string `json:"eventType"`
+	Label          string `json:"label"`
+	DefaultEnabled bool   `json:"defaultEnabled"`
+}
+
+type NotificationPolicyGroup struct {
+	ID     string                    `json:"id"`
+	Label  string                    `json:"label"`
+	Events []NotificationPolicyEvent `json:"events"`
+}
+
+type NotificationPolicy struct {
+	EnabledEventTypes []string                  `json:"enabledEventTypes"`
+	RecordVersion     int                       `json:"recordVersion"`
+	Groups            []NotificationPolicyGroup `json:"groups"`
+}
+
 type NotificationDelivery struct {
 	ID            string     `json:"id"`
 	ChannelID     string     `json:"channelId"`

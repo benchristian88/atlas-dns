@@ -31,6 +31,8 @@ type NotificationRepository interface {
 	RecordNotificationTest(context.Context, Event, NotificationDelivery, domain.AuditEvent) error
 	ClaimNotificationDelivery(context.Context, time.Time) (NotificationDelivery, NotificationChannelRecord, error)
 	FinishNotificationDelivery(context.Context, NotificationDelivery) error
+	NotificationPolicy(context.Context) (NotificationPolicy, error)
+	UpdateNotificationPolicy(context.Context, NotificationPolicy, int, time.Time, domain.AuditEvent) (NotificationPolicy, error)
 }
 
 type NotificationService struct {
@@ -42,6 +44,77 @@ type NotificationService struct {
 
 var notificationCategories = map[string]bool{
 	"dns": true, "redundancy": true, "certificates": true, "versions": true, "maintenance": true, "upgrades": true,
+}
+
+var notificationPolicyGroups = []NotificationPolicyGroup{
+	{ID: "dns", Label: "DNS", Events: []NotificationPolicyEvent{
+		{EventType: "dns.failed", Label: "DNS degraded", DefaultEnabled: true},
+		{EventType: "dns.recovered", Label: "DNS recovered", DefaultEnabled: true},
+	}},
+	{ID: "high_availability", Label: "High Availability", Events: []NotificationPolicyEvent{
+		{EventType: "redundancy.degraded", Label: "HA redundancy degraded", DefaultEnabled: true},
+		{EventType: "redundancy.at_risk", Label: "DNS service at risk", DefaultEnabled: true},
+		{EventType: "redundancy.restored", Label: "HA redundancy restored", DefaultEnabled: true},
+	}},
+	{ID: "certificates", Label: "Certificates", Events: []NotificationPolicyEvent{
+		{EventType: "certificate.warning", Label: "Certificate warning"},
+		{EventType: "certificate.critical", Label: "Certificate critical"},
+		{EventType: "certificate.expired", Label: "Certificate expired"},
+		{EventType: "certificate.recovered", Label: "Certificate recovered"},
+	}},
+	{ID: "nodes_lifecycle", Label: "Nodes and Lifecycle", Events: []NotificationPolicyEvent{
+		{EventType: "maintenance.started", Label: "Maintenance started"},
+		{EventType: "maintenance.return_validation_failed", Label: "Return validation failed", DefaultEnabled: true},
+		{EventType: "maintenance.ended", Label: "Maintenance ended"},
+	}},
+	{ID: "updates", Label: "Lifecycle and Updates", Events: []NotificationPolicyEvent{
+		{EventType: "version.update_available", Label: "AdGuard Home update available"},
+		{EventType: "version.current", Label: "AdGuard Home current"},
+		{EventType: "upgrade.started", Label: "Guided upgrade started"},
+		{EventType: "upgrade.succeeded", Label: "Guided upgrade succeeded"},
+		{EventType: "upgrade.validation_failed", Label: "Guided upgrade validation failed", DefaultEnabled: true},
+	}},
+}
+
+func NotificationPolicyGroups() []NotificationPolicyGroup {
+	body, _ := json.Marshal(notificationPolicyGroups)
+	var result []NotificationPolicyGroup
+	_ = json.Unmarshal(body, &result)
+	return result
+}
+
+func RecommendedNotificationEventTypes() []string {
+	result := []string{}
+	for _, group := range notificationPolicyGroups {
+		for _, event := range group.Events {
+			if event.DefaultEnabled {
+				result = append(result, event.EventType)
+			}
+		}
+	}
+	return result
+}
+
+func ValidateNotificationEventTypes(values []string) ([]string, error) {
+	known := map[string]bool{}
+	for _, group := range notificationPolicyGroups {
+		for _, event := range group.Events {
+			known[event.EventType] = true
+		}
+	}
+	seen := map[string]bool{}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if !known[value] {
+			return nil, domain.Validation("enabledEventTypes", "contains an unsupported notification event")
+		}
+		if !seen[value] {
+			seen[value] = true
+			result = append(result, value)
+		}
+	}
+	return result, nil
 }
 
 func RecommendedNotificationCategories() []string {
@@ -95,6 +168,36 @@ func NewNotificationService(repository NotificationRepository, protector Payload
 	client.Timeout = 10 * time.Second
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &NotificationService{repository: repository, protector: protector, client: client, now: time.Now}
+}
+
+func (s *NotificationService) Policy(ctx context.Context) (NotificationPolicy, error) {
+	value, err := s.repository.NotificationPolicy(ctx)
+	if err != nil {
+		return NotificationPolicy{}, err
+	}
+	value.Groups = NotificationPolicyGroups()
+	return value, nil
+}
+
+func (s *NotificationService) UpdatePolicy(ctx context.Context, actor domain.Actor, enabled []string, expectedVersion int) (NotificationPolicy, error) {
+	enabled, err := ValidateNotificationEventTypes(enabled)
+	if err != nil {
+		return NotificationPolicy{}, err
+	}
+	id, err := domain.NewID()
+	if err != nil {
+		return NotificationPolicy{}, err
+	}
+	now := s.now().UTC()
+	actorID := actor.UserID
+	event := domain.AuditEvent{ID: id, ActorType: "user", ActorUserID: &actorID, Action: "notification.policy_changed",
+		ResourceType: "notification_policy", RequestID: actor.RequestID, Metadata: map[string]any{"enabledEventTypes": enabled}, CreatedAt: now}
+	value, err := s.repository.UpdateNotificationPolicy(ctx, NotificationPolicy{EnabledEventTypes: enabled}, expectedVersion, now, event)
+	if err != nil {
+		return NotificationPolicy{}, fmt.Errorf("update notification policy: %w", err)
+	}
+	value.Groups = NotificationPolicyGroups()
+	return value, nil
 }
 
 func (s *NotificationService) List(ctx context.Context, clusterID string) ([]NotificationChannel, error) {

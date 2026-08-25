@@ -47,9 +47,9 @@ measured API-ingestion limitations and a new review before implementation.
 - `internal/adguard`: bounded, direct status/version and configuration adapter with explicit TLS policy, version capabilities, supported writers, and stable failure mapping.
 - `internal/jobs`: health polling and session cleanup.
 - `internal/api`: standard-library route registration, DTO decoding, authentication/CSRF middleware, security headers, error mapping, request IDs, and frontend serving.
-- `internal/config`: environment-only runtime configuration and secret validation.
+- `internal/config`: bootstrap/network/secret environment validation plus one-time legacy runtime seeds.
 - `internal/version`: build-injected controller version metadata.
-- `internal/configuration`: immutable schema-v1 compatibility plus canonical schema v2, deterministic normalisation, hashing, validation, projection, and ownership-aware structured differences.
+- `internal/configuration`: canonical schema 2, one-way historical schema-1 read conversion, deterministic normalisation, hashing, validation, and ownership-aware structured differences.
 - `internal/inventory`: observation, capability, comparison, audited draft import, and audited filter-refresh orchestration.
 - `internal/controlplane`: desired draft validation, immutable revisions, deployment preview/creation/execution, rollback, drift evaluation, and reconciliation policy orchestration.
 

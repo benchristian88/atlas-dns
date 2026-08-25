@@ -312,3 +312,9 @@ contains the optimistic `update_checks_enabled` setting, record version, and
 safe updater attribution; it is required control-plane recovery state. Existing
 users remain the only authentication principals, and sessions remain transient
 and are excluded from both Standard and Full portable recovery.
+
+Release 1.1 migration `000017_release_1_1_runtime_policy_history` completes the
+typed singleton runtime settings and adds `notification_policy`. Both are
+required control-plane recovery state and are included in Standard Backup.
+Operational History retention prunes only `ha_operational_events` and cascading
+delivery rows; Audit Log and other durable domains remain independent.

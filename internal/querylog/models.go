@@ -184,7 +184,7 @@ func SupportsVersion(version string) bool {
 	major, majorErr := strconv.Atoi(parts[0])
 	minor, minorErr := strconv.Atoi(parts[1])
 	patch, patchErr := strconv.Atoi(parts[2])
-	return majorErr == nil && minorErr == nil && patchErr == nil && major == 0 && minor == 107 && patch >= 52
+	return majorErr == nil && minorErr == nil && patchErr == nil && major == 0 && minor == 107 && patch >= 78
 }
 
 // VersionBelowMinimum distinguishes evidence of an unsupported old contract
@@ -201,7 +201,7 @@ func VersionBelowMinimum(version string) bool {
 	if majorErr != nil || minorErr != nil || patchErr != nil || major != 0 {
 		return false
 	}
-	return minor < 107 || (minor == 107 && patch < 52)
+	return minor < 107 || (minor == 107 && patch < 78)
 }
 
 func normalizeDomain(value string) string {

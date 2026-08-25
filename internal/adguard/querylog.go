@@ -59,18 +59,11 @@ type queryLogItem struct {
 func SupportsQueryLog(version string) bool { return querylog.SupportsVersion(version) }
 
 func (r *ConfigurationReader) ReadQueryLogConfig(ctx context.Context, request domain.NodeProbeRequest, version string) (querylog.SourceConfig, error) {
-	path := "/control/querylog_info"
-	if supportsConfigurationPatch(version, 72) {
-		path = "/control/querylog/config"
-	}
-	// The legacy querylog_info interval is expressed in days and can be a
-	// fractional JSON number. Collection only needs these two privacy controls,
-	// so deliberately avoid decoding unrelated version-variable fields.
 	var response struct {
 		Enabled           bool `json:"enabled"`
 		AnonymizeClientIP bool `json:"anonymize_client_ip"`
 	}
-	if err := r.getOperationalResource(ctx, request, path, nil, &response); err != nil {
+	if err := r.getOperationalResource(ctx, request, "/control/querylog/config", nil, &response); err != nil {
 		return querylog.SourceConfig{}, err
 	}
 	return querylog.SourceConfig{Enabled: response.Enabled, AnonymizeClientIP: response.AnonymizeClientIP}, nil

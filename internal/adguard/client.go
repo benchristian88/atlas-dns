@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/benchristian88/atlas-dns/internal/domain"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 )
 
 const maxResponseBytes = 1 << 20
@@ -23,16 +24,32 @@ const maxResponseBytes = 1 << 20
 const (
 	minimumSupportedMajor = 0
 	minimumSupportedMinor = 107
-	minimumSupportedPatch = 52
+	minimumSupportedPatch = 78
 	latestTestedPatch     = 79
 )
 
 type Probe struct {
-	timeout time.Duration
+	timeout  time.Duration
+	settings interface {
+		RuntimeSettings() systemsettings.RuntimeSettings
+	}
 }
 
 func NewProbe(timeout time.Duration) *Probe {
 	return &Probe{timeout: timeout}
+}
+
+func (p *Probe) SetRuntimeSettings(provider interface {
+	RuntimeSettings() systemsettings.RuntimeSettings
+}) {
+	p.settings = provider
+}
+
+func (p *Probe) currentTimeout() time.Duration {
+	if p.settings != nil {
+		return p.settings.RuntimeSettings().NodeRequestTimeout
+	}
+	return p.timeout
 }
 
 type statusResponse struct {
@@ -45,6 +62,7 @@ type statusResponse struct {
 }
 
 func (p *Probe) Status(ctx context.Context, request domain.NodeProbeRequest) (domain.NodeProbeResult, error) {
+	timeout := p.currentTimeout()
 	baseURL, err := domain.NormaliseNodeURL(request.BaseURL, request.CertificatePolicy)
 	if err != nil {
 		return domain.NodeProbeResult{}, err
@@ -60,7 +78,7 @@ func (p *Probe) Status(ctx context.Context, request domain.NodeProbeRequest) (do
 	defer transport.CloseIdleConnections()
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   p.timeout,
+		Timeout:   timeout,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return errors.New("node status redirects are not allowed")
 		},
@@ -132,6 +150,7 @@ func nodeAPIError(kind domain.ErrorKind, method, path string, status int, conten
 }
 
 func (p *Probe) transport(policy domain.CertificatePolicy, customCAPEM string) (*http.Transport, error) {
+	timeout := p.currentTimeout()
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 	if policy == domain.CertificateCustomCA {
 		roots, err := x509.SystemCertPool()
@@ -145,13 +164,13 @@ func (p *Probe) transport(policy domain.CertificatePolicy, customCAPEM string) (
 	}
 	return &http.Transport{
 		DialContext: (&net.Dialer{
-			Timeout:   p.timeout,
+			Timeout:   timeout,
 			KeepAlive: 30 * time.Second,
 		}).DialContext,
 		ForceAttemptHTTP2:     true,
 		TLSClientConfig:       tlsConfig,
-		TLSHandshakeTimeout:   p.timeout,
-		ResponseHeaderTimeout: p.timeout,
+		TLSHandshakeTimeout:   timeout,
+		ResponseHeaderTimeout: timeout,
 		IdleConnTimeout:       30 * time.Second,
 	}, nil
 }
@@ -190,20 +209,8 @@ func VersionCompatibility(version string) domain.Compatibility {
 	return ConfigurationCompatibility(version)
 }
 
-// OnboardingCompatibility applies the v1.1 guided-onboarding baseline without
-// withdrawing the compatibility contract for nodes already managed by Atlas.
 func OnboardingCompatibility(version string) domain.Compatibility {
-	major, minor, patch, ok := configurationVersion(version)
-	if !ok {
-		return domain.CompatibilityUnknown
-	}
-	if major == 0 && minor == 107 && patch >= 78 {
-		return domain.CompatibilitySupported
-	}
-	if major == 0 && (minor < 107 || (minor == 107 && patch < 78)) {
-		return domain.CompatibilityUnsupported
-	}
-	return domain.CompatibilityUnknown
+	return ConfigurationCompatibility(version)
 }
 
 func ConfigurationCompatibility(version string) domain.Compatibility {
@@ -250,20 +257,12 @@ func configurationVersion(version string) (major, minor, patch int, ok bool) {
 	return parsedMajor, parsedMinor, parsedPatch, true
 }
 
-func supportsEcosia(version string) bool {
-	return supportsConfigurationPatch(version, 53)
-}
-
-func supportsSchemaV2(version string) bool {
-	return supportsEcosia(version)
-}
-
 // SupportsRecentStatistics reports whether the tested AdGuard Home API can
 // return an exact caller-selected recent window. Earlier supported versions
 // expose statistics, but not the range control required for honest 24h/7d/30d
 // aggregation.
 func SupportsRecentStatistics(version string) bool {
-	return supportsConfigurationPatch(version, 72)
+	return supportsConfigurationPatch(version, minimumSupportedPatch)
 }
 
 func supportsConfigurationPatch(version string, minimum int) bool {

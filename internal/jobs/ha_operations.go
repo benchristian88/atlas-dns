@@ -42,10 +42,17 @@ func RunHAOperations(ctx context.Context, service HAOperationsPoller, interval t
 	run()
 	for {
 		timer := time.NewTimer(currentInterval())
+		var changed <-chan struct{}
+		if len(providers) > 0 {
+			changed = runtimeSettingsChanged(providers[0])
+		}
 		select {
 		case <-ctx.Done():
 			timer.Stop()
 			return
+		case <-changed:
+			timer.Stop()
+			continue
 		case <-timer.C:
 			run()
 		}

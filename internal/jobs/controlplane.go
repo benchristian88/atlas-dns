@@ -102,16 +102,20 @@ func RunOperationalCommandExecutor(ctx context.Context, executor DeploymentExecu
 	}
 }
 
-func RunReconciler(ctx context.Context, reconciler DriftReconciler, interval time.Duration, logger *slog.Logger, trackers ...*operationalhealth.Tracker) {
-	var tracker *operationalhealth.Tracker
-	if len(trackers) > 0 {
-		tracker = trackers[0]
-	}
-	if interval < 10*time.Second {
-		interval = 10 * time.Second
+func RunReconciler(ctx context.Context, reconciler DriftReconciler, interval time.Duration, logger *slog.Logger, tracker *operationalhealth.Tracker, providers ...RuntimeSettingsProvider) {
+	currentInterval := func() time.Duration {
+		value := interval
+		if len(providers) > 0 && providers[0] != nil {
+			value = providers[0].RuntimeSettings().NodeHealthInterval
+		}
+		if value < 10*time.Second {
+			return 10 * time.Second
+		}
+		return value
 	}
 	failures := 0
 	run := func() {
+		interval = currentInterval()
 		if tracker != nil {
 			tracker.Start("drift_reconciliation", time.Now().UTC().Add(interval))
 		}
@@ -132,13 +136,20 @@ func RunReconciler(ctx context.Context, reconciler DriftReconciler, interval tim
 		}
 	}
 	run()
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
 	for {
+		timer := time.NewTimer(currentInterval())
+		var changed <-chan struct{}
+		if len(providers) > 0 {
+			changed = runtimeSettingsChanged(providers[0])
+		}
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return
-		case <-ticker.C:
+		case <-changed:
+			timer.Stop()
+			continue
+		case <-timer.C:
 			run()
 		}
 	}

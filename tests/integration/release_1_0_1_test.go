@@ -19,8 +19,8 @@ func TestReappliesCurrentMigrationChainWithoutChangingLedger(t *testing.T) {
 	if err := store.Pool().QueryRow(ctx, `SELECT count(*),max(version) FROM schema_migrations`).Scan(&beforeCount, &beforeVersion); err != nil {
 		t.Fatal(err)
 	}
-	if beforeCount != 16 || beforeVersion != 16 {
-		t.Fatalf("baseline ledger count/version = %d/%d, want 16/16", beforeCount, beforeVersion)
+	if beforeCount != 17 || beforeVersion != 17 {
+		t.Fatalf("baseline ledger count/version = %d/%d, want 17/17", beforeCount, beforeVersion)
 	}
 
 	if err := database.ApplyMigrations(ctx, store.Pool()); err != nil {

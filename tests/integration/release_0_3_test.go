@@ -41,7 +41,7 @@ func (s *adGuardState) handler(response http.ResponseWriter, request *http.Reque
 	response.Header().Set("Content-Type", "application/json")
 	switch request.URL.Path {
 	case "/control/status":
-		_, _ = io.WriteString(response, validAdGuardStatusResponse("v0.107.65"))
+		_, _ = io.WriteString(response, validAdGuardStatusResponse("v0.107.78"))
 	case "/control/dns_info":
 		_ = json.NewEncoder(response).Encode(map[string]any{"upstream_dns": s.upstreamDNS, "bootstrap_dns": []string{}, "fallback_dns": []string{}, "local_ptr_upstreams": []string{}, "protection_enabled": true, "protection_disabled_until": nil, "cache_enabled": true, "cache_size": 4_194_304, "upstream_timeout": 10})
 	case "/control/filtering/status":
@@ -50,6 +50,8 @@ func (s *adGuardState) handler(response http.ResponseWriter, request *http.Reque
 		_ = json.NewEncoder(response).Encode(map[string]any{"clients": s.clients})
 	case "/control/rewrite/list":
 		_ = json.NewEncoder(response).Encode(s.rewrites)
+	case "/control/rewrite/settings":
+		_, _ = io.WriteString(response, `{"enabled":true}`)
 	case "/control/rewrite/add":
 		var rewrite map[string]any
 		_ = json.NewDecoder(request.Body).Decode(&rewrite)
