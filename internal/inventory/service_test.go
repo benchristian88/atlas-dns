@@ -131,12 +131,12 @@ func TestImportRequiresConfirmationAndCreatesOnlyDraft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !repo.imported || draft.Version != 1 || draft.SchemaVersion != configuration.LegacySchemaVersion || draft.SourceSnapshotID != snapshotID || draft.Document.NodeOverrides[nodeID].DNSPort != 53 {
+	if !repo.imported || draft.Version != 1 || draft.SchemaVersion != configuration.SchemaVersion || draft.SourceSnapshotID != snapshotID || draft.Document.NodeOverrides[nodeID].DNSPort != 53 {
 		t.Fatalf("unexpected draft: %#v", draft)
 	}
 }
 
-func TestImportDoesNotDowngradeSchemaV2Draft(t *testing.T) {
+func TestImportConvertsLegacyObservationIntoSchemaV2Draft(t *testing.T) {
 	clusterID := "11111111-1111-4111-8111-111111111111"
 	nodeID := "22222222-2222-4222-8222-222222222222"
 	snapshotID := "33333333-3333-4333-8333-333333333333"
@@ -145,11 +145,12 @@ func TestImportDoesNotDowngradeSchemaV2Draft(t *testing.T) {
 	repo := &fakeRepository{snapshot: Snapshot{ID: snapshotID, NodeID: nodeID, Document: &legacy, CollectionStatus: "succeeded"}, node: domain.Node{ID: nodeID, ClusterID: clusterID}, draft: current}
 	service := NewService(repo, unusedCredentials{}, unusedReader{})
 	actor := domain.Actor{UserID: "44444444-4444-4444-8444-444444444444", RequestID: "55555555-5555-4555-8555-555555555555"}
-	if _, err := service.Import(context.Background(), actor, clusterID, snapshotID, 3, true); err == nil {
-		t.Fatal("legacy observation downgraded a schema-v2 draft")
+	draft, err := service.Import(context.Background(), actor, clusterID, snapshotID, 3, true)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if repo.imported {
-		t.Fatal("schema downgrade changed the draft")
+	if !repo.imported || draft.SchemaVersion != configuration.SchemaVersion {
+		t.Fatalf("legacy observation was not converted: %#v", draft)
 	}
 }
 

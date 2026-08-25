@@ -221,64 +221,6 @@ type TLSStatus struct {
 	Warning          string   `json:"warning,omitempty"`
 }
 
-type legacyDNS struct {
-	UpstreamDNS       []string `json:"upstreamDns"`
-	BootstrapDNS      []string `json:"bootstrapDns"`
-	FallbackDNS       []string `json:"fallbackDns"`
-	PrivateReverseDNS []string `json:"privateReverseDns"`
-}
-
-type legacyFiltering struct {
-	Enabled        bool     `json:"enabled"`
-	UpdateInterval int      `json:"updateIntervalHours"`
-	FilterURLs     []string `json:"filterUrls"`
-	UserRules      []string `json:"userRules"`
-}
-
-type legacyShared struct {
-	DNS       legacyDNS       `json:"dns"`
-	Filtering legacyFiltering `json:"filtering"`
-}
-
-func legacySharedFrom(value Shared) legacyShared {
-	return legacyShared{DNS: legacyDNS{UpstreamDNS: value.DNS.UpstreamDNS, BootstrapDNS: value.DNS.BootstrapDNS, FallbackDNS: value.DNS.FallbackDNS, PrivateReverseDNS: value.DNS.PrivateReverseDNS}, Filtering: legacyFiltering{Enabled: value.Filtering.Enabled, UpdateInterval: value.Filtering.UpdateInterval, FilterURLs: value.Filtering.FilterURLs, UserRules: value.Filtering.UserRules}}
-}
-
-func (document Document) MarshalJSON() ([]byte, error) {
-	if document.SchemaVersion != LegacySchemaVersion {
-		type alias Document
-		return json.Marshal(alias(document))
-	}
-	return json.Marshal(struct {
-		SchemaVersion int          `json:"schemaVersion"`
-		Shared        legacyShared `json:"shared"`
-		NodeSpecific  NodeSpecific `json:"nodeSpecific"`
-		ObservedOnly  struct {
-			ProductVersion string `json:"productVersion"`
-		} `json:"observedOnly"`
-		Unsupported []Unsupported `json:"unsupported"`
-	}{document.SchemaVersion, legacySharedFrom(document.Shared), NodeSpecific{BindHosts: document.NodeSpecific.BindHosts, DNSPort: document.NodeSpecific.DNSPort}, struct {
-		ProductVersion string `json:"productVersion"`
-	}{document.ObservedOnly.ProductVersion}, document.Unsupported})
-}
-
-func (document DesiredDocument) MarshalJSON() ([]byte, error) {
-	if document.SchemaVersion != LegacySchemaVersion {
-		type alias DesiredDocument
-		return json.Marshal(alias(document))
-	}
-	overrides := make(map[string]NodeSpecific, len(document.NodeOverrides))
-	for id, value := range document.NodeOverrides {
-		overrides[id] = NodeSpecific{BindHosts: value.BindHosts, DNSPort: value.DNSPort}
-	}
-	return json.Marshal(struct {
-		SchemaVersion int                     `json:"schemaVersion"`
-		Shared        legacyShared            `json:"shared"`
-		NodeOverrides map[string]NodeSpecific `json:"nodeOverrides"`
-		Unsupported   []Unsupported           `json:"unsupported"`
-	}{document.SchemaVersion, legacySharedFrom(document.Shared), overrides, document.Unsupported})
-}
-
 type Unsupported struct {
 	Section string `json:"section"`
 	Reason  string `json:"reason"`
@@ -305,6 +247,11 @@ type Difference struct {
 func Canonicalise(document Document) Document {
 	if document.SchemaVersion == 0 {
 		document.SchemaVersion = SchemaVersion
+	} else if document.SchemaVersion == LegacySchemaVersion {
+		document.SchemaVersion = SchemaVersion
+		if !IsLegacyConverted(document.Unsupported) {
+			document.Unsupported = append(document.Unsupported, Unsupported{Section: legacyMigrationSection, Reason: "Imported from a v1.0.x schema-1 record; import and publish a fresh schema-2 revision before deployment"})
+		}
 	}
 	document.Shared.DNS.UpstreamDNS = cleanOrdered(document.Shared.DNS.UpstreamDNS)
 	document.Shared.DNS.BootstrapDNS = cleanSet(document.Shared.DNS.BootstrapDNS)
@@ -365,7 +312,7 @@ func CanonicaliseDesired(document DesiredDocument) DesiredDocument {
 		document.SchemaVersion = SchemaVersion
 	}
 	observed := Canonicalise(Document{SchemaVersion: document.SchemaVersion, Shared: document.Shared, Unsupported: document.Unsupported})
-	document.Shared, document.Unsupported = observed.Shared, observed.Unsupported
+	document.SchemaVersion, document.Shared, document.Unsupported = observed.SchemaVersion, observed.Shared, observed.Unsupported
 	if document.NodeOverrides == nil {
 		document.NodeOverrides = map[string]NodeSpecific{}
 	}
@@ -381,7 +328,7 @@ func CanonicaliseDesired(document DesiredDocument) DesiredDocument {
 
 func DesiredFromObservation(nodeID string, document Document) DesiredDocument {
 	desired := DesiredDocument{
-		SchemaVersion: document.SchemaVersion,
+		SchemaVersion: SchemaVersion,
 		Shared:        document.Shared,
 		NodeOverrides: map[string]NodeSpecific{nodeID: document.NodeSpecific},
 		Unsupported:   document.Unsupported,
@@ -389,30 +336,37 @@ func DesiredFromObservation(nodeID string, document Document) DesiredDocument {
 	return CanonicaliseDesired(desired)
 }
 
-// ProjectDocument narrows a current observation to the feature boundary of a
-// historical revision.  This lets schema-v1 active revisions continue to
-// reconcile and roll back without treating newly observed v2 fields as drift.
-func ProjectDocument(document Document, schemaVersion int) Document {
+// ProjectDocument returns the single supported configuration representation.
+// The schemaVersion argument is retained to avoid changing historical service
+// contracts; records are converted at their database read boundary.
+func ProjectDocument(document Document, _ int) Document {
 	document = Canonicalise(document)
-	if schemaVersion == LegacySchemaVersion {
-		return Canonicalise(Document{
-			SchemaVersion: LegacySchemaVersion,
-			Shared: Shared{
-				DNS: DNS{
-					UpstreamDNS: document.Shared.DNS.UpstreamDNS, BootstrapDNS: document.Shared.DNS.BootstrapDNS,
-					FallbackDNS: document.Shared.DNS.FallbackDNS, PrivateReverseDNS: document.Shared.DNS.PrivateReverseDNS,
-				},
-				Filtering: Filtering{
-					Enabled: document.Shared.Filtering.Enabled, UpdateInterval: document.Shared.Filtering.UpdateInterval,
-					FilterURLs: document.Shared.Filtering.FilterURLs, UserRules: document.Shared.Filtering.UserRules,
-				},
-			},
-			NodeSpecific: NodeSpecific{BindHosts: document.NodeSpecific.BindHosts, DNSPort: document.NodeSpecific.DNSPort},
-			Unsupported:  document.Unsupported,
-		})
-	}
 	document.SchemaVersion = SchemaVersion
 	return document
+}
+
+const legacyMigrationSection = "legacy_schema1"
+
+// ConvertLegacyDocument is the one-way read adapter for immutable v1.0.x
+// records. Converted values are schema 2 API shapes but remain deliberately
+// non-deployable until an operator imports and publishes a fresh schema 2 draft.
+func ConvertLegacyDocument(document Document) Document {
+	document.SchemaVersion = LegacySchemaVersion
+	return Canonicalise(document)
+}
+
+func ConvertLegacyDesired(document DesiredDocument) DesiredDocument {
+	document.SchemaVersion = LegacySchemaVersion
+	return CanonicaliseDesired(document)
+}
+
+func IsLegacyConverted(values []Unsupported) bool {
+	for _, value := range values {
+		if value.Section == legacyMigrationSection {
+			return true
+		}
+	}
+	return false
 }
 
 func Effective(document DesiredDocument, nodeID string) (Document, error) {
@@ -552,14 +506,14 @@ func ValidateDesired(document DesiredDocument, nodeIDs []string) []ValidationIss
 	providedSchemaVersion := document.SchemaVersion
 	document = CanonicaliseDesired(document)
 	issues := make([]ValidationIssue, 0)
-	if providedSchemaVersion != LegacySchemaVersion && providedSchemaVersion != SchemaVersion {
-		issues = append(issues, ValidationIssue{Field: "schemaVersion", Message: "must be 1 or 2"})
+	if providedSchemaVersion != SchemaVersion {
+		issues = append(issues, ValidationIssue{Field: "schemaVersion", Message: "must be 2"})
 	}
-	allowedIntervals := map[int]bool{0: true, 1: true, 12: true, 24: true, 72: true, 168: true}
-	if providedSchemaVersion == LegacySchemaVersion && !allowedIntervals[document.Shared.Filtering.UpdateInterval] {
-		issues = append(issues, ValidationIssue{Field: "shared.filtering.updateIntervalHours", Message: "must be 0, 1, 12, 24, 72, or 168"})
-	} else if providedSchemaVersion >= SchemaVersion && (document.Shared.Filtering.UpdateInterval < 0 || document.Shared.Filtering.UpdateInterval > 8760) {
+	if document.Shared.Filtering.UpdateInterval < 0 || document.Shared.Filtering.UpdateInterval > 8760 {
 		issues = append(issues, ValidationIssue{Field: "shared.filtering.updateIntervalHours", Message: "must be between 0 and 8760"})
+	}
+	if IsLegacyConverted(document.Unsupported) {
+		issues = append(issues, ValidationIssue{Field: "unsupported", Message: "legacy schema-1 records must be imported and published as a fresh schema-2 revision before deployment"})
 	}
 	for index, rawURL := range document.Shared.Filtering.FilterURLs {
 		if !validHTTPURL(rawURL) {
@@ -571,9 +525,7 @@ func ValidateDesired(document DesiredDocument, nodeIDs []string) []ValidationIss
 			issues = append(issues, ValidationIssue{Field: fmt.Sprintf("shared.filtering.whitelistUrls[%d]", index), Message: "must be an absolute HTTP or HTTPS URL"})
 		}
 	}
-	if providedSchemaVersion >= SchemaVersion {
-		issues = append(issues, validateV2Shared(document.Shared)...)
-	}
+	issues = append(issues, validateV2Shared(document.Shared)...)
 	enabledDHCP := 0
 	for _, nodeID := range nodeIDs {
 		override, ok := document.NodeOverrides[nodeID]

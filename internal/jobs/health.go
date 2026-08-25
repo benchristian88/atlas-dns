@@ -64,6 +64,9 @@ func (p *HealthPoller) Run(ctx context.Context) {
 		case <-ctx.Done():
 			timer.Stop()
 			return
+		case <-runtimeSettingsChanged(p.settings):
+			timer.Stop()
+			continue
 		case <-timer.C:
 			p.poll(ctx)
 		}

@@ -45,6 +45,7 @@ explicitly say so.
 ## Standard and Full
 
 Standard Backup includes database schema and required control-plane rows. It
+includes database-backed System Settings and notification policy. It
 excludes table data for sessions, controller/upstream release caches,
 Statistics, Query Log ingestion/events, DNS probes, HA operational events, and
 notification deliveries. The table schema is retained so a restored database

@@ -76,11 +76,15 @@ describe("system settings API contract", () => {
     const settings: SystemSettings = {
       updateChecksEnabled: true,
       recordVersion: 7,
+      sessionDurationSeconds: 43200,
       nodeHealthIntervalSeconds: 30,
+      nodeRequestTimeoutSeconds: 10,
       statisticsPollIntervalSeconds: 3600,
       queryLogCollectionEnabled: true,
       queryLogPollIntervalSeconds: 30,
       queryLogRetentionSeconds: 604800,
+      logLevel: "info",
+      operationalHistoryRetentionDays: 90,
       queryLogRetention: "168h0m0s",
       statisticsRetention: "32 days detailed; 400 days daily",
       installationType: "docker",
@@ -99,11 +103,15 @@ describe("system settings API contract", () => {
     expect(JSON.parse(String(options.body))).toEqual({
       updateChecksEnabled: true,
       recordVersion: 7,
+      sessionDurationSeconds: 43200,
       nodeHealthIntervalSeconds: 30,
+      nodeRequestTimeoutSeconds: 10,
       statisticsPollIntervalSeconds: 3600,
       queryLogCollectionEnabled: true,
       queryLogPollIntervalSeconds: 30,
       queryLogRetentionSeconds: 604800,
+      logLevel: "info",
+      operationalHistoryRetentionDays: 90,
     });
     expect(String(options.body)).not.toContain('queryLogRetention"');
     expect(String(options.body)).not.toContain("statisticsRetention");

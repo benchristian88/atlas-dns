@@ -174,10 +174,6 @@ func (s *Store) RecordNotificationTest(ctx context.Context, event haoperations.E
 	if err := audit(ctx, tx, auditEvent); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM ha_operational_events WHERE id IN
-		(SELECT id FROM ha_operational_events WHERE occurred_at < $1 ORDER BY occurred_at,id LIMIT 10000)`, event.OccurredAt.Add(-365*24*time.Hour)); err != nil {
-		return fmt.Errorf("clean notification test history: %w", err)
-	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit notification test history: %w", err)
 	}

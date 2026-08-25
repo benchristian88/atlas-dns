@@ -40,12 +40,16 @@ export interface ControllerUpdateStatus {
 export interface SystemSettings {
   updateChecksEnabled: boolean;
   recordVersion: number;
+  sessionDurationSeconds: number;
   nodeHealthIntervalSeconds: number;
+  nodeRequestTimeoutSeconds: number;
   statisticsPollIntervalSeconds: number;
   queryLogCollectionEnabled: boolean;
   queryLogPollIntervalSeconds: number;
   queryLogRetentionSeconds: number;
   queryLogRetention: string;
+  logLevel: "debug" | "info" | "warn" | "error";
+  operationalHistoryRetentionDays: 7 | 14 | 30 | 90 | 180 | 365;
   statisticsRetention: string;
   installationType: string;
 }
@@ -1039,6 +1043,24 @@ export interface NotificationChannel {
   recordVersion: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface NotificationPolicyEvent {
+  eventType: string;
+  label: string;
+  defaultEnabled: boolean;
+}
+
+export interface NotificationPolicyGroup {
+  id: string;
+  label: string;
+  events: NotificationPolicyEvent[];
+}
+
+export interface NotificationPolicy {
+  enabledEventTypes: string[];
+  recordVersion: number;
+  groups: NotificationPolicyGroup[];
 }
 
 export interface NotificationTestResult {

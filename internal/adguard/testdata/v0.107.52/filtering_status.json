@@ -1,1 +1,0 @@
-{"filtering_enabled":true,"interval":24,"filters":[{"id":1,"enabled":true,"url":"https://filters.example/list.txt","name":"Example","rules_count":100,"last_updated":"2026-01-01T00:00:00Z"}],"user_rules":["||example.test^"]}

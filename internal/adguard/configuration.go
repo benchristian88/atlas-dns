@@ -364,16 +364,14 @@ type dhcpActiveCheckResponse struct {
 }
 
 func (r *ConfigurationReader) ReadConfiguration(ctx context.Context, request domain.NodeProbeRequest, version string) (configuration.Document, inventory.CapabilityProfile, error) {
-	profile := inventory.CapabilityProfile{ProductVersion: version, Compatibility: string(ConfigurationCompatibility(version)), SchemaVersion: configuration.SchemaVersion, Features: map[string]bool{"dns": false, "cache_toggle": false, "upstream_timeout": false, "test_upstream_dns": false, "cache_clear": false, "filtering": false, "test_host_filtering": false, "test_host_filtering_context": false, "filter_interval_arbitrary": false, "clients": false, "rewrites": false, "rewrite_toggle": false, "blocked_services": false, "safety": false, "safe_search_ecosia": supportsEcosia(version), "query_log": false, "querylog_clear": false, "statistics": false, "statistics_exact_range": SupportsRecentStatistics(version), "stats_reset": false, "ignored_lists_toggle": false, "tls": false, "dhcp": false}, Warnings: []string{}}
+	profile := inventory.CapabilityProfile{ProductVersion: version, Compatibility: string(ConfigurationCompatibility(version)), SchemaVersion: configuration.SchemaVersion, Features: map[string]bool{"dns": false, "cache_toggle": false, "upstream_timeout": false, "test_upstream_dns": false, "cache_clear": false, "filtering": false, "test_host_filtering": false, "test_host_filtering_context": false, "filter_interval_arbitrary": false, "clients": false, "rewrites": false, "rewrite_toggle": false, "blocked_services": false, "safety": false, "safe_search_ecosia": false, "query_log": false, "querylog_clear": false, "statistics": false, "statistics_exact_range": SupportsRecentStatistics(version), "stats_reset": false, "ignored_lists_toggle": false, "tls": false, "dhcp": false}, Warnings: []string{}}
 	if ConfigurationCompatibility(version) != domain.CompatibilitySupported {
 		profile.Warnings = append(profile.Warnings, "This AdGuard Home version is outside the tested configuration inventory range.")
-		return configuration.Document{}, profile, domain.NewError(domain.ErrorCapability, "the node version is outside the supported AdGuard Home API generation")
+		return configuration.Document{}, profile, domain.NewError(domain.ErrorCapability, fmt.Sprintf("Unsupported AdGuard Home version. Minimum supported version: 0.107.78. Detected version: %s", version))
 	}
 	if IsProvisionallyCompatible(version) {
 		profile.Warnings = append(profile.Warnings, "This newer AdGuard Home 0.107 patch is provisionally compatible; Atlas validated the APIs it uses, but this patch has not been explicitly release-tested.")
 	}
-	// These destructive endpoints predate the supported v0.107.52 floor and do
-	// not depend on schema-v2 policy inventory.
 	profile.Features["querylog_clear"] = true
 	profile.Features["stats_reset"] = true
 	var status statusResponse
@@ -406,18 +404,8 @@ func (r *ConfigurationReader) ReadConfiguration(ctx context.Context, request dom
 	}
 	profile.Features["filtering"] = true
 	profile.Features["test_host_filtering"] = true
-	profile.Features["test_host_filtering_context"] = supportsConfigurationPatch(version, 58)
-	profile.Features["filter_interval_arbitrary"] = supportsConfigurationPatch(version, 78)
-	if !supportsSchemaV2(version) {
-		profile.SchemaVersion = configuration.LegacySchemaVersion
-		profile.Warnings = append(profile.Warnings, "AdGuard Home v0.107.53 or later in the supported 0.107 API generation is required for schema-v2 configuration management; legacy schema-v1 inventory remains available.")
-		document := configuration.ProjectDocument(configurationDocument(version, status, dns, filtering), configuration.LegacySchemaVersion)
-		document.Unsupported = []configuration.Unsupported{
-			{Section: "services", Reason: "blocked services and safety services require schema-v2 inventory"},
-			{Section: "tls_dhcp", Reason: "TLS and DHCP require schema-v2 inventory"},
-		}
-		return configuration.Canonicalise(document), profile, nil
-	}
+	profile.Features["test_host_filtering_context"] = true
+	profile.Features["filter_interval_arbitrary"] = true
 	var clients clientsResponse
 	if err := r.get(ctx, request, "/control/clients", &clients); err != nil {
 		return configuration.Document{}, profile, err
@@ -428,13 +416,11 @@ func (r *ConfigurationReader) ReadConfiguration(ctx context.Context, request dom
 		return configuration.Document{}, profile, err
 	}
 	profile.Features["rewrites"] = true
-	rewriteSettings := rewriteSettingsResponse{Enabled: true}
-	if supportsConfigurationPatch(version, 68) {
-		if err := r.get(ctx, request, "/control/rewrite/settings", &rewriteSettings); err != nil {
-			return configuration.Document{}, profile, err
-		}
-		profile.Features["rewrite_toggle"] = true
+	var rewriteSettings rewriteSettingsResponse
+	if err := r.get(ctx, request, "/control/rewrite/settings", &rewriteSettings); err != nil {
+		return configuration.Document{}, profile, err
 	}
+	profile.Features["rewrite_toggle"] = true
 	var blocked blockedServicesResponse
 	if err := r.get(ctx, request, "/control/blocked_services/get", &blocked); err != nil {
 		return configuration.Document{}, profile, err
@@ -452,6 +438,7 @@ func (r *ConfigurationReader) ReadConfiguration(ctx context.Context, request dom
 		return configuration.Document{}, profile, err
 	}
 	profile.Features["safety"] = true
+	profile.Features["safe_search_ecosia"] = true
 	var queryLog, statistics policyResponse
 	if err := r.get(ctx, request, "/control/querylog/config", &queryLog); err != nil {
 		return configuration.Document{}, profile, err
@@ -1057,7 +1044,7 @@ func (r *ConfigurationReader) getOperationalResource(ctx context.Context, reques
 	}
 	httpRequest.SetBasicAuth(request.Credentials.Username, request.Credentials.Password)
 	httpRequest.Header.Set("Accept", "application/json")
-	client := &http.Client{Transport: transport, Timeout: r.probe.timeout, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{Transport: transport, Timeout: r.probe.currentTimeout(), CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(httpRequest)
 	if err != nil {
 		return classifyNetworkError(err)
@@ -1332,7 +1319,7 @@ func (r *ConfigurationReader) postResource(ctx context.Context, request domain.N
 	httpRequest.SetBasicAuth(request.Credentials.Username, request.Credentials.Password)
 	httpRequest.Header.Set("Accept", "application/json")
 	httpRequest.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Transport: transport, Timeout: r.probe.timeout, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{Transport: transport, Timeout: r.probe.currentTimeout(), CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(httpRequest)
 	if err != nil {
 		return classifyNetworkError(err)
@@ -1383,7 +1370,7 @@ func (r *ConfigurationReader) postOperationalResource(ctx context.Context, reque
 	httpRequest.SetBasicAuth(request.Credentials.Username, request.Credentials.Password)
 	httpRequest.Header.Set("Accept", "application/json")
 	httpRequest.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Transport: transport, Timeout: r.probe.timeout, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{Transport: transport, Timeout: r.probe.currentTimeout(), CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(httpRequest)
 	if err != nil {
 		return classifyNetworkError(err)
@@ -1440,7 +1427,7 @@ func (r *ConfigurationReader) send(ctx context.Context, request domain.NodeProbe
 	if payload != nil {
 		httpRequest.Header.Set("Content-Type", "application/json")
 	}
-	client := &http.Client{Transport: transport, Timeout: r.probe.timeout, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{Transport: transport, Timeout: r.probe.currentTimeout(), CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(httpRequest)
 	if err != nil {
 		return classifyNetworkError(err)
@@ -1485,7 +1472,7 @@ func (r *ConfigurationReader) getResource(ctx context.Context, request domain.No
 	}
 	httpRequest.SetBasicAuth(request.Credentials.Username, request.Credentials.Password)
 	httpRequest.Header.Set("Accept", "application/json")
-	client := &http.Client{Transport: transport, Timeout: r.probe.timeout, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{Transport: transport, Timeout: r.probe.currentTimeout(), CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(httpRequest)
 	if err != nil {
 		return false, classifyNetworkError(err)

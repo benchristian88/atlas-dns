@@ -226,6 +226,40 @@ func (s *Server) handleNotificationChannels(response http.ResponseWriter, reques
 	}
 	writeJSON(response, http.StatusOK, map[string]any{"items": value})
 }
+
+func (s *Server) handleNotificationPolicy(response http.ResponseWriter, request *http.Request) {
+	if s.notifications == nil {
+		s.writeError(response, request, domain.NewError(domain.ErrorNotFound, "notification settings are unavailable"))
+		return
+	}
+	value, err := s.notifications.Policy(request.Context())
+	if err != nil {
+		s.writeError(response, request, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, value)
+}
+
+func (s *Server) handleUpdateNotificationPolicy(response http.ResponseWriter, request *http.Request) {
+	if s.notifications == nil {
+		s.writeError(response, request, domain.NewError(domain.ErrorNotFound, "notification settings are unavailable"))
+		return
+	}
+	var input struct {
+		EnabledEventTypes []string `json:"enabledEventTypes"`
+		RecordVersion     int      `json:"recordVersion"`
+	}
+	if err := decodeJSON(response, request, &input); err != nil {
+		s.writeError(response, request, err)
+		return
+	}
+	value, err := s.notifications.UpdatePolicy(request.Context(), actor(request.Context()), input.EnabledEventTypes, input.RecordVersion)
+	if err != nil {
+		s.writeError(response, request, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, value)
+}
 func (s *Server) handleCreateNotificationChannel(response http.ResponseWriter, request *http.Request) {
 	if s.notifications == nil {
 		s.writeError(response, request, domain.NewError(domain.ErrorNotFound, "notification settings are unavailable"))

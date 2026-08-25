@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -172,10 +173,20 @@ func (s *ManagementService) ValidateNodeCandidate(ctx context.Context, input Cre
 	if err != nil {
 		return NodeProbeResult{}, err
 	}
-	return s.probe.Status(ctx, NodeProbeRequest{
+	result, err := s.probe.Status(ctx, NodeProbeRequest{
 		BaseURL: baseURL, CertificatePolicy: input.CertificatePolicy, CustomCAPEM: input.CustomCAPEM,
 		Credentials: NodeCredentials{Username: input.Username, Password: input.Password},
 	})
+	if err != nil {
+		return NodeProbeResult{}, err
+	}
+	if result.Compatibility == CompatibilityUnsupported {
+		return NodeProbeResult{}, NewError(ErrorCapability, fmt.Sprintf("Unsupported AdGuard Home version. Minimum supported version: 0.107.78. Detected version: %s", result.Version))
+	}
+	if result.Compatibility != CompatibilitySupported {
+		return NodeProbeResult{}, NewError(ErrorCapability, fmt.Sprintf("AdGuard Home version compatibility could not be established. Minimum supported version: 0.107.78. Detected version: %s", result.Version))
+	}
+	return result, nil
 }
 
 func (s *ManagementService) CreateNode(ctx context.Context, actor Actor, input CreateNodeInput) (Node, error) {

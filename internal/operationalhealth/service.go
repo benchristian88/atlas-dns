@@ -65,6 +65,7 @@ func (s *Service) Status(ctx context.Context, clusterID string) (Status, error) 
 	if s.settings != nil {
 		current := s.settings.RuntimeSettings()
 		options.NodeInterval = current.NodeHealthInterval
+		options.RequestTimeout = current.NodeRequestTimeout
 		options.StatisticsInterval = current.StatisticsPollInterval
 		options.QueryLogInterval = current.QueryLogPollInterval
 		options.QueryLogRetention = current.QueryLogRetention

@@ -13,7 +13,8 @@ name/type, expected RCODE, and UDP/TCP. Each network operation has a two-second
 bound.
 
 Latest results and 30 days of probe evidence are durable; only transitions
-create HA events, retained for one year. A result is healthy only when every
+create HA events. Operational History defaults to 90 days and is configurable
+in System Settings. A result is healthy only when every
 enabled protocol succeeds. Cluster state supports N nodes: healthy requires at
 least two fresh serving nodes and no other degradation; degraded retains serving
 redundancy with management/convergence/maintenance concerns; at-risk has fewer
@@ -105,6 +106,15 @@ and are not webhook triggers in v1.0.2. Channels subscribe to future
 transitions; creating or enabling a channel does not replay an already-active
 degraded state.
 
+Release 1.1 adds a controller-wide exact-event policy grouped as DNS, HA,
+Certificates, Node lifecycle, and Lifecycle/Updates. DNS failure/recovery,
+redundancy degraded/at-risk/restored, maintenance return-validation failure,
+and upgrade validation failure are enabled by default. Informational lifecycle,
+version, certificate, and successful-upgrade events are opt-in. Global policy,
+channel enablement, channel category subscription, and encrypted destination
+configuration are independent gates. Policy-disabled delivery rows are retained
+as `suppressed`, not failures.
+
 Administration supports add, edit, enable/disable, delete, and test:
 
 - List/read returns name, safe scheme/host summary, explicit enabled state, the
@@ -123,6 +133,11 @@ Administration supports add, edit, enable/disable, delete, and test:
 All mutations require an administrator session, CSRF, validation, and audit.
 Names must not contain secrets. Destination userinfo/fragments are rejected;
 path and query are hidden from summaries and diagnostics.
+
+Operational History clear requires the exact phrase `CLEAR OPERATIONAL HISTORY`.
+It transactionally deletes only HA events and delivery rows and writes its audit
+record in the same transaction. Audit Log, revisions, deployments, drift,
+upgrades, and DNS probe samples are outside this history domain and survive.
 
 ## Node Detail presentation
 

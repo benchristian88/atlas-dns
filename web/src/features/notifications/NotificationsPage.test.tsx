@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import axe from "axe-core";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../lib/api";
 import type { Cluster, NotificationChannel } from "../../lib/types";
 import { NotificationsPage } from "./NotificationsPage";
@@ -16,6 +16,31 @@ const cluster = {
   id: "11111111-1111-4111-8111-111111111111",
   name: "Home",
 } as Cluster;
+
+beforeEach(() => {
+  vi.spyOn(api, "notificationPolicy").mockResolvedValue({
+    enabledEventTypes: ["dns.failed", "dns.recovered"],
+    recordVersion: 1,
+    groups: [
+      {
+        id: "dns",
+        label: "DNS",
+        events: [
+          {
+            eventType: "dns.failed",
+            label: "DNS failed",
+            defaultEnabled: true,
+          },
+          {
+            eventType: "dns.recovered",
+            label: "DNS recovered",
+            defaultEnabled: true,
+          },
+        ],
+      },
+    ],
+  });
+});
 
 describe("NotificationsPage", () => {
   it("renders existing encrypted channel summaries without exposing destinations", async () => {
@@ -69,5 +94,41 @@ describe("NotificationsPage", () => {
       }),
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  it("saves exact event toggles independently of webhook channels", async () => {
+    vi.spyOn(api, "notificationChannels").mockResolvedValue({ items: [] });
+    const update = vi.spyOn(api, "updateNotificationPolicy").mockResolvedValue({
+      enabledEventTypes: ["dns.recovered"],
+      recordVersion: 2,
+      groups: [
+        {
+          id: "dns",
+          label: "DNS",
+          events: [
+            {
+              eventType: "dns.failed",
+              label: "DNS failed",
+              defaultEnabled: true,
+            },
+            {
+              eventType: "dns.recovered",
+              label: "DNS recovered",
+              defaultEnabled: true,
+            },
+          ],
+        },
+      ],
+    });
+    render(<NotificationsPage cluster={cluster} />);
+    fireEvent.click(
+      await screen.findByRole("checkbox", { name: "DNS failed" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save notification policy" }),
+    );
+    await vi.waitFor(() =>
+      expect(update).toHaveBeenCalledWith(["dns.recovered"], 1),
+    );
   });
 });

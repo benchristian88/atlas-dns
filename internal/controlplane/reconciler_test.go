@@ -38,7 +38,7 @@ func (f *reconciliationRepositoryFake) RevisionByID(context.Context, string) (Re
 	return f.revision, nil
 }
 func (*reconciliationRepositoryFake) ListNodes(context.Context, string) ([]domain.Node, error) {
-	return []domain.Node{{ID: reconcileNodeID, ClusterID: reconcileClusterID, Enabled: true}}, nil
+	return []domain.Node{{ID: reconcileNodeID, ClusterID: reconcileClusterID, Enabled: true, CompatibilityStatus: domain.CompatibilitySupported}}, nil
 }
 func (*reconciliationRepositoryFake) UpdateNodeConvergence(context.Context, string, string, time.Time) error {
 	return nil
@@ -54,7 +54,7 @@ func (f *reconciliationRepositoryFake) LatestSnapshots(context.Context, string) 
 	return []inventory.Snapshot{f.snapshot}, nil
 }
 func (*reconciliationRepositoryFake) CapabilityProfiles(context.Context, string) ([]inventory.CapabilityProfile, error) {
-	return []inventory.CapabilityProfile{{NodeID: reconcileNodeID, Compatibility: string(domain.CompatibilitySupported), Features: map[string]bool{"dns": true, "filtering": true}}}, nil
+	return []inventory.CapabilityProfile{{NodeID: reconcileNodeID, Compatibility: string(domain.CompatibilitySupported), SchemaVersion: configuration.SchemaVersion, Features: map[string]bool{"dns": true, "filtering": true, "clients": true, "rewrites": true, "blocked_services": true, "safety": true, "query_log": true, "statistics": true, "tls": true, "safe_search_ecosia": true, "filter_interval_arbitrary": true, "cache_toggle": true, "upstream_timeout": true, "rewrite_toggle": true, "ignored_lists_toggle": true}}}, nil
 }
 func (f *reconciliationRepositoryFake) CreateDeployment(_ context.Context, deployment Deployment, _ domain.AuditEvent) error {
 	f.deployment = &deployment
@@ -71,7 +71,7 @@ func (f reconciliationObserverFake) Observe(context.Context, string) (inventory.
 }
 
 func TestReconcilerEnforceCreatesDurableTargetedDeployment(t *testing.T) {
-	desired := configuration.DesiredDocument{SchemaVersion: 1, Shared: configuration.Shared{DNS: configuration.DNS{UpstreamDNS: []string{"1.1.1.1"}}, Filtering: configuration.Filtering{UpdateInterval: 24}}, NodeOverrides: map[string]configuration.NodeSpecific{reconcileNodeID: {BindHosts: []string{"0.0.0.0"}, DNSPort: 53}}}
+	desired := configuration.DesiredDocument{SchemaVersion: configuration.SchemaVersion, Shared: configuration.Shared{DNS: configuration.DNS{UpstreamDNS: []string{"1.1.1.1"}}, Filtering: configuration.Filtering{UpdateInterval: 24}}, NodeOverrides: map[string]configuration.NodeSpecific{reconcileNodeID: {BindHosts: []string{"0.0.0.0"}, DNSPort: 53}}}
 	observedDocument, err := configuration.Effective(desired, reconcileNodeID)
 	if err != nil {
 		t.Fatal(err)

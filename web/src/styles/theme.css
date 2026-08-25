@@ -300,7 +300,7 @@ tr:last-child td { border-bottom: 0; }
 .settings-group { margin-bottom: var(--atlas-space-6); border: 1px solid var(--atlas-border); border-radius: var(--atlas-radius-card); background: var(--atlas-card); }
 .settings-group[aria-disabled="true"], .setting-row[aria-disabled="true"] { opacity: .62; }
 .settings-group__header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--atlas-space-4); padding: var(--atlas-space-6); border-bottom: 1px solid var(--atlas-border); }
-.settings-group__header h2 { margin-bottom: var(--atlas-space-1); }
+.settings-group__header :is(h2, h3) { margin-bottom: var(--atlas-space-1); }
 .settings-group__body { padding-inline: var(--atlas-space-6); }
 .settings-group__body--padded { display: grid; gap: var(--atlas-space-5); padding-block: var(--atlas-space-5); }
 .settings-group__body--padded > .button { justify-self: start; }
@@ -311,6 +311,21 @@ tr:last-child td { border-bottom: 0; }
 .settings-group-content:last-child { margin-bottom: 0; }
 .settings-group-copy { color: var(--atlas-text-muted); font-size: .84rem; line-height: 1.5; }
 .settings-group-action { margin: 0; }
+.runtime-settings-card > .settings-group__body { background: var(--atlas-page-subtle); border-radius: 0 0 var(--atlas-radius-card) var(--atlas-radius-card); }
+.runtime-settings-card__groups { display: grid; gap: var(--atlas-space-4); }
+.runtime-settings-card__groups > .settings-group { margin: 0; }
+.runtime-settings-card__groups > .settings-group > .settings-group__header { padding: var(--atlas-space-4) var(--atlas-space-5); }
+.runtime-settings-card__groups > .settings-group > .settings-group__header h3 { font-size: .96rem; }
+.runtime-settings-card__groups > .settings-group > .settings-group__body { padding-inline: var(--atlas-space-5); }
+.runtime-settings-card__groups > .settings-group > .settings-group__body--padded { gap: var(--atlas-space-4); padding-block: var(--atlas-space-4); }
+.runtime-setting-fields { display: grid; gap: var(--atlas-space-4); padding-block: var(--atlas-space-4); }
+.runtime-setting-note { margin: 0; font-size: .8rem; line-height: 1.45; }
+.runtime-setting-summary { justify-self: end; color: var(--atlas-text-muted); font-size: .78rem; line-height: 1.45; text-align: right; }
+.runtime-settings-danger-zone { display: grid; gap: var(--atlas-space-4); padding-top: var(--atlas-space-5); border-top: 1px solid var(--atlas-border); }
+.runtime-settings-danger-zone h4 { margin-bottom: var(--atlas-space-1); font-size: .88rem; }
+.runtime-settings-danger-zone > .button { justify-self: start; }
+.runtime-settings-danger-zone > [role="status"] { margin: 0; font-size: .8rem; }
+.runtime-settings-card__footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--atlas-space-3); padding-top: var(--atlas-space-5); border-top: 1px solid var(--atlas-border); }
 .setting-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, .7fr); gap: var(--atlas-space-6); padding-block: var(--atlas-space-5); border-bottom: 1px solid var(--atlas-border); }
 .setting-row:last-child { border-bottom: 0; }
 .setting-row__description { color: var(--atlas-text-muted); line-height: 1.45; }
@@ -602,6 +617,10 @@ th[data-align="right"], td[data-align="right"] { text-align: right; }
   .settings-group__header { align-items: stretch; flex-direction: column; padding: var(--atlas-space-4); }
   .settings-group__header > .button, .settings-group__header > a.button { align-self: flex-start; }
   .settings-group__body { padding-inline: var(--atlas-space-4); }
+  .runtime-settings-card__groups > .settings-group > .settings-group__header, .runtime-settings-card__groups > .settings-group > .settings-group__body { padding-inline: var(--atlas-space-4); }
+  .runtime-setting-summary { justify-self: start; text-align: left; }
+  .runtime-settings-card__footer { align-items: stretch; flex-direction: column-reverse; }
+  .runtime-settings-card__footer .button { justify-content: center; }
   .duration-field, .structured-diff__row dl { grid-template-columns: 1fr; }
   .structured-diff__row dl div + div { border-top: 1px solid var(--atlas-border); border-left: 0; }
   .list-field__row, .list-field__add { grid-template-columns: 1fr; }

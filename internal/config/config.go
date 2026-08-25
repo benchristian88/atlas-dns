@@ -48,46 +48,16 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	sessionDuration, err := duration("SESSION_DURATION", 12*time.Hour)
-	if err != nil {
-		return Config{}, err
-	}
-	healthInterval, err := duration("NODE_HEALTH_INTERVAL", 30*time.Second)
-	if err != nil {
-		return Config{}, err
-	}
-	if healthInterval < 5*time.Second || healthInterval > time.Hour {
-		return Config{}, fmt.Errorf("NODE_HEALTH_INTERVAL must be between 5s and 1h")
-	}
-	requestTimeout, err := duration("NODE_REQUEST_TIMEOUT", 10*time.Second)
-	if err != nil {
-		return Config{}, err
-	}
-	statisticsInterval, err := duration("STATISTICS_POLL_INTERVAL", time.Hour)
-	if err != nil {
-		return Config{}, err
-	}
-	if statisticsInterval < time.Minute || statisticsInterval > 24*time.Hour {
-		return Config{}, fmt.Errorf("STATISTICS_POLL_INTERVAL must be between 1m and 24h")
-	}
-	queryLogCollection, err := boolean("QUERY_LOG_COLLECTION_ENABLED", true)
-	if err != nil {
-		return Config{}, err
-	}
-	queryLogInterval, err := duration("QUERY_LOG_POLL_INTERVAL", 30*time.Second)
-	if err != nil {
-		return Config{}, err
-	}
-	if queryLogInterval < 5*time.Second || queryLogInterval > time.Hour {
-		return Config{}, fmt.Errorf("QUERY_LOG_POLL_INTERVAL must be between 5s and 1h")
-	}
-	queryLogRetention, err := duration("QUERY_LOG_RETENTION", 7*24*time.Hour)
-	if err != nil {
-		return Config{}, err
-	}
-	if queryLogRetention < time.Hour || queryLogRetention > 90*24*time.Hour {
-		return Config{}, fmt.Errorf("QUERY_LOG_RETENTION must be between 1h and 2160h")
-	}
+	// v1.1 reads these variables only as a one-time legacy seed. Invalid stale
+	// values therefore fall back safely and cannot prevent a database-backed
+	// installation from starting.
+	sessionDuration := legacyDuration("SESSION_DURATION", 12*time.Hour, 15*time.Minute, 30*24*time.Hour)
+	healthInterval := legacyDuration("NODE_HEALTH_INTERVAL", 30*time.Second, 5*time.Second, time.Hour)
+	requestTimeout := legacyDuration("NODE_REQUEST_TIMEOUT", 10*time.Second, time.Second, 2*time.Minute)
+	statisticsInterval := legacyDuration("STATISTICS_POLL_INTERVAL", time.Hour, time.Minute, 24*time.Hour)
+	queryLogCollection := legacyBoolean("QUERY_LOG_COLLECTION_ENABLED", true)
+	queryLogInterval := legacyDuration("QUERY_LOG_POLL_INTERVAL", 30*time.Second, 5*time.Second, time.Hour)
+	queryLogRetention := legacyDuration("QUERY_LOG_RETENTION", 7*24*time.Hour, time.Hour, 90*24*time.Hour)
 	autoMigrate, err := boolean("AUTO_MIGRATE", true)
 	if err != nil {
 		return Config{}, err
@@ -102,6 +72,10 @@ func Load() (Config, error) {
 	installationType := env("INSTALLATION_TYPE", "unknown")
 	if installationType != "docker" && installationType != "native_systemd" && installationType != "custom" && installationType != "unknown" {
 		return Config{}, fmt.Errorf("INSTALLATION_TYPE must be docker, native_systemd, custom, or unknown")
+	}
+	logLevel := env("LOG_LEVEL", "info")
+	if logLevel != "debug" && logLevel != "info" && logLevel != "warn" && logLevel != "error" {
+		logLevel = "info"
 	}
 	return Config{
 		Environment:             env("APP_ENV", "development"),
@@ -118,7 +92,7 @@ func Load() (Config, error) {
 		QueryLogPollInterval:    queryLogInterval,
 		QueryLogRetention:       queryLogRetention,
 		WebDistDirectory:        env("WEB_DIST_DIR", "web/dist"),
-		LogLevel:                env("LOG_LEVEL", "info"),
+		LogLevel:                logLevel,
 		AutoMigrate:             autoMigrate,
 		MetricsToken:            metricsToken,
 		PGDumpPath:              env("PG_DUMP_PATH", "pg_dump"),
@@ -166,6 +140,14 @@ func duration(key string, fallback time.Duration) (time.Duration, error) {
 	return parsed, nil
 }
 
+func legacyDuration(key string, fallback, minimum, maximum time.Duration) time.Duration {
+	value, err := duration(key, fallback)
+	if err != nil || value < minimum || value > maximum {
+		return fallback
+	}
+	return value
+}
+
 func boolean(key string, fallback bool) (bool, error) {
 	value := required(key)
 	if value == "" {
@@ -176,4 +158,12 @@ func boolean(key string, fallback bool) (bool, error) {
 		return false, fmt.Errorf("%s must be true or false", key)
 	}
 	return parsed, nil
+}
+
+func legacyBoolean(key string, fallback bool) bool {
+	value, err := boolean(key, fallback)
+	if err != nil {
+		return fallback
+	}
+	return value
 }

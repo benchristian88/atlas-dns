@@ -32,7 +32,13 @@ available, preserving audit attribution and the current authorization boundary.
 
 ## Webhooks and notifications
 
-HA → HA Operations owns the single notification-channel subsystem.
+HA Controller → Notifications owns the single notification-channel subsystem.
+
+HA Controller → Notifications also owns the controller-wide exact-event
+policy. Event toggles are grouped by DNS, HA, certificates, node lifecycle, and
+updates. Policy, channel enablement, category subscription, and encrypted
+destination are independent controls; suppressed policy events are not failed
+deliveries.
 
 - **Add webhook** accepts a unique name, enabled state, HTTPS destination, and
   one or more event categories.
@@ -89,8 +95,8 @@ history. Sessions and release caches are excluded.
 
 Actual restore is offline through `atlas-dns-backup restore`, with the controller
 stopped and a new empty database. See the [backup procedure](../operations/backup-and-restore.md)
-and [format reference](../operations/backup-format.md). Store runtime settings
-such as session secret, database URL, public origin, and TLS separately.
+and [format reference](../operations/backup-format.md). Store bootstrap values
+such as the session secret, database URL, public origin, and TLS separately.
 
 ## Updates
 
@@ -101,15 +107,15 @@ untrusted display data. Back up and preflight before following host instructions
 
 ## System Settings
 
-System → Settings controls persistent release checks plus node-health cadence,
-Statistics polling cadence, Query Log collection, Query Log polling cadence,
-and central Query Log retention. Changes use optimistic concurrency, are
-audited, and update collector scheduling without restart. Database connectivity,
+System → Settings controls session duration, node-health cadence and request
+timeout, Statistics cadence, Query Log collection/cadence/retention, log level,
+and Operational History retention. Changes use optimistic concurrency, are
+audited, and update runtime consumers without restart. Existing sessions retain
+their issued expiry; new sessions use the new duration. Database connectivity,
 secrets, listener settings, and the public origin remain protected deployment
-configuration. API and DNS freshness deadlines expand with the selected node
-health cadence; an explicit probe failure still takes effect immediately. Use
-Operational Status to verify effective worker behavior and the next scheduled
-run.
+configuration. Operational History supports 7/14/30/90/180/365 days (90-day
+default) and an exact-confirmation clear; Audit Log and other durable domains
+are unaffected. Use Operational Status to verify effective worker behavior.
 
 ## About
 

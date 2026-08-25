@@ -61,7 +61,7 @@ const secondary: Node = {
   ...primary,
   id: "33333333-3333-4333-8333-333333333333",
   name: "Secondary",
-  version: "v0.107.53",
+  version: "v0.107.78",
 };
 
 const desiredDocument = {

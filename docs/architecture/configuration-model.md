@@ -62,18 +62,17 @@ nodeOverrides:
 
 Release 0.2 froze the per-node observed `Document` shape. Release 0.3 added a distinct authoritative `DesiredDocument`: shared DNS/filtering values, `nodeOverrides`, and explicit unsupported areas. Observed-only product version never enters desired state. Schema v1 manages DNS upstream, bootstrap, fallback, and private reverse resolvers plus filtering enablement, interval, blocklist subscription URLs, and custom rules. Bind hosts and DNS port are required node overrides but are verification-only because AdGuard Home exposes no supported writer for them.
 
-Release 0.4 introduces schema v2 without changing schema v1. Shared v2 state adds protection, rate limiting, blocking response behavior, EDNS Client Subnet, DNSSEC, cache and resolver modes; blocklist and allowlist URLs; persistent-client identity/policy/schedules/upstream cache; rewrites; blocked-service schedules; Safe Browsing, parental control, Safe Search; and node-local query-log/statistics policy. Node overrides add DHCP configuration and static leases. Redacted TLS status and dynamic DHCP leases are observed-only. TLS mutation is listed as unsupported.
+Release 0.4 introduced schema v2. Shared v2 state adds protection, rate limiting, blocking response behavior, EDNS Client Subnet, DNSSEC, cache and resolver modes; blocklist and allowlist URLs; persistent-client identity/policy/schedules/upstream cache; rewrites; blocked-service schedules; Safe Browsing, parental control, Safe Search; and node-local query-log/statistics policy. Node overrides add DHCP configuration and static leases. Redacted TLS status and dynamic DHCP leases are observed-only. TLS mutation is listed as unsupported.
 
-v0.107.52 observations remain schema v1. v0.107.53 and later patches in the
-v0.107 API generation use schema v2. v0.107.78 and v0.107.79 are explicitly
+Release 1.1 supports schema v2 only and requires v0.107.78 or later in the
+v0.107 API generation. v0.107.78 and v0.107.79 are explicitly
 release-tested; a newer v0.107 patch is provisionally compatible only when all
 typed endpoint and semantic checks used by the observation succeed. Other API
-generations remain unknown. Patch-level capabilities cover upstream timeout
-(v0.107.57), cache enablement (v0.107.64), rewrite enablement (v0.107.68),
-ignore-list activation (v0.107.72), and arbitrary filter intervals
-(v0.107.78). `ProjectDocument` narrows a current observation to a historical
-revision schema, and convergence ignores observed-only/unsupported metadata.
-The database retains each document's original version and canonical JSON.
+generations remain unknown. All managed capabilities required by the v2 adapter
+are present at the minimum floor. The database retains historical schema-1
+documents and hashes unchanged, while read APIs convert them into a marked,
+non-deployable schema-2 representation. A fresh import/publication is required
+before deployment.
 
 AdGuard protection pause is normalized explicitly: `/control/status` supplies
 the remaining `protection_disabled_duration`, while `/control/dns_info`

@@ -7,11 +7,11 @@ proxies DNS, mutates AdGuard Home statistics, or reads query-log events.
 
 The combined controller process starts the statistics worker after PostgreSQL,
 credentials, and the node adapter are ready. It runs one immediate pass, then
-runs at `STATISTICS_POLL_INTERVAL` (default `1h`). Up to four nodes are polled
+runs at the database-backed Statistics poll interval (default one hour). Up to four nodes are polled
 concurrently. A node's eligible range reads are sequential and bounded by
-`NODE_REQUEST_TIMEOUT`; the next pass starts only after the current pass ends.
+the configured node request timeout; the next pass starts only after the current pass ends.
 
-Eligible nodes are enabled, outside maintenance, and report v0.107.72 or later
+Eligible nodes are enabled, outside maintenance, and report v0.107.78 or later
 in the v0.107 API generation with exact `recent` statistics support. v0.107.78
 and v0.107.79 are explicitly tested; newer v0.107 patches must pass the same
 typed response validation. Before

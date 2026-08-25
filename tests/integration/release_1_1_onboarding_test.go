@@ -39,7 +39,11 @@ func TestRelease11OnboardingRuntimeSettingsAndNotificationCategoriesPersist(t *t
 		t.Fatalf("onboarding state=%#v err=%v", storedState, err)
 	}
 
-	runtime := systemsettings.RuntimeSettings{NodeHealthInterval: 20 * time.Second, StatisticsPollInterval: 15 * time.Minute, QueryLogCollection: true, QueryLogPollInterval: 45 * time.Second, QueryLogRetention: 72 * time.Hour}
+	runtime := systemsettings.Recommended()
+	runtime.NodeHealthInterval = 20 * time.Second
+	runtime.StatisticsPollInterval = 15 * time.Minute
+	runtime.QueryLogPollInterval = 45 * time.Second
+	runtime.QueryLogRetention = 72 * time.Hour
 	settings, err := store.InitializeRuntimeSettings(ctx, runtime)
 	if err != nil || !settings.RuntimeInitialized || settings.Runtime != runtime {
 		t.Fatalf("runtime settings=%#v err=%v", settings, err)

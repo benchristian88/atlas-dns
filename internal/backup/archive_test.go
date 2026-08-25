@@ -164,6 +164,11 @@ func TestStandardBackupExcludesAllTransientAndOptionalHistoryTables(t *testing.T
 			t.Fatalf("standard backup does not exclude %q", required)
 		}
 	}
+	for _, requiredState := range []string{"system_settings", "notification_policy"} {
+		if contains(optionalTables, requiredState) {
+			t.Fatalf("standard backup incorrectly excludes required state %q", requiredState)
+		}
+	}
 }
 
 func contains(values []string, wanted string) bool {

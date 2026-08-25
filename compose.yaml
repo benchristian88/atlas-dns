@@ -32,6 +32,8 @@ services:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL in .env}
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?set CREDENTIAL_ENCRYPTION_KEY in .env}
+      # Deprecated v1.0.x values seed PostgreSQL once during upgrade. System
+      # Settings is authoritative after initialization.
       SESSION_DURATION: ${SESSION_DURATION:-12h}
       NODE_HEALTH_INTERVAL: ${NODE_HEALTH_INTERVAL:-30s}
       NODE_REQUEST_TIMEOUT: ${NODE_REQUEST_TIMEOUT:-10s}

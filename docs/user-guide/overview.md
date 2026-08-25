@@ -148,8 +148,10 @@ validation; it never runs host or node package commands.
 ## Notifications
 
 Notifications is an Atlas HA Controller function, not an AdGuard Home setting.
-It manages the existing HA lifecycle webhook channels. Delivery outcomes remain
-in HA Operations history.
+It manages the exact grouped event policy and the existing HA lifecycle webhook
+channels. Conservative failure, recovery, and redundancy events are enabled by
+default; informational lifecycle events are opt-in. Delivery outcomes remain in
+HA Operations history.
 
 Webhook endpoints are write-only secrets. The list shows only a safe
 scheme/host summary. Administrators can add, edit, pause, resume, test, or delete

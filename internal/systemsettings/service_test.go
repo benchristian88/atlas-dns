@@ -9,8 +9,14 @@ import (
 )
 
 type repositoryStub struct {
-	stored StoredSettings
-	event  domain.AuditEvent
+	stored  StoredSettings
+	event   domain.AuditEvent
+	cleared ClearOperationalHistoryResult
+}
+
+func (r *repositoryStub) ClearOperationalHistory(_ context.Context, event domain.AuditEvent) (ClearOperationalHistoryResult, error) {
+	r.event = event
+	return r.cleared, nil
 }
 
 func (r *repositoryStub) SystemSettings(context.Context) (StoredSettings, error) {
@@ -48,7 +54,12 @@ func TestGetReturnsPersistedSettingAndReadOnlyRuntimeFacts(t *testing.T) {
 }
 
 func TestGetInitializesRuntimeFromDeploymentFallbackOnce(t *testing.T) {
-	fallback := RuntimeSettings{NodeHealthInterval: 45 * time.Second, StatisticsPollInterval: 2 * time.Hour, QueryLogCollection: false, QueryLogPollInterval: time.Minute, QueryLogRetention: 24 * time.Hour}
+	fallback := Recommended()
+	fallback.NodeHealthInterval = 45 * time.Second
+	fallback.StatisticsPollInterval = 2 * time.Hour
+	fallback.QueryLogCollection = false
+	fallback.QueryLogPollInterval = time.Minute
+	fallback.QueryLogRetention = 24 * time.Hour
 	repository := &repositoryStub{stored: StoredSettings{UpdateChecksEnabled: true, RecordVersion: 2}}
 	service := NewService(repository, fallback, "native_systemd")
 	settings, err := service.Get(context.Background())
@@ -65,7 +76,7 @@ func TestUpdateUsesExpectedVersionAuditsAndPublishesRuntime(t *testing.T) {
 	store := NewRuntimeStore(Recommended())
 	service := NewService(repository, Recommended(), "native_systemd", store)
 	service.now = func() time.Time { return time.Unix(1, 0).UTC() }
-	input := Settings{UpdateChecksEnabled: false, NodeHealthIntervalSeconds: 10, StatisticsPollIntervalSeconds: 300, QueryLogCollectionEnabled: false, QueryLogPollIntervalSeconds: 15, QueryLogRetentionSeconds: 86400}
+	input := Settings{UpdateChecksEnabled: false, SessionDurationSeconds: 3600, NodeHealthIntervalSeconds: 10, NodeRequestTimeoutSeconds: 5, StatisticsPollIntervalSeconds: 300, QueryLogCollectionEnabled: false, QueryLogPollIntervalSeconds: 15, QueryLogRetentionSeconds: 86400, LogLevel: "warn", OperationalHistoryRetentionDays: 30}
 	settings, err := service.Update(context.Background(), domain.Actor{UserID: "11111111-1111-4111-8111-111111111111", RequestID: "request"}, input, 3)
 	if err != nil {
 		t.Fatal(err)
@@ -81,8 +92,20 @@ func TestUpdateUsesExpectedVersionAuditsAndPublishesRuntime(t *testing.T) {
 func TestUpdateRejectsUnsafeRuntimeBounds(t *testing.T) {
 	repository := &repositoryStub{stored: StoredSettings{RuntimeInitialized: true, Runtime: Recommended(), RecordVersion: 1}}
 	service := NewService(repository, Recommended(), "docker")
-	_, err := service.Update(context.Background(), domain.Actor{}, Settings{NodeHealthIntervalSeconds: 1, StatisticsPollIntervalSeconds: 60, QueryLogPollIntervalSeconds: 5, QueryLogRetentionSeconds: 3600}, 1)
+	_, err := service.Update(context.Background(), domain.Actor{}, Settings{SessionDurationSeconds: 3600, NodeHealthIntervalSeconds: 1, NodeRequestTimeoutSeconds: 10, StatisticsPollIntervalSeconds: 60, QueryLogPollIntervalSeconds: 5, QueryLogRetentionSeconds: 3600, LogLevel: "info", OperationalHistoryRetentionDays: 90}, 1)
 	if err == nil {
 		t.Fatal("unsafe health interval accepted")
+	}
+}
+
+func TestClearOperationalHistoryRequiresConfirmationAndAudits(t *testing.T) {
+	repository := &repositoryStub{cleared: ClearOperationalHistoryResult{EventsDeleted: 4, DeliveriesDeleted: 2}}
+	service := NewService(repository, Recommended(), "docker")
+	if _, err := service.ClearOperationalHistory(context.Background(), domain.Actor{}, "clear"); err == nil {
+		t.Fatal("unsafe confirmation accepted")
+	}
+	result, err := service.ClearOperationalHistory(context.Background(), domain.Actor{UserID: "11111111-1111-4111-8111-111111111111", RequestID: "request"}, ClearOperationalHistoryConfirmation)
+	if err != nil || result.EventsDeleted != 4 || repository.event.Action != "operational_history.cleared" {
+		t.Fatalf("result=%#v event=%#v err=%v", result, repository.event, err)
 	}
 }

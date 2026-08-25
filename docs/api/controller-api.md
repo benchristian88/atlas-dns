@@ -28,11 +28,16 @@ require the existing same-origin CSRF token.
   manifest and offline restore plan. Restore execution has no web endpoint.
 - `GET /api/v1/system/update` returns cached controller release status and host-guided
   update instructions; `POST /api/v1/system/update/check` forces a bounded refresh.
-- `GET/PATCH /api/v1/system/settings` exposes the persisted release-check,
-  node-health interval, Statistics interval, Query Log collection/interval,
-  and Query Log retention settings plus read-only installation facts with
+- `GET/PATCH /api/v1/system/settings` exposes persisted release-check, session,
+  node-health/request, Statistics, Query Log, logging, and Operational History
+  retention settings plus read-only installation facts with
   optimistic `recordVersion`. PATCH retains omitted monitoring values for
   compatibility with the earlier release-check-only payload.
+- `DELETE /api/v1/system/operational-history` requires
+  `{ "confirmation": "CLEAR OPERATIONAL HISTORY" }` and returns deleted HA
+  event/delivery counts. It does not delete Audit Log or other durable domains.
+- `GET/PATCH /api/v1/system/notification-policy` reads/updates the complete
+  exact-event allowlist with optimistic `recordVersion` and server-owned groups.
 - `GET /api/v1/system/version` returns application version, commit, build time,
   development state, and current database schema version.
 
@@ -251,11 +256,11 @@ PUT  /api/v1/clusters/{clusterId}/configuration-draft
 POST /api/v1/clusters/{clusterId}/configuration-draft/validate
 ```
 
-Observation performs bounded, authenticated GET requests and stores either an immutable canonical schema-v1/v2 snapshot or an immutable failed attempt with a safe error code. v0.107.52 remains schema v1; v0.107.53 and later patches in the v0.107 API generation use schema v2. v0.107.78 and v0.107.79 are explicitly tested; newer v0.107 patches are provisionally compatible only after the typed endpoints Atlas uses validate. Other API generations report unknown compatibility. Inventory returns the latest attempt for each node, current capability profiles, current schema version, and the optional cluster draft. The `draft` member is omitted when no draft exists. Comparison returns `equal` plus differences grouped by section, field, and `shared_managed`, `node_specific_managed`, `observed_only`, or `unsupported` scope.
+Observation performs bounded, authenticated GET requests and stores either an immutable canonical schema-v2 snapshot or an immutable failed attempt with a safe error code. v0.107.78 and v0.107.79 are explicitly tested; newer v0.107 patches are provisionally compatible only after the typed endpoints Atlas uses validate. Earlier versions are unsupported and other API generations report unknown compatibility; both block managed configuration. Inventory returns the latest attempt for each node, current capability profiles, current schema version, and the optional cluster draft. The `draft` member is omitted when no draft exists. Comparison returns `equal` plus differences grouped by section, field, and `shared_managed`, `node_specific_managed`, `observed_only`, or `unsupported` scope.
 
 Import accepts `snapshotId`, `expectedVersion`, and `confirmed: true`. It rejects failed snapshots, cross-cluster snapshots, missing confirmation, and stale draft versions. The transaction updates the draft and writes `configuration.draft_imported`. It never publishes or deploys configuration.
 
-Draft update accepts `expectedVersion` and a complete schema-v2 desired `document`. It saves canonical mutable intent and returns validation issues. Frozen schema-v1 drafts must be refreshed/imported before editing or publication; historical v1 revisions remain deployable and reconcilable. Validation returns the same fleet feature/listener/DHCP preflight used by publication and deployment.
+Draft update accepts `expectedVersion` and a complete schema-v2 desired `document`. It saves canonical mutable intent and returns validation issues. Retained schema-1 rows are converted to a marked schema-2 read representation and are not deployable or reconcilable; refresh/import and publish a fresh schema-2 revision. Validation returns the same fleet feature/listener/DHCP preflight used by publication and deployment.
 
 The blocked-services catalogue route reads observed metadata through the controller and never mutates desired state. It returns the union of stable service IDs and names, optional group IDs, per-service supported/unsupported node IDs, per-node `available`, `stale`, `error`, or `unsupported` state, and response freshness. Upstream filtering rules and SVG icons are removed at the adapter boundary. Node URLs, credentials, and raw node errors are never returned. Metadata is cached per node version/capability signature for 15 minutes; version/capability changes force refresh, and an expired matching cache entry is exposed as stale only when a refresh fails.
 
@@ -292,7 +297,7 @@ POST /api/v1/drift-events/{driftId}/adopt
 POST /api/v1/nodes/{nodeId}/maintenance
 ```
 
-Publication requires a non-empty summary and the current draft version. Preview returns structured semantic changes from the active revision, ordered affected nodes/effective hashes, capability or listener issues, strategy/failure policy, and whether a restart is required (false for schema v1). Deployment creation returns HTTP 202 and a durable queued resource; per-node task details expose only safe errors and verification snapshot identifiers. Cancellation is a request honored at a safe node boundary. Rollback requires explicit confirmation and creates a deployment of a historical immutable revision. Drift restore creates a targeted deployment; adoption writes the observed shared state and node override into the optimistic draft but still requires publication and normal deployment.
+Publication requires a non-empty summary and the current schema-2 draft version. Preview returns structured semantic changes from the active revision, ordered affected nodes/effective hashes, capability or listener issues, strategy/failure policy, and whether a restart is required. Deployment creation returns HTTP 202 and a durable queued resource; per-node task details expose only safe errors and verification snapshot identifiers. Cancellation is a request honored at a safe node boundary. Rollback requires explicit confirmation and creates a deployment only when the historical revision is deployable schema 2. Drift restore creates a targeted deployment; adoption writes the observed shared state and node override into the optimistic draft but still requires publication and normal deployment.
 
 Lists hide archived records unless `includeArchived=true`. Revision/deployment
 responses include immutable archive metadata and server-derived lifecycle
@@ -459,6 +464,8 @@ GET  /api/v1/clusters/{clusterId}/certificates
 GET  /api/v1/clusters/{clusterId}/versions
 GET  /api/v1/clusters/{clusterId}/upgrades
 GET  /api/v1/clusters/{clusterId}/notification-channels
+GET  /api/v1/system/notification-policy
+PATCH /api/v1/system/notification-policy
 POST /api/v1/clusters/{clusterId}/notification-channels
 PATCH /api/v1/notification-channels/{channelId}
 POST /api/v1/notification-channels/{channelId}/test

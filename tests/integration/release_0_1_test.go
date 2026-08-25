@@ -92,7 +92,7 @@ func TestRelease01OperatorWorkflow(t *testing.T) {
 			return
 		}
 		response.Header().Set("Content-Type", "application/json")
-		_, _ = response.Write([]byte(validAdGuardStatusResponse("v0.107.65")))
+		_, _ = response.Write([]byte(validAdGuardStatusResponse("v0.107.78")))
 	})
 	nodeAURL, nodeBURL := testNodeURLs(t, aghHandler)
 	nodePayload := fmt.Sprintf(`{
@@ -113,7 +113,7 @@ func TestRelease01OperatorWorkflow(t *testing.T) {
 	if err := json.Unmarshal([]byte(nodeBody), &node); err != nil {
 		t.Fatal(err)
 	}
-	if node.HealthStatus != domain.NodeHealthy || node.Version != "v0.107.65" {
+	if node.HealthStatus != domain.NodeHealthy || node.Version != "v0.107.78" {
 		t.Fatalf("node health = %q, version = %q", node.HealthStatus, node.Version)
 	}
 	testResponse := doJSON(t, client, http.MethodPost, server.URL+"/api/v1/nodes/"+node.ID+"/test-connection", `{}`, csrf)

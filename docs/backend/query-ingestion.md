@@ -7,7 +7,7 @@ outside the DNS request path.
 
 ## Supported source contract
 
-Atlas DNS Controller accepts AdGuard Home v0.107.52 and later patches in the
+Atlas DNS Controller accepts AdGuard Home v0.107.78 and later patches in the
 v0.107 API generation. v0.107.78 and v0.107.79 are explicitly tested; newer
 v0.107 patches use the same bounded typed contract provisionally. It
 reads `GET /control/querylog` newest-first with a maximum page size of 500,
@@ -23,7 +23,7 @@ The DNS root question name `.` is preserved as a valid domain; ordinary fully
 qualified names have one trailing dot removed before case normalization.
 Malformed or oversized records are skipped and recorded as an ingestion gap,
 with only the node ID and invalid-record count written to safe warning logs.
-Legacy `querylog_info` and current `querylog/config` are used only to determine
+`querylog/config` is used to determine
 whether logging is enabled and whether client addresses are anonymized. Atlas DNS Controller
 preserves the anonymized identity exactly as received and never reverses it.
 
@@ -33,13 +33,13 @@ or a clear operation. These limitations are surfaced rather than hidden.
 
 ## Polling and checkpoints
 
-The worker runs immediately and then at `QUERY_LOG_POLL_INTERVAL` (30 seconds
+The worker runs immediately and then at the database-backed Query Log poll interval (30 seconds
 by default), with at most four node requests active concurrently. Each enabled
 node is handled independently with the configured node timeout. Maintenance,
 unsupported, unreachable, authentication, disabled-query-log, malformed-source,
 and timeout outcomes become safe per-node attempt/checkpoint evidence.
 
-An old version below v0.107.52 or a proven missing Query Log endpoint is
+An old version below v0.107.78 or a proven missing Query Log endpoint is
 `QUERY_LOG_UNSUPPORTED`. A malformed/different API generation or a network,
 TLS, authentication, timeout, or decode failure is failed/unknown rather than
 misreported as unsupported.
@@ -90,10 +90,10 @@ mutable draft change; saving, publication, and deployment remain explicit.
 
 ## Configuration and retention
 
-- `QUERY_LOG_COLLECTION_ENABLED` defaults to `true` and can stop new ingestion
+- Collection defaults to enabled and can stop new ingestion
   without deleting retained events.
-- `QUERY_LOG_POLL_INTERVAL` defaults to `30s`, bounded from 5 seconds to 1 hour.
-- `QUERY_LOG_RETENTION` defaults to `168h` (seven days), bounded from 1 hour to
+- Polling defaults to 30 seconds, bounded from 5 seconds to 1 hour.
+- Retention defaults to seven days, bounded from 1 hour to
   90 days.
 
 Cleanup removes at most 10,000 expired events and attempts per pass. Failure is

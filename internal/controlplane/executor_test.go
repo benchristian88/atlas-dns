@@ -122,12 +122,12 @@ func TestExecutorDeploysSequentiallyAndActivatesAfterReadBack(t *testing.T) {
 }
 
 func executionFixture() (*executionRepositoryFake, configuration.Document) {
-	document := configuration.Document{SchemaVersion: 1, Shared: configuration.Shared{DNS: configuration.DNS{UpstreamDNS: []string{"1.1.1.1"}}, Filtering: configuration.Filtering{UpdateInterval: 24}}, NodeSpecific: configuration.NodeSpecific{BindHosts: []string{"0.0.0.0"}, DNSPort: 53}}
-	desired := configuration.DesiredDocument{SchemaVersion: 1, Shared: document.Shared, NodeOverrides: map[string]configuration.NodeSpecific{"node-a": document.NodeSpecific, "node-b": document.NodeSpecific}}
+	document := configuration.Document{SchemaVersion: configuration.SchemaVersion, Shared: configuration.Shared{DNS: configuration.DNS{UpstreamDNS: []string{"1.1.1.1"}}, Filtering: configuration.Filtering{UpdateInterval: 24}}, NodeSpecific: configuration.NodeSpecific{BindHosts: []string{"0.0.0.0"}, DNSPort: 53}}
+	desired := configuration.DesiredDocument{SchemaVersion: configuration.SchemaVersion, Shared: document.Shared, NodeOverrides: map[string]configuration.NodeSpecific{"node-a": document.NodeSpecific, "node-b": document.NodeSpecific}}
 	deployment := Deployment{ID: "deployment", ClusterID: "cluster", RevisionID: "revision", Status: "queued", Origin: "manual", RequestID: "00000000-0000-4000-8000-000000000001", Nodes: []DeploymentNode{{ID: "task-a", NodeID: "node-a", Position: 1, Status: "pending"}, {ID: "task-b", NodeID: "node-b", Position: 2, Status: "pending"}}}
 	records := map[string]domain.NodeRecord{
-		"node-a": {Node: domain.Node{ID: "node-a", Enabled: true, BaseURL: "node-a"}},
-		"node-b": {Node: domain.Node{ID: "node-b", Enabled: true, BaseURL: "node-b"}},
+		"node-a": {Node: domain.Node{ID: "node-a", Enabled: true, BaseURL: "node-a", CompatibilityStatus: domain.CompatibilitySupported}},
+		"node-b": {Node: domain.Node{ID: "node-b", Enabled: true, BaseURL: "node-b", CompatibilityStatus: domain.CompatibilitySupported}},
 	}
 	return &executionRepositoryFake{deployment: deployment, revision: Revision{ID: "revision", Document: desired}, records: records}, document
 }

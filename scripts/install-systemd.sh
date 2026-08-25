@@ -131,7 +131,7 @@ if [[ ! -f ${environment_file} ]]; then
     printf 'PUBLIC_BASE_URL=%s\n' "${public_base_url}"
     printf 'SESSION_SECRET=%s\n' "${session_secret}"
     printf 'CREDENTIAL_ENCRYPTION_KEY=%s\n' "${credential_key}"
-    printf 'LOG_LEVEL=info\nSESSION_DURATION=12h\nNODE_HEALTH_INTERVAL=30s\nNODE_REQUEST_TIMEOUT=10s\nSTATISTICS_POLL_INTERVAL=1h\nQUERY_LOG_COLLECTION_ENABLED=true\nQUERY_LOG_POLL_INTERVAL=30s\nQUERY_LOG_RETENTION=168h\nAUTO_MIGRATE=true\n'
+    printf 'AUTO_MIGRATE=true\n'
   } >"${environment_file}"
   chmod 0600 "${environment_file}"
 else

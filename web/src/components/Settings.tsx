@@ -38,6 +38,8 @@ export function SettingsGroup({
   description,
   actions,
   children,
+  className,
+  headingLevel = 2,
   disabled = false,
   bodySpacing = "rows",
 }: {
@@ -45,14 +47,20 @@ export function SettingsGroup({
   description?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
+  className?: string;
+  headingLevel?: 2 | 3;
   disabled?: boolean;
   bodySpacing?: "rows" | "padded";
 }) {
+  const Heading = headingLevel === 3 ? "h3" : "h2";
   return (
-    <section className="settings-group" aria-disabled={disabled || undefined}>
+    <section
+      className={`settings-group${className ? ` ${className}` : ""}`}
+      aria-disabled={disabled || undefined}
+    >
       <header className="settings-group__header">
         <div>
-          <h2>{title}</h2>
+          <Heading>{title}</Heading>
           {description !== undefined && (
             <div className="muted">{description}</div>
           )}

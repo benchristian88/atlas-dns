@@ -104,6 +104,10 @@ func scanSnapshot(row rowScanner) (inventory.Snapshot, error) {
 		if err := json.Unmarshal(document, &decoded); err != nil {
 			return item, fmt.Errorf("decode snapshot: %w", err)
 		}
+		if item.SchemaVersion == configuration.LegacySchemaVersion || decoded.SchemaVersion == configuration.LegacySchemaVersion {
+			decoded = configuration.ConvertLegacyDocument(decoded)
+			item.SchemaVersion = configuration.SchemaVersion
+		}
 		item.Document = &decoded
 	}
 	return item, nil
@@ -133,6 +137,11 @@ func (s *Store) CapabilityProfiles(ctx context.Context, clusterID string) ([]inv
 		if err := json.Unmarshal(warnings, &item.Warnings); err != nil {
 			return nil, err
 		}
+		if item.SchemaVersion == configuration.LegacySchemaVersion {
+			item.SchemaVersion = configuration.SchemaVersion
+			item.Compatibility = string(domain.CompatibilityUnsupported)
+			item.Warnings = append(item.Warnings, "This retained v1.0.x capability record requires a fresh schema-2 observation.")
+		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
@@ -147,6 +156,11 @@ func (s *Store) DraftByCluster(ctx context.Context, clusterID string) (inventory
 	}
 	if err := json.Unmarshal(document, &item.Document); err != nil {
 		return item, fmt.Errorf("decode configuration draft: %w", err)
+	}
+	if item.SchemaVersion == configuration.LegacySchemaVersion || item.Document.SchemaVersion == configuration.LegacySchemaVersion {
+		item.Document = configuration.ConvertLegacyDesired(item.Document)
+		item.SchemaVersion = configuration.SchemaVersion
+		item.CanonicalHash = ""
 	}
 	if item.CanonicalHash == "" {
 		_, item.CanonicalHash, err = configuration.MarshalDesired(item.Document)

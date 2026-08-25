@@ -30,6 +30,7 @@ import type {
   Node,
   NodeLifecycle,
   NotificationChannel,
+  NotificationPolicy,
   NotificationTestResult,
   OperationalStatus,
   OperationalTarget,
@@ -146,11 +147,15 @@ type MutableSystemSettings = Pick<
   SystemSettings,
   | "updateChecksEnabled"
   | "recordVersion"
+  | "sessionDurationSeconds"
   | "nodeHealthIntervalSeconds"
+  | "nodeRequestTimeoutSeconds"
   | "statisticsPollIntervalSeconds"
   | "queryLogCollectionEnabled"
   | "queryLogPollIntervalSeconds"
   | "queryLogRetentionSeconds"
+  | "logLevel"
+  | "operationalHistoryRetentionDays"
 >;
 
 export const api = {
@@ -278,13 +283,23 @@ export const api = {
       body: JSON.stringify({
         updateChecksEnabled: settings.updateChecksEnabled,
         recordVersion: settings.recordVersion,
+        sessionDurationSeconds: settings.sessionDurationSeconds,
         nodeHealthIntervalSeconds: settings.nodeHealthIntervalSeconds,
+        nodeRequestTimeoutSeconds: settings.nodeRequestTimeoutSeconds,
         statisticsPollIntervalSeconds: settings.statisticsPollIntervalSeconds,
         queryLogCollectionEnabled: settings.queryLogCollectionEnabled,
         queryLogPollIntervalSeconds: settings.queryLogPollIntervalSeconds,
         queryLogRetentionSeconds: settings.queryLogRetentionSeconds,
+        logLevel: settings.logLevel,
+        operationalHistoryRetentionDays:
+          settings.operationalHistoryRetentionDays,
       }),
     }),
+  clearOperationalHistory: (confirmation: string) =>
+    request<{ eventsDeleted: number; deliveriesDeleted: number }>(
+      "/api/v1/system/operational-history",
+      { method: "DELETE", body: JSON.stringify({ confirmation }) },
+    ),
   clusters: () => request<{ items: Cluster[] }>("/api/v1/clusters"),
   createCluster: (input: { name: string; description: string }) =>
     request<Cluster>("/api/v1/clusters", {
@@ -385,6 +400,16 @@ export const api = {
     request<{ items: NotificationChannel[] }>(
       `/api/v1/clusters/${clusterId}/notification-channels`,
     ),
+  notificationPolicy: () =>
+    request<NotificationPolicy>("/api/v1/system/notification-policy"),
+  updateNotificationPolicy: (
+    enabledEventTypes: string[],
+    recordVersion: number,
+  ) =>
+    request<NotificationPolicy>("/api/v1/system/notification-policy", {
+      method: "PATCH",
+      body: JSON.stringify({ enabledEventTypes, recordVersion }),
+    }),
   createNotificationChannel: (
     clusterId: string,
     input: {

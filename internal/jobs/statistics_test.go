@@ -103,7 +103,7 @@ func TestStatisticsPollerDoesNotCallUnsupportedNode(t *testing.T) {
 	store := &statisticsStoreFake{}
 	reader := &statisticsReaderFake{config: telemetry.SourceConfig{Enabled: true, Retention: 30 * 24 * time.Hour}}
 	poller := NewStatisticsPoller(store, decrypterFake{}, reader, time.Hour, time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	poller.pollNode(context.Background(), domain.NodeRecord{Node: domain.Node{ID: "22222222-2222-4222-8222-222222222222", ClusterID: "11111111-1111-4111-8111-111111111111", Version: "v0.107.71"}})
+	poller.pollNode(context.Background(), domain.NodeRecord{Node: domain.Node{ID: "22222222-2222-4222-8222-222222222222", ClusterID: "11111111-1111-4111-8111-111111111111", Version: "v0.107.77"}})
 	if store.attempt.Status != "unsupported" || store.attempt.RangeErrors[telemetry.Range24Hours] != "STATISTICS_EXACT_RANGE_UNSUPPORTED" {
 		t.Fatalf("attempt = %+v", store.attempt)
 	}

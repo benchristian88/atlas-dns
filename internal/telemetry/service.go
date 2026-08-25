@@ -160,10 +160,17 @@ func (s *Service) Statistics(ctx context.Context, clusterID string, window Range
 func (s *Service) aggregate(window Range, nodeID string, limit int, nodes []domain.Node, snapshots []Snapshot, attempts []NodeAttempt) Report {
 	now := s.now().UTC()
 	pollInterval := s.pollInterval
+	timeout := s.timeout
 	if s.settings != nil {
-		pollInterval = s.settings.RuntimeSettings().StatisticsPollInterval
+		runtime := s.settings.RuntimeSettings()
+		if runtime.StatisticsPollInterval > 0 {
+			pollInterval = runtime.StatisticsPollInterval
+		}
+		if runtime.NodeRequestTimeout > 0 {
+			timeout = runtime.NodeRequestTimeout
+		}
 	}
-	staleAfter := 2*pollInterval + s.timeout
+	staleAfter := 2*pollInterval + timeout
 	if staleAfter < 3*time.Hour {
 		staleAfter = 3 * time.Hour
 	}
