@@ -152,13 +152,16 @@ type NodeProbeResult struct {
 }
 
 type AuditEvent struct {
-	ID           string         `json:"id"`
-	ActorType    string         `json:"actorType"`
-	ActorUserID  *string        `json:"actorUserId,omitempty"`
-	Action       string         `json:"action"`
-	ResourceType string         `json:"resourceType"`
-	ResourceID   *string        `json:"resourceId,omitempty"`
-	RequestID    string         `json:"requestId"`
-	Metadata     map[string]any `json:"metadata"`
-	CreatedAt    time.Time      `json:"createdAt"`
+	ID               string         `json:"id"`
+	ActorType        string         `json:"actorType"`
+	ActorUserID      *string        `json:"actorUserId,omitempty"`
+	ActorDisplayName string         `json:"actorDisplayName,omitempty"`
+	Action           string         `json:"action"`
+	ResourceType     string         `json:"resourceType"`
+	ResourceID       *string        `json:"resourceId,omitempty"`
+	RequestID        string         `json:"requestId"`
+	Metadata         map[string]any `json:"metadata"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	Scope            string         `json:"scope,omitempty"`
+	ClusterID        string         `json:"clusterId,omitempty"`
 }

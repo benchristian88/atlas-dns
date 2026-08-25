@@ -1,7 +1,9 @@
 # Release 1.1.0 upgrade notes
 
 Back up Atlas before upgrading. Release 1.1.0 applies forward-only migrations
-`000016` and `000017`; no down migration is a supported production rollback.
+`000016`, `000017`, and `000018`; no down migration is a supported production
+rollback. Migration `000018` adds the stable Audit Log
+`(created_at DESC, id DESC)` paging index and does not rewrite audit evidence.
 
 On first startup, operational values from a v1.0.x environment are copied into
 PostgreSQL if the corresponding database columns are not initialized. Preserve
@@ -48,3 +50,23 @@ and Node Detail use the same compact health-card anatomy for their top-level
 evidence. System Settings removes non-setting General, Backup & Restore,
 Operations, and Security cards while retaining every runtime setting and the
 release-check control. About Atlas Project now precedes technical build data.
+
+Audit Log now uses server-side opaque keyset pagination and exact
+`auditEventId` deep links. Rows expand inline to show current actor labels,
+immutable actor UUIDs, request/resource IDs, canonical links, and typed safe
+change evidence. Metadata is redacted and bounded before persistence and again
+at representation; unknown historical metadata uses a defensive redacted
+fallback.
+
+Dashboard health, HA, Attention, Nodes, revision/deployment, drift, and Recent
+Changes evidence remains cluster-wide. Only DNS activity and domain rankings
+follow the selected traffic node and are labelled `Traffic scope`. Recent
+Changes uses a database-scoped selected-cluster audit query, includes explicitly
+labelled Controller administration/security events, excludes other clusters,
+de-duplicates exact revision/deployment audit twins in favor of domain records,
+and retains valid sources under a scoped partial warning.
+
+Failed, non-archived deployments may still remain in Dashboard Attention as
+historical evidence. Acknowledgement/resolution semantics require a separate
+product decision and are deliberately deferred; v1.1.0 does not invent that
+state model.

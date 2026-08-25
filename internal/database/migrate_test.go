@@ -7,8 +7,8 @@ func TestEmbeddedMigrationChainIncludesV110Onboarding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 17 {
-		t.Fatalf("migration count = %d, want 17", len(items))
+	if len(items) != 18 {
+		t.Fatalf("migration count = %d, want 18", len(items))
 	}
 	for index, item := range items {
 		wantVersion := int64(index + 1)
@@ -19,7 +19,7 @@ func TestEmbeddedMigrationChainIncludesV110Onboarding(t *testing.T) {
 			t.Fatalf("migration %06d is incomplete: %#v", item.version, item)
 		}
 	}
-	if LatestSchemaVersion() != 17 {
-		t.Fatalf("latest schema version = %d, want 17", LatestSchemaVersion())
+	if LatestSchemaVersion() != 18 {
+		t.Fatalf("latest schema version = %d, want 18", LatestSchemaVersion())
 	}
 }

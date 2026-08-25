@@ -3,6 +3,7 @@ import type {
   AllowlistPresentation,
   ApiErrorBody,
   AuditEvent,
+  AuditEventPage,
   AuthResponse,
   BlockedServicesCatalogue,
   BlocklistPresentation,
@@ -800,6 +801,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ expectedDraftVersion }),
     }),
-  auditEvents: () =>
-    request<{ items: AuditEvent[] }>("/api/v1/audit-events?limit=100"),
+  auditEvents: (
+    options: {
+      cursor?: string;
+      limit?: number;
+      clusterId?: string;
+      includeController?: boolean;
+    } = {},
+  ) => {
+    const query = new URLSearchParams({
+      limit: String(options.limit ?? 50),
+    });
+    if (options.cursor) query.set("cursor", options.cursor);
+    if (options.clusterId) query.set("clusterId", options.clusterId);
+    if (options.includeController) query.set("includeController", "true");
+    return request<AuditEventPage>(`/api/v1/audit-events?${query}`);
+  },
+  auditEvent: (auditEventId: string) =>
+    request<AuditEvent>(
+      `/api/v1/audit-events/${encodeURIComponent(auditEventId)}`,
+    ),
 };

@@ -40,6 +40,10 @@ interfaces.
   safe changes, compact node state, and top-domain rankings.
 - Added ADR-0034 and canonical navigation, shell, dashboard, responsive, and
   route-ownership documentation.
+- Added expandable Audit Log evidence with typed known-action presentation,
+  defensive metadata redaction, current actor labels plus immutable UUIDs,
+  canonical resource links, exact deep links, and server-side keyset paging.
+- Added append-only migration `000018_release_1_1_audit_keyset`.
 
 ### Changed
 
@@ -58,6 +62,9 @@ interfaces.
   ownership. Setup Guide is a bottom-rail help/reference utility.
 - Standardized every canonical authenticated page on the Dashboard's wide
   content frame, including Operational Status, Administration, and Setup Guide.
+- Dashboard now states cluster-wide versus traffic-only scope explicitly and
+  builds Recent Changes from selected-cluster plus labelled Controller events,
+  with durable-ID de-duplication, exact drill-down, and scoped partial warnings.
 
 ### Fixed
 

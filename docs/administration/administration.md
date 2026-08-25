@@ -140,6 +140,26 @@ deployments/rollback, drift, maintenance/upgrades, webhook lifecycle/test,
 backup/preflight, and lifecycle archive/delete actions. Audit is evidence, not a
 substitute for deployment per-node results or webhook delivery history.
 
+Events are newest-first and use opaque cursor pagination. Opening a row keeps
+the evidence inline and records only its audit event UUID in
+`?auditEventId=…`, so a copied link or refresh reopens the exact event even when
+it is older than the visible page. Previous/Next retain a stable page while it
+is inspected; **Show newest** returns from an older page.
+
+The collapsed Actor value is the best current safe label. Expanded evidence
+always shows the immutable actor user UUID when the event has one. A current
+display name is not a historical name snapshot, and deleting or renaming a
+current identity must not make the audit record unreadable. Supported resources
+link to their canonical Node, Revision, Deployment, Drift, Users, Settings, or
+HA page without inventing unsupported detail routes.
+
+Known actions present allowlisted, human-readable recorded fields. A
+previous/new transition is shown only when the producer recorded both values;
+otherwise the detail says that it is showing resulting values. Unknown fields
+use a bounded redacted fallback. Passwords, tokens, credentials, private keys,
+certificate bodies, query/client content, rules, raw errors, response bodies,
+and secret-bearing destinations are never valid Audit Log evidence.
+
 ## Routine administrative checklist
 
 1. Review Operational Status and unresolved drift.

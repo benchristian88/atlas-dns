@@ -199,12 +199,21 @@ export interface AuditEvent {
   id: string;
   actorType: "user" | "system" | "anonymous";
   actorUserId?: string;
+  actorDisplayName?: string;
   action: string;
   resourceType: string;
   resourceId?: string;
   requestId: string;
   metadata: Record<string, unknown>;
   createdAt: string;
+  scope?: "cluster" | "controller";
+  clusterId?: string;
+}
+
+export interface AuditEventPage {
+  items: AuditEvent[];
+  nextCursor?: string;
+  hasMore?: boolean;
 }
 
 export interface ConfigurationDocument {

@@ -167,6 +167,7 @@ function mockSources(
     items: [
       {
         id: "revision-1",
+        clusterId: cluster.id,
         revisionNumber: 7,
         summary: "Blocking policy updated",
         createdAt: "2026-08-24T06:30:00Z",
@@ -189,9 +190,9 @@ function mockSources(
   });
 }
 
-function renderDashboard(nodeItems = nodes) {
+function renderDashboard(nodeItems = nodes, nodeId = "") {
   return render(
-    <ScopeProvider value={{ nodeId: "", nodes: nodeItems }}>
+    <ScopeProvider value={{ nodeId, nodes: nodeItems }}>
       <DashboardPage cluster={cluster} />
     </ScopeProvider>,
   );
@@ -220,6 +221,13 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("heading", { name: "Nodes (2)" })).toBeTruthy();
     expect(screen.getByText("example.com")).toBeTruthy();
     expect(screen.getByText("ads.example")).toBeTruthy();
+    expect(screen.getByText(/Cluster: Home/)).toBeTruthy();
+    expect(screen.getAllByText("Traffic scope: Entire Cluster").length).toBe(2);
+    expect(api.auditEvents).toHaveBeenCalledWith({
+      clusterId: cluster.id,
+      includeController: true,
+      limit: 50,
+    });
     expect(
       container.querySelectorAll(".dashboard-node-table tbody tr"),
     ).toHaveLength(2);
@@ -273,6 +281,126 @@ describe("DashboardPage", () => {
       ),
     ).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Nodes (2)" })).toBeTruthy();
+    expect(screen.getByText(/Recent changes is partial:/)).toBeTruthy();
+    expect(screen.getByText(/Audit Log unavailable/)).toBeTruthy();
+  });
+
+  it("keeps cluster evidence cluster-wide while labeling selected-node traffic only", async () => {
+    mockSources();
+    renderDashboard(nodes, primaryNodeID);
+    expect(await screen.findByText("DNS Serving")).toBeTruthy();
+    expect(screen.getByText(/Cluster: Home/)).toBeTruthy();
+    expect(screen.getAllByText("Traffic scope: Primary").length).toBe(2);
+    expect(screen.queryByText(/Scope: Primary/)).toBeNull();
+    expect(api.statistics).toHaveBeenCalledWith(
+      cluster.id,
+      "24h",
+      primaryNodeID,
+    );
+    expect(api.haStatus).toHaveBeenCalledWith(cluster.id);
+    expect(api.nodes).toHaveBeenCalledWith(cluster.id);
+  });
+
+  it("scopes, labels, de-duplicates, and exact-links Recent Changes", async () => {
+    mockSources();
+    vi.mocked(api.configurationRevisions).mockResolvedValue({
+      items: [
+        {
+          id: "revision-1",
+          clusterId: cluster.id,
+          revisionNumber: 7,
+          summary: "Blocking policy updated",
+          createdAt: "2026-08-24T06:30:00Z",
+          active: true,
+        },
+        {
+          id: "revision-other",
+          clusterId: "99999999-9999-4999-8999-999999999999",
+          revisionNumber: 99,
+          summary: "Other cluster revision",
+          createdAt: "2026-08-24T08:00:00Z",
+        },
+      ] as never[],
+    });
+    vi.mocked(api.deployments).mockResolvedValue({
+      items: [
+        {
+          id: "deployment-1",
+          clusterId: cluster.id,
+          revisionId: "revision-1",
+          status: "succeeded",
+          origin: "manual",
+          requestedAt: "2026-08-24T06:00:00Z",
+          completedAt: "2026-08-24T06:20:00Z",
+        },
+        {
+          id: "deployment-other",
+          clusterId: "99999999-9999-4999-8999-999999999999",
+          revisionId: "revision-other",
+          status: "failed",
+          origin: "manual",
+          requestedAt: "2026-08-24T07:00:00Z",
+          completedAt: "2026-08-24T07:10:00Z",
+        },
+      ] as never[],
+    });
+    vi.mocked(api.auditEvents).mockResolvedValue({
+      items: [
+        {
+          id: "audit-revision",
+          action: "configuration.revision_published",
+          resourceType: "configuration_revision",
+          resourceId: "revision-1",
+          actorType: "user",
+          actorDisplayName: "Current Admin",
+          createdAt: "2026-08-24T06:30:00Z",
+          clusterId: cluster.id,
+          scope: "cluster",
+        },
+        {
+          id: "audit-deployment",
+          action: "deployment.succeeded",
+          resourceType: "deployment",
+          resourceId: "deployment-1",
+          actorType: "system",
+          createdAt: "2026-08-24T06:20:00Z",
+          clusterId: cluster.id,
+          scope: "cluster",
+        },
+        {
+          id: "audit-controller",
+          action: "system_settings.updated",
+          resourceType: "system_settings",
+          actorType: "user",
+          actorDisplayName: "Current Admin",
+          createdAt: "2026-08-24T06:10:00Z",
+          scope: "controller",
+        },
+        {
+          id: "audit-other-cluster",
+          action: "node.updated",
+          resourceType: "node",
+          actorType: "user",
+          createdAt: "2026-08-24T07:00:00Z",
+          clusterId: "99999999-9999-4999-8999-999999999999",
+          scope: "cluster",
+        },
+      ] as never[],
+      hasMore: false,
+    });
+    renderDashboard();
+    expect(await screen.findByText("Blocking policy updated")).toBeTruthy();
+    expect(screen.getAllByText("Blocking policy updated")).toHaveLength(1);
+    expect(screen.queryByText("Configuration Revision Published")).toBeNull();
+    expect(screen.getByText("Deployment Succeeded")).toBeTruthy();
+    expect(screen.queryByText("Node updated")).toBeNull();
+    expect(screen.queryByText("Other cluster revision")).toBeNull();
+    const controllerChange = screen.getByRole("link", {
+      name: /Controller · System settings changed/,
+    });
+    expect(controllerChange.getAttribute("href")).toBe(
+      "/system/audit?auditEventId=audit-controller",
+    );
   });
 
   it("does not present unavailable statistics totals as zero", async () => {

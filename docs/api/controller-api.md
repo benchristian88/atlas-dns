@@ -317,11 +317,33 @@ boundary is audited; the UI is never authoritative about eligibility.
 ## Audit and version routes
 
 ```text
-GET /api/v1/audit-events?limit=50&offset=0
+GET /api/v1/audit-events?limit=50&cursor={opaque}
+GET /api/v1/audit-events/{auditEventId}
+GET /api/v1/audit-events?clusterId={clusterId}&includeController=true&limit=50&cursor={opaque}
 GET /api/v1/system/version
 ```
 
-Audit pagination is bounded to 100 records per request. Audit metadata excludes secrets.
+Audit list pagination is bounded to 1–100 records (default 50) and ordered by
+`(createdAt DESC, id DESC)`. `nextCursor` is an opaque versioned base64url
+cursor containing the keyset boundary; clients must not inspect or alter it.
+The detail route validates the UUID and returns the same representation used by
+the list. Offset pagination is not supported.
+
+The optional cluster query is the Dashboard Recent Changes audit source. It
+selects that cluster through durable resource relations or recorded
+`clusterId`, excludes every other cluster, and may include an explicit allowlist
+of controller-global authentication, user, System Settings, Operational
+History, backup, controller, and notification-policy actions. Returned events
+are labelled `scope=cluster|controller`; cluster events also carry the selected
+`clusterId`. This query is applied in PostgreSQL before the limit, so a bounded
+global page is never client-filtered as a substitute.
+
+Responses resolve `actorDisplayName` from the current Users record when one is
+available and retain `actorUserId` as immutable evidence; the display name is
+not a historical snapshot. Metadata is sanitized before persistence and again
+when represented, with bounded depth/count/string size and suspicious-key
+redaction for historical or unknown rows. API-wide authorization, `no-store`,
+request IDs, safe errors, and structured JSON escaping apply.
 
 ## DHCP operational commands
 
