@@ -67,8 +67,10 @@ describe("AuditPage", () => {
       name: "View audit evidence for System settings changed",
     });
     expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(disclosure.textContent).toBe("+");
     await user.click(disclosure);
     expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure.textContent).toBe("−");
     expect(window.location.search).toBe(`?auditEventId=${eventID}`);
 
     const detail = document.getElementById(`audit-detail-${eventID}`);

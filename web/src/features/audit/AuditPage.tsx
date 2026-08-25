@@ -137,7 +137,7 @@ export function AuditPage() {
             aria-label={`${expanded ? "Hide" : "View"} audit evidence for ${auditActionLabel(event.action)}`}
             onClick={() => toggle(event.id)}
           >
-            <span aria-hidden="true">{expanded ? "⌃" : "⌄"}</span>
+            <span aria-hidden="true">{expanded ? "−" : "+"}</span>
           </button>
         );
       },
