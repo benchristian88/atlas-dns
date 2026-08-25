@@ -230,6 +230,19 @@ describe("DashboardPage", () => {
     expect(accessibility.violations).toEqual([]);
   });
 
+  it("does not create certificate attention when canonical warning count is zero", async () => {
+    mockSources();
+    vi.mocked(api.haStatus).mockResolvedValue({
+      ...ha,
+      certificateWarnings: 0,
+    });
+    renderDashboard();
+    expect(
+      await screen.findByRole("heading", { name: "Attention" }),
+    ).toBeTruthy();
+    expect(screen.queryByText("Certificate expiry needs review.")).toBeNull();
+  });
+
   it("keeps partial dashboard content visible when supplementary APIs fail", async () => {
     vi.spyOn(api, "nodes").mockResolvedValue({
       items: nodes,

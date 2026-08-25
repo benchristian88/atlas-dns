@@ -704,7 +704,7 @@ func populateBroaderDocument(document *configuration.Document, clients clientsRe
 	document.Shared.Services = configuration.Services{BlockedServiceIDs: blocked.IDs, BlockedSchedule: scheduleModel(blocked.Schedule), SafeBrowsing: safeBrowsing.Enabled, ParentalControl: parental.Enabled, SafeSearch: safeSearchModel(safeSearch)}
 	document.Shared.QueryLog = configuration.QueryLogPolicy{Enabled: queryLog.Enabled, IntervalMillis: queryLog.IntervalMillis, AnonymizeClientIP: queryLog.AnonymizeClientIP, Ignored: queryLog.Ignored, IgnoredEnabled: valueOrDefault(queryLog.IgnoredEnabled, true)}
 	document.Shared.Statistics = configuration.StatisticsPolicy{Enabled: statistics.Enabled, IntervalMillis: statistics.IntervalMillis, Ignored: statistics.Ignored, IgnoredEnabled: valueOrDefault(statistics.IgnoredEnabled, true)}
-	document.ObservedOnly.TLS = configuration.TLSStatus{Enabled: tls.Enabled, ServerName: tls.ServerName, ForceHTTPS: tls.ForceHTTPS, HTTPSPort: tls.HTTPSPort, DNSOverTLSPort: tls.DNSOverTLSPort, DNSOverQUICPort: tls.DNSOverQUICPort, ServePlainDNS: tls.ServePlainDNS, ValidCertificate: tls.ValidCert, ValidChain: tls.ValidChain, ValidKey: tls.ValidKey, ValidPair: tls.ValidPair, Subject: tls.Subject, Issuer: tls.Issuer, NotBefore: tls.NotBefore, NotAfter: tls.NotAfter, DNSNames: tls.DNSNames, Warning: tls.Warning}
+	document.ObservedOnly.TLS = configurationTLSStatus(tls)
 	if !dhcpSupported {
 		document.Unsupported = append(document.Unsupported, configuration.Unsupported{Section: "dhcp", Reason: "the node reports that DHCP is unavailable"})
 		return
@@ -717,6 +717,18 @@ func populateBroaderDocument(document *configuration.Document, clients clientsRe
 	document.ObservedOnly.DHCPLeases = make([]configuration.DHCPLease, 0, len(dhcp.Leases))
 	for _, lease := range dhcp.Leases {
 		document.ObservedOnly.DHCPLeases = append(document.ObservedOnly.DHCPLeases, configuration.DHCPLease{MAC: lease.MAC, IP: lease.IP, Hostname: lease.Hostname, ExpiresAt: lease.Expires})
+	}
+}
+
+func configurationTLSStatus(tls tlsStatusResponse) configuration.TLSStatus {
+	return configuration.TLSStatus{
+		Enabled: tls.Enabled, ServerName: tls.ServerName, ForceHTTPS: tls.ForceHTTPS,
+		HTTPSPort: tls.HTTPSPort, DNSOverTLSPort: tls.DNSOverTLSPort,
+		DNSOverQUICPort: tls.DNSOverQUICPort, ServePlainDNS: tls.ServePlainDNS,
+		ValidCertificate: tls.ValidCert, ValidChain: tls.ValidChain, ValidKey: tls.ValidKey,
+		ValidPair: tls.ValidPair, Subject: tls.Subject, Issuer: tls.Issuer,
+		NotBefore: tls.NotBefore, NotAfter: tls.NotAfter, DNSNames: tls.DNSNames,
+		Warning: tls.Warning,
 	}
 }
 

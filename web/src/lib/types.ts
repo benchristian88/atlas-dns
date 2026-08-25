@@ -928,7 +928,13 @@ export interface CertificateHealth {
   issuer?: string;
   notAfter?: string;
   daysRemaining?: number;
-  state: "healthy" | "warning" | "critical" | "expired" | "unknown";
+  state:
+    | "healthy"
+    | "warning"
+    | "critical"
+    | "expired"
+    | "not_applicable"
+    | "unknown";
   observedAt?: string;
 }
 

@@ -128,11 +128,12 @@ type HistoryPage struct {
 type CertificateState string
 
 const (
-	CertificateHealthy  CertificateState = "healthy"
-	CertificateWarning  CertificateState = "warning"
-	CertificateCritical CertificateState = "critical"
-	CertificateExpired  CertificateState = "expired"
-	CertificateUnknown  CertificateState = "unknown"
+	CertificateHealthy       CertificateState = "healthy"
+	CertificateWarning       CertificateState = "warning"
+	CertificateCritical      CertificateState = "critical"
+	CertificateExpired       CertificateState = "expired"
+	CertificateNotApplicable CertificateState = "not_applicable"
+	CertificateUnknown       CertificateState = "unknown"
 )
 
 type Certificate struct {

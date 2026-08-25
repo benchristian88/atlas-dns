@@ -241,8 +241,16 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
               {certificates.map((certificate) => (
                 <tr key={certificate.nodeId}>
                   <td>{certificate.nodeName}</td>
-                  <td>{certificate.subject || "Not reported"}</td>
-                  <td>{formatTime(certificate.notAfter)}</td>
+                  <td>
+                    {certificate.state === "not_applicable"
+                      ? "Not configured"
+                      : certificate.subject || "Not reported"}
+                  </td>
+                  <td>
+                    {certificate.state === "not_applicable"
+                      ? "Not applicable"
+                      : formatTime(certificate.notAfter)}
+                  </td>
                   <td>
                     {certificate.daysRemaining === undefined
                       ? "—"

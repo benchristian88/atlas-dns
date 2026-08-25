@@ -481,6 +481,14 @@ POST /api/v1/nodes/{nodeId}/upgrades
 POST /api/v1/upgrades/{upgradeId}/validate
 ```
 
+Certificate items use `healthy`, `warning`, `critical`, `expired`,
+`not_applicable`, or `unknown`. `not_applicable` means the latest AdGuard
+observation successfully reports TLS encryption disabled; `notAfter` and
+`daysRemaining` are omitted. `unknown` instead means applicable expiry evidence
+is missing, invalid, or uninterpretable. An expired state is produced only for
+an enabled, AdGuard-valid certificate whose parsed `notAfter` is not in the
+future.
+
 Notification create/update payloads include `subscribedCategories`, a non-empty
 subset of `dns`, `redundancy`, `certificates`, `versions`, `maintenance`, and
 `upgrades`. Existing channels migrate to all categories. Delivery is queued

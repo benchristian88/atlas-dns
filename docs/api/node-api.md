@@ -140,7 +140,7 @@ Invalid, mismatched, oversized, negative, empty-key, NaN, or infinite data maps
 to a safe node-response error. The adapter returns a normalized typed snapshot;
 raw JSON and authentication data do not cross into storage.
 
-TLS parsing deliberately has no fields for `certificate_chain`, `private_key`, `certificate_path`, or `private_key_path`. Only public status, subject/issuer, validity, DNS names, ports, and safe warning text cross the adapter boundary. DHCP dynamic leases are observed-only; configuration/static leases are node-specific managed state.
+TLS parsing deliberately has no fields for `certificate_chain`, `private_key`, `certificate_path`, or `private_key_path`. Only public status, subject/issuer, validity, DNS names, ports, and safe warning text cross the adapter boundary. Certificate applicability uses the capability contract rather than an exact patch allowlist: both tested v0.107.78 and v0.107.79 responses use `enabled=false` for intentionally unused TLS, and their zero/default certificate timestamps are retained only as observation metadata, never interpreted as an expiry. DHCP dynamic leases are observed-only; configuration/static leases are node-specific managed state.
 
 ## Error mapping
 
