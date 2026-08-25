@@ -20,6 +20,13 @@ Existing webhook channels, encrypted destinations, and category subscriptions
 are preserved. The new global notification policy starts with conservative
 failure/recovery/redundancy defaults and does not replay historical events.
 
+Certificate expiry monitoring now treats a successful AdGuard observation with
+TLS encryption disabled as `not_applicable`. AdGuard's zero/default certificate
+timestamps are no longer classified as expired, so intentionally non-TLS nodes
+do not add Dashboard Attention, HA certificate alerts, operational events,
+webhook deliveries, or false recovery transitions. Enabled TLS remains
+fail-closed for missing, invalid, malformed, or expired certificate evidence.
+
 Standard Backup includes System Settings and notification policy because both
 are required control-plane state. It continues to exclude Operational History
 events/deliveries, Statistics, Query Log events, DNS probes, and sessions. Full

@@ -528,7 +528,7 @@ th[data-align="right"], td[data-align="right"] { text-align: right; }
 .status--info, .status--observed { border-color: var(--atlas-info-border); color: var(--atlas-info); background: var(--atlas-info-soft); }
 .status--degraded, .status--stale, .status--drifted, .status--pending, .status--applying, .status--verifying, .status--warning, .status--unknown { border-color: var(--atlas-warning-border); color: var(--atlas-warning); background: var(--atlas-warning-soft); }
 .status--unreachable, .status--incompatible, .status--unsupported, .status--failed { border-color: var(--atlas-danger-border); color: var(--atlas-danger); background: var(--atlas-danger-soft); }
-.status--maintenance, .status--paused, .status--disabled, .status--empty { border-color: var(--atlas-border); color: var(--atlas-text-muted); background: var(--atlas-neutral-soft); }
+.status--maintenance, .status--paused, .status--disabled, .status--empty, .status--not_applicable { border-color: var(--atlas-border); color: var(--atlas-text-muted); background: var(--atlas-neutral-soft); }
 
 .dialog-layer { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: var(--atlas-space-4); }
 .dialog-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--atlas-overlay); cursor: default; }

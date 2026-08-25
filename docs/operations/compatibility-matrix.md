@@ -7,7 +7,7 @@ a compatibility commitment. **Unsupported** must not be advertised as working.
 | Area | Version/platform | Status | Boundary |
 |---|---|---|---|
 | AdGuard Home | Earlier than v0.107.78 | Unsupported | Status can be identified, but onboarding, configuration inventory, and every managed write are blocked. |
-| AdGuard Home | v0.107.78 and v0.107.79 | Tested and supported | Schema v2; node observation, Query Log, Statistics, configuration adapters, and rolling mixed-patch operation are contract-tested. |
+| AdGuard Home | v0.107.78 and v0.107.79 | Tested and supported | Schema v2; node observation, Query Log, Statistics, TLS applicability, configuration adapters, and rolling mixed-patch operation are contract-tested. |
 | AdGuard Home | Newer v0.107 patch | Provisionally compatible | Atlas attempts normal typed capability/API validation and operates when it succeeds; capability-specific incompatibility fails safely. |
 | AdGuard Home | Other newer API generations | Unknown | Inventory and managed writes are blocked pending review; unknown is not reported as unsupported evidence. |
 | PostgreSQL | 17 | Tested and supported | Matching PostgreSQL 17 `pg_dump`/`pg_restore` required. |

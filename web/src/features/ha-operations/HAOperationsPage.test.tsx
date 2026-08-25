@@ -49,6 +49,47 @@ function commonMocks() {
 }
 
 describe("HA operations", () => {
+  it("renders disabled TLS as neutral and not applicable", async () => {
+    commonMocks();
+    vi.spyOn(api, "haStatus").mockResolvedValue({
+      state: "at_risk",
+      totalNodes: 1,
+      servingDnsNodes: 1,
+      apiReachableNodes: 1,
+      convergedNodes: 1,
+      maintenanceNodes: 0,
+      certificateWarnings: 0,
+      updateAvailableNodes: 0,
+      message: "No redundancy.",
+      nodes: [
+        {
+          nodeId: node.id,
+          dnsStatus: "healthy",
+          udpStatus: "healthy",
+          tcpStatus: "healthy",
+        },
+      ],
+    });
+    vi.spyOn(api, "certificates").mockResolvedValue({
+      items: [
+        { nodeId: node.id, nodeName: node.name, state: "not_applicable" },
+      ],
+    });
+    vi.spyOn(api, "versions").mockResolvedValue({ items: [] });
+    vi.spyOn(api, "haHistory").mockResolvedValue({ items: [], hasMore: false });
+    vi.spyOn(api, "notificationChannels").mockResolvedValue({ items: [] });
+
+    render(<HAOperationsPage cluster={cluster} />);
+    expect(await screen.findByText("Not configured")).toBeTruthy();
+    expect(screen.getByText("Not applicable")).toBeTruthy();
+    expect(
+      screen
+        .getByText("not applicable")
+        .classList.contains("status--not_applicable"),
+    ).toBe(true);
+    expect(screen.queryByText("Expired")).toBeNull();
+  });
+
   it("renders separate DNS, API, convergence, certificates, versions, notifications, and history dimensions", async () => {
     commonMocks();
     vi.spyOn(api, "haStatus").mockResolvedValue({

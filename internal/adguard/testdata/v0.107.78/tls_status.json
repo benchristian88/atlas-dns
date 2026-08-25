@@ -1,0 +1,1 @@
+{"enabled":false,"server_name":"","force_https":false,"port_https":0,"port_dns_over_tls":0,"port_dns_over_quic":0,"serve_plain_dns":true,"valid_cert":false,"valid_chain":false,"valid_key":false,"valid_pair":false,"not_before":"0001-01-01T00:00:00Z","not_after":"0001-01-01T00:00:00Z","dns_names":null}

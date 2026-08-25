@@ -403,11 +403,19 @@ export function NodeLifecyclePage({
         <dl className="detail-list">
           <div>
             <dt>Subject</dt>
-            <dd>{lifecycle.certificate.subject || "Not reported"}</dd>
+            <dd>
+              {lifecycle.certificate.state === "not_applicable"
+                ? "Not configured"
+                : lifecycle.certificate.subject || "Not reported"}
+            </dd>
           </div>
           <div>
             <dt>Expiry</dt>
-            <dd>{formatTime(lifecycle.certificate.notAfter)}</dd>
+            <dd>
+              {lifecycle.certificate.state === "not_applicable"
+                ? "Not applicable"
+                : formatTime(lifecycle.certificate.notAfter)}
+            </dd>
           </div>
           <div>
             <dt>Remaining</dt>
@@ -419,7 +427,17 @@ export function NodeLifecyclePage({
           </div>
           <div>
             <dt>State</dt>
-            <dd>{lifecycle.certificate.state}</dd>
+            <dd>
+              <StatusBadge
+                status={
+                  lifecycle.certificate.state === "critical" ||
+                  lifecycle.certificate.state === "expired"
+                    ? "failed"
+                    : lifecycle.certificate.state
+                }
+                label={lifecycle.certificate.state.replaceAll("_", " ")}
+              />
+            </dd>
           </div>
         </dl>
         <p className="muted">

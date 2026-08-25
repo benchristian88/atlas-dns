@@ -69,9 +69,27 @@ and does not create another transition event.
 
 ## Certificate and version awareness
 
-Certificate state uses redacted observation metadata. Warning begins at 30 days,
-critical at seven days, and expired is distinct. Private material and filesystem
-paths never enter this model.
+Certificate state uses redacted observation metadata and determines
+applicability before interpreting certificate timestamps:
+
+| State | Meaning |
+| --- | --- |
+| `not_applicable` | The successful AdGuard observation reports `tls.enabled=false`; expiry monitoring is intentionally inactive even if AdGuard retains zero or old certificate metadata. |
+| `unknown` | TLS is enabled or expected, but a valid certificate expiry cannot be determined from the observation. This includes missing, invalid, or malformed expected certificate data. |
+| `healthy` | TLS is enabled, AdGuard reports a valid certificate, and expiry is more than 30 days away. |
+| `warning` | The valid applicable certificate expires in 30 days or fewer. |
+| `critical` | The valid applicable certificate expires in seven days or fewer. |
+| `expired` | A valid applicable certificate has an expiry at or before the current time. |
+
+`invalid` is not overloaded as `expired`: enabled TLS with a missing or invalid
+certificate remains `unknown` for expiry presentation and fails the applicable
+return-to-service TLS check with a specific safe invalid-certificate, chain,
+key, or pair code. Private material and filesystem paths never enter this model.
+
+Only warning, critical, and expired applicability transitions create certificate
+alert events. A recovery requires an uninterrupted applicable monitoring chain;
+`not_applicable` itself, repeated disabled-TLS polls, and transitions to or from
+disabled TLS create no certificate event or webhook delivery.
 
 The AdGuard Home release checker reads the official GitHub latest-release API at
 most every six hours and retains safe stale-cache state after failure.

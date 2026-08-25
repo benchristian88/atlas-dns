@@ -33,6 +33,7 @@ type Repository interface {
 	RecordHAEvent(context.Context, Event) error
 	RecordHAEventAndAudit(context.Context, Event, domain.AuditEvent) error
 	LatestSuccessfulSnapshots(context.Context, string) ([]inventory.Snapshot, error)
+	CertificateMonitoringDisabledSince(context.Context, string, time.Time) (bool, error)
 	LatestSnapshots(context.Context, string) ([]inventory.Snapshot, error)
 	ActiveDeploymentExists(context.Context, string) (bool, error)
 	OpenDriftExists(context.Context, string) (bool, error)
@@ -345,25 +346,46 @@ func (s *Service) recordCertificateTransitions(ctx context.Context, clusterID st
 		return err
 	}
 	for _, certificate := range certificates {
-		previous := ""
+		var previous *Event
 		for _, event := range events {
 			if event.NodeID == nil || *event.NodeID != certificate.NodeID || !strings.HasPrefix(event.EventType, "certificate.") {
 				continue
 			}
-			previous = strings.TrimPrefix(event.EventType, "certificate.")
-			if previous == "recovered" {
-				previous = "healthy"
-			}
+			previous = &event
 			break
 		}
 		current := string(certificate.State)
-		if current == "unknown" || current == previous {
+		if certificate.State == CertificateUnknown || certificate.State == CertificateNotApplicable {
+			continue
+		}
+		previousState := ""
+		disabledSince := false
+		if previous != nil {
+			previousState = strings.TrimPrefix(previous.EventType, "certificate.")
+			if previousState == "recovered" {
+				previousState = "healthy"
+			}
+			var disabledErr error
+			disabledSince, disabledErr = s.repository.CertificateMonitoringDisabledSince(ctx, certificate.NodeID, previous.OccurredAt)
+			if disabledErr != nil {
+				return disabledErr
+			}
+			if disabledSince {
+				previousState = ""
+			}
+		}
+		if current == previousState {
 			continue
 		}
 		eventType, severity, summary := "certificate."+current, "warning", "Certificate expiry warning"
 		if current == "healthy" {
+			// A healthy first observation is a baseline, not a recovery.  A
+			// disabled-TLS observation at or after the previous alert also breaks
+			// the recovery chain: not-applicable -> healthy is not a recovery.
+			if previous == nil || disabledSince {
+				continue
+			}
 			eventType, severity, summary = "certificate.recovered", "info", "Certificate status recovered"
-			current = "recovered"
 		}
 		if certificate.State == CertificateCritical || certificate.State == CertificateExpired {
 			severity = "critical"
@@ -498,7 +520,7 @@ func (s *Service) Certificates(ctx context.Context, clusterID string) ([]Certifi
 	if err != nil {
 		return nil, err
 	}
-	snapshots, err := s.repository.LatestSuccessfulSnapshots(ctx, clusterID)
+	snapshots, err := s.repository.LatestSnapshots(ctx, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -509,24 +531,39 @@ func (s *Service) Certificates(ctx context.Context, clusterID string) ([]Certifi
 	result := make([]Certificate, 0, len(nodes))
 	for _, node := range nodes {
 		certificate := Certificate{NodeID: node.ID, NodeName: node.Name, State: CertificateUnknown}
-		if snapshot, ok := byNode[node.ID]; ok && snapshot.Document != nil {
-			certificate.Subject, certificate.Issuer, certificate.ObservedAt = snapshot.Document.ObservedOnly.TLS.Subject, snapshot.Document.ObservedOnly.TLS.Issuer, &snapshot.ObservedAt
-			if expiry, ok := parseCertificateTime(snapshot.Document.ObservedOnly.TLS.NotAfter); ok {
-				certificate.NotAfter = &expiry
-				days := int(expiry.Sub(s.now().UTC()).Hours() / 24)
-				certificate.DaysRemaining = &days
-				switch {
-				case days < 0:
-					certificate.State = CertificateExpired
-				case days <= s.criticalDays:
-					certificate.State = CertificateCritical
-				case days <= s.warningDays:
-					certificate.State = CertificateWarning
-				default:
-					certificate.State = CertificateHealthy
+		if snapshot, ok := byNode[node.ID]; ok {
+			certificate.ObservedAt = &snapshot.ObservedAt
+			if (snapshot.CollectionStatus != "" && snapshot.CollectionStatus != "succeeded") || snapshot.Document == nil {
+				result = append(result, certificate)
+				continue
+			}
+			tls := snapshot.Document.ObservedOnly.TLS
+			if !tls.Enabled {
+				certificate.State = CertificateNotApplicable
+				result = append(result, certificate)
+				continue
+			}
+			certificate.Subject, certificate.Issuer = tls.Subject, tls.Issuer
+			// AdGuard can serialize the zero time for an absent certificate.
+			// Applicability and certificate validity must be established before
+			// interpreting not_after as an actual expiry.
+			if tls.ValidCertificate {
+				if expiry, ok := parseCertificateTime(tls.NotAfter); ok {
+					certificate.NotAfter = &expiry
+					now := s.now().UTC()
+					days := int(expiry.Sub(now).Hours() / 24)
+					certificate.DaysRemaining = &days
+					switch {
+					case !now.Before(expiry):
+						certificate.State = CertificateExpired
+					case days <= s.criticalDays:
+						certificate.State = CertificateCritical
+					case days <= s.warningDays:
+						certificate.State = CertificateWarning
+					default:
+						certificate.State = CertificateHealthy
+					}
 				}
-			} else if snapshot.Document.ObservedOnly.TLS.Enabled && snapshot.Document.ObservedOnly.TLS.ValidCertificate {
-				certificate.State = CertificateHealthy
 			}
 		}
 		result = append(result, certificate)
@@ -1053,26 +1090,8 @@ func returnTLSCheck(snapshot inventory.Snapshot, observationErr error, now time.
 	failure := func(code, message string) Check {
 		return Check{Name: "tls", Status: "fail", Required: true, ErrorCode: code, Message: message}
 	}
-	if strings.TrimSpace(tls.NotBefore) != "" {
-		notBefore, ok := parseCertificateTime(tls.NotBefore)
-		if !ok {
-			return failure("TLS_CERTIFICATE_TIME_INVALID", "TLS certificate start time could not be interpreted")
-		}
-		if now.Before(notBefore) {
-			return failure("TLS_CERTIFICATE_NOT_YET_VALID", "TLS certificate is not valid before "+notBefore.Format("2006-01-02"))
-		}
-	}
-	if strings.TrimSpace(tls.NotAfter) != "" {
-		notAfter, ok := parseCertificateTime(tls.NotAfter)
-		if !ok {
-			return failure("TLS_CERTIFICATE_TIME_INVALID", "TLS certificate expiry could not be interpreted")
-		}
-		if !now.Before(notAfter) {
-			return failure("TLS_CERTIFICATE_EXPIRED", "TLS certificate expired on "+notAfter.Format("2006-01-02"))
-		}
-	}
 	if !tls.ValidCertificate {
-		return failure("TLS_CERTIFICATE_INVALID", "AdGuard Home reports that the TLS certificate is invalid")
+		return failure("TLS_CERTIFICATE_INVALID", "AdGuard Home reports that the TLS certificate is missing or invalid")
 	}
 	if !tls.ValidChain {
 		return failure("TLS_CERTIFICATE_CHAIN_INVALID", "AdGuard Home reports that the TLS certificate chain is invalid")
@@ -1082,6 +1101,25 @@ func returnTLSCheck(snapshot inventory.Snapshot, observationErr error, now time.
 	}
 	if !tls.ValidPair {
 		return failure("TLS_CERTIFICATE_KEY_MISMATCH", "AdGuard Home reports that the TLS certificate and private key do not match")
+	}
+	if strings.TrimSpace(tls.NotBefore) != "" {
+		notBefore, ok := parseCertificateTime(tls.NotBefore)
+		if !ok {
+			return failure("TLS_CERTIFICATE_TIME_INVALID", "TLS certificate start time could not be interpreted")
+		}
+		if now.Before(notBefore) {
+			return failure("TLS_CERTIFICATE_NOT_YET_VALID", "TLS certificate is not valid before "+notBefore.Format("2006-01-02"))
+		}
+	}
+	if strings.TrimSpace(tls.NotAfter) == "" {
+		return failure("TLS_CERTIFICATE_TIME_INVALID", "TLS certificate expiry was not reported")
+	}
+	notAfter, ok := parseCertificateTime(tls.NotAfter)
+	if !ok {
+		return failure("TLS_CERTIFICATE_TIME_INVALID", "TLS certificate expiry could not be interpreted")
+	}
+	if !now.Before(notAfter) {
+		return failure("TLS_CERTIFICATE_EXPIRED", "TLS certificate expired on "+notAfter.Format("2006-01-02"))
 	}
 	return Check{Name: "tls", Status: "pass", Required: true, Message: "TLS encryption is enabled and AdGuard Home reports valid certificate metadata"}
 }

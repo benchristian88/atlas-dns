@@ -277,6 +277,17 @@ func TestCompatibilityFixturesNormalizeProtectionSemanticsAndAdditiveFields(t *t
 	}
 }
 
+func TestTLSStatusFixturesPreserveDisabledApplicabilityAcrossTestedVersions(t *testing.T) {
+	for _, version := range []string{"v0.107.78", "v0.107.79"} {
+		var response tlsStatusResponse
+		readFixture(t, filepath.Join("testdata", version, "tls_status.json"), &response)
+		tls := configurationTLSStatus(response)
+		if tls.Enabled || tls.ValidCertificate || tls.NotAfter != "0001-01-01T00:00:00Z" {
+			t.Fatalf("%s disabled TLS contract was not preserved: %#v", version, tls)
+		}
+	}
+}
+
 func TestProtectionSemanticValidationRejectsMissingWrongTypeAndContradiction(t *testing.T) {
 	for name, body := range map[string]string{
 		"missing":       `{"upstream_dns":[]}`,

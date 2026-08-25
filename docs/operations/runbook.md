@@ -121,6 +121,13 @@ fails closed. For an HTTPS administration URL, transport trust and hostname
 failures instead appear in the separate required `api` check as
 `NODE_TLS_FAILED`; Atlas never disables certificate verification.
 
+In certificate expiry views, **Not applicable** means TLS is deliberately
+disabled, **Unknown** means enabled/expected certificate expiry could not be
+determined, **Invalid** is a blocking enabled-TLS validation result rather than
+an expiry date, and **Expired** is reserved for a present, applicable certificate
+whose parsed expiry is in the past. Disabled TLS does not create certificate
+Attention, operational alert/recovery events, or webhook deliveries.
+
 Archive hides terminal historical records without making them mutable. Hard
 deletion is restricted to unreferenced unused revisions and never-started,
 effect-free deployments, requires strong confirmation, and is audited.
