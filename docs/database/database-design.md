@@ -259,7 +259,8 @@ Initial indexes:
 - deployments: cluster_id plus requested_at descending.
 - deployment_nodes: deployment_id, node_id.
 - drift: node_id plus detected_at descending, unresolved status.
-- audit: created_at descending, resource lookup.
+- audit: `(created_at, id)` descending for stable cursor paging, plus resource
+  and actor lookup.
 - query_events: node_id and source_timestamp.
 - query_events: domain and source_timestamp.
 - query_events: client address and source timestamp.

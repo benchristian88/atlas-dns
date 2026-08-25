@@ -35,6 +35,7 @@ not part of the operator documentation set.
 - [Configuration model](architecture/configuration-model.md)
 - [Controller API](api/controller-api.md) and [node API boundary](api/node-api.md)
 - [Database schema](database/schema.md)
+- [v1.1 page-responsibility audit follow-up](frontend/page-responsibility-audit-follow-up-1.1.md)
 - [Architecture decisions](decisions/README.md)
 
 ## Develop and contribute

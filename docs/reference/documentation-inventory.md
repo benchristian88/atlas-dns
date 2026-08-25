@@ -27,6 +27,7 @@ unless a more specific row overrides it.
 | `docs/frontend/design-system.md`, `component-catalogue.md` | CURRENT ARCHITECTURE / TECHNICAL REFERENCE | Current visual primitives and shared components. | No |
 | `docs/frontend/frontend-design.md`, `navigation-and-shell.md`, `ui-navigation.md` | CURRENT ARCHITECTURE / TECHNICAL REFERENCE | Current frontend architecture, shell, routes, and navigation. | No |
 | `docs/frontend/feature-presentation-rules.md`, `ha-controller-responsibility-separation.md`, `query-log.md`, `operational-status.md`, `theme-brand-and-pwa.md` | CURRENT ARCHITECTURE / TECHNICAL REFERENCE | Current frontend behavior and safety boundaries. | No |
+| `docs/frontend/page-responsibility-audit-follow-up-1.1.md` | RELEASE EVIDENCE | v1.1 evidence/data finding implementation status and explicit deferrals; not a replacement audit. | No |
 | `docs/frontend/reference/*` | CURRENT ARCHITECTURE / TECHNICAL REFERENCE | Upstream AdGuard Home comparison/reference material; not controller design authority. | No |
 | `docs/development/coding-standards.md`, `local-development.md`, `regression-safety-rules.md`, `release-process.md`, `testing.md` | CURRENT DEVELOPMENT / CONTRIBUTOR DOCUMENTATION | Active contributor workflow and quality gates. | No |
 | `docs/roadmap/roadmap.md` | CURRENT PRODUCT DOCUMENTATION | Sole forward-looking roadmap; not a release promise. | No |

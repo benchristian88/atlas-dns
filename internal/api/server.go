@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	auditservice "github.com/benchristian88/atlas-dns/internal/audit"
 	"github.com/benchristian88/atlas-dns/internal/auth"
 	"github.com/benchristian88/atlas-dns/internal/backup"
 	"github.com/benchristian88/atlas-dns/internal/controlplane"
@@ -38,7 +39,8 @@ const (
 )
 
 type AuditReader interface {
-	ListAuditEvents(context.Context, int, int) ([]domain.AuditEvent, error)
+	List(context.Context, auditservice.ListRequest) (auditservice.Page, error)
+	Detail(context.Context, string) (domain.AuditEvent, error)
 }
 
 type HealthChecker interface {
@@ -206,13 +208,13 @@ func (s *Server) SetMetrics(tracker *operationalhealth.Tracker, token string) {
 	s.metrics, s.metricsToken = tracker, token
 }
 
-func NewServer(authService *auth.Service, management *domain.ManagementService, inventoryService *inventory.Service, audit AuditReader, health HealthChecker, logger *slog.Logger, secureCookies bool, publicBaseURL string, healthInterval time.Duration, webDist string, controlplanes ...*controlplane.Service) *Server {
+func NewServer(authService *auth.Service, management *domain.ManagementService, inventoryService *inventory.Service, auditRepository auditservice.Repository, health HealthChecker, logger *slog.Logger, secureCookies bool, publicBaseURL string, healthInterval time.Duration, webDist string, controlplanes ...*controlplane.Service) *Server {
 	var controlplaneService *controlplane.Service
 	if len(controlplanes) > 0 {
 		controlplaneService = controlplanes[0]
 	}
 	server := &Server{
-		auth: authService, management: management, inventory: inventoryService, catalogue: inventoryService, blocklists: inventoryService, allowlists: inventoryService, dhcpInterfaces: inventoryService, dhcpChecker: inventoryService, dhcpOperations: inventoryService, audit: audit, health: health,
+		auth: authService, management: management, inventory: inventoryService, catalogue: inventoryService, blocklists: inventoryService, allowlists: inventoryService, dhcpInterfaces: inventoryService, dhcpChecker: inventoryService, dhcpOperations: inventoryService, audit: auditservice.NewService(auditRepository), health: health,
 		controlplane: controlplaneService,
 		logger:       logger, secureCookies: secureCookies, publicBaseURL: publicBaseURL, healthInterval: healthInterval,
 		webDist: webDist, mux: http.NewServeMux(),
@@ -327,6 +329,7 @@ func (s *Server) routes() {
 		s.mux.Handle("POST /api/v1/drift-events/{driftId}/adopt", s.authenticated(true, http.HandlerFunc(s.handleAdoptDrift)))
 	}
 	s.mux.Handle("GET /api/v1/audit-events", s.authenticated(false, http.HandlerFunc(s.handleAuditEvents)))
+	s.mux.Handle("GET /api/v1/audit-events/{auditEventId}", s.authenticated(false, http.HandlerFunc(s.handleAuditEvent)))
 	s.mux.Handle("GET /api/v1/system/version", s.authenticated(false, http.HandlerFunc(s.handleVersion)))
 	s.mux.HandleFunc("/", s.handleFrontend)
 }

@@ -110,6 +110,13 @@ deployment status/archive filters, drift deduplication, retained-time cleanup,
 Query Log keyset/trigram search, and worker claims. High-volume cleanup is
 bounded to avoid long uninterruptible transactions.
 
+Audit Log paging uses the append-only `audit_events_created_at_id_idx` composite
+index on `(created_at DESC, id DESC)`. Cluster-specific Recent Changes audit
+reads use durable resource relations and the safe recorded `clusterId`; they do
+not denormalize cluster ownership into mutable browser state. Audit metadata is
+sanitized before insert and defensively sanitized again on read so older rows
+cannot bypass the current representation boundary.
+
 ## Migration ledger
 
 The files below are development-era milestones that were all shipped unchanged
@@ -135,12 +142,13 @@ bootstrap, and recorded by version/name/SHA-256 in `schema_migrations`.
 | `000015_release_1_0_2_notification_history` | Bounded webhook HTTP/failure diagnostics and delivery-history query index. | Append-only v1.0.2 upgrade. |
 | `000016_release_1_1_onboarding` | Canonical onboarding acknowledgements/completion, persisted runtime monitoring values, and notification category subscriptions. | Append-only v1.1 upgrade; established node+revision clusters are marked complete. |
 | `000017_release_1_1_runtime_policy_history` | Completes typed runtime settings, exact-event notification policy, and Operational History retention. | Append-only v1.1 upgrade; legacy environment values seed nullable settings once. |
+| `000018_release_1_1_audit_keyset` | Stable Audit Log `(created_at, id)` keyset index. | Append-only v1.1 upgrade; no audit rows are rewritten. |
 
 The complete chain is the physical v1.0.0 baseline. Pre-1.0 databases are not
 supported for in-place upgrade, but removing or squashing the chain would break
 empty-database creation and v1.0.0 checksum recognition. Release 1.0.1 uses the
 same schema and adds no migration. Release 1.0.2 appends `000015`; release 1.1
-appends `000016` and `000017`. Future
+appends `000016`, `000017`, and `000018`. Future
 schema-changing 1.x releases append new immutable, never-renumbered forward
 migrations after the current highest version; schema-neutral patches do not add
 placeholders.

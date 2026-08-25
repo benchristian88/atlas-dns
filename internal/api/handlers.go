@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	auditservice "github.com/benchristian88/atlas-dns/internal/audit"
 	"github.com/benchristian88/atlas-dns/internal/domain"
 	"github.com/benchristian88/atlas-dns/internal/version"
 )
@@ -332,13 +333,33 @@ func (s *Server) handleNodeMaintenance(response http.ResponseWriter, request *ht
 
 func (s *Server) handleAuditEvents(response http.ResponseWriter, request *http.Request) {
 	limit := parseBoundedInt(request.URL.Query().Get("limit"), 50, 1, 100)
-	offset := parseBoundedInt(request.URL.Query().Get("offset"), 0, 0, 100000)
-	events, err := s.audit.ListAuditEvents(request.Context(), limit, offset)
+	includeController := false
+	if value := strings.TrimSpace(request.URL.Query().Get("includeController")); value != "" {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			s.writeError(response, request, domain.Validation("includeController", "must be true or false"))
+			return
+		}
+		includeController = parsed
+	}
+	page, err := s.audit.List(request.Context(), auditservice.ListRequest{
+		Limit: limit, Cursor: strings.TrimSpace(request.URL.Query().Get("cursor")),
+		ClusterID: strings.TrimSpace(request.URL.Query().Get("clusterId")), IncludeController: includeController,
+	})
 	if err != nil {
 		s.writeError(response, request, err)
 		return
 	}
-	writeJSON(response, http.StatusOK, map[string]any{"items": events, "limit": limit, "offset": offset})
+	writeJSON(response, http.StatusOK, page)
+}
+
+func (s *Server) handleAuditEvent(response http.ResponseWriter, request *http.Request) {
+	event, err := s.audit.Detail(request.Context(), request.PathValue("auditEventId"))
+	if err != nil {
+		s.writeError(response, request, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, event)
 }
 
 func (s *Server) handleVersion(response http.ResponseWriter, request *http.Request) {

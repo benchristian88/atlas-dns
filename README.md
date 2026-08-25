@@ -192,5 +192,5 @@ handling, and documented failure behavior.
 Atlas DNS Controller is licensed under the Business Source License 1.1
 (`BUSL-1.1`). Non-commercial personal and homelab use is granted; commercial
 hosting or resale is prohibited. Each version changes to Apache License 2.0 on
-August 12, 2032 or its earlier fourth-anniversary trigger under BUSL-1.1. See
+August 12, 2032 or its earlier sixth-anniversary trigger under BUSL-1.1. See
 [LICENSE](LICENSE) for the controlling terms.

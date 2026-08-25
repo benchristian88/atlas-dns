@@ -671,6 +671,12 @@ Table rules:
   disclosure button, `aria-expanded`, and `aria-controls`. Only one row is open
   per table. Revisions, Deployments, and Drift persist the selected ID in the
   URL and scroll a valid deep link into view once after loading.
+- Audit Log uses the same adjacent expanded-row and query-selection pattern.
+  Its compact row is Time, human Action, Resource, current Actor label, and a
+  labelled disclosure. Request ID, immutable actor UUID, raw action, canonical
+  resource link, timestamp, and typed/bounded metadata remain in the detail.
+  Cursor pages use the shared Pagination control; an exact deep link may pin a
+  directly fetched older event above the stable current page.
 - Very large secondary data, such as a complete immutable revision document,
   stays behind an independently operable collapsed disclosure inside the
   inline detail.
@@ -716,7 +722,24 @@ of each node.
 - DNS activity uses the canonical 24-hour Statistics report for Queries,
   Blocked percentage, Safety Interventions, and Average Processing. Coverage
   diagnostics remain on Statistics and Operational Status.
-- Recent Changes composes safe revision, deployment, and audit summaries.
+- Dashboard header and all health, HA, collection, attention, node,
+  revision/deployment, drift, and Recent Changes evidence remain explicitly
+  cluster-wide. Only DNS activity and top-domain rankings follow the shell node
+  selection, and each of those panels says `Traffic scope: Entire Cluster` or
+  names the selected node. The page header says `Cluster: <name>` and never
+  implies that node selection changes cluster health semantics.
+- Recent Changes composes safe revision, deployment, and database-scoped audit
+  summaries for the selected cluster, plus controller-global administration
+  and security events labelled `Controller`. Events from other clusters are
+  excluded by the server query before its bound is applied.
+- A revision/deployment domain row wins over an audit twin only when action,
+  resource type, and resource UUID deterministically match. Safe current actor
+  attribution may enrich the domain row. After de-duplication, actual timestamp
+  orders the list with a stable ID tie-break; source priority never reorders it.
+- Audit-only Recent Changes links include the exact `auditEventId`. Dashboard
+  labels remain concise and never render audit metadata. A failed revision,
+  deployment, or audit source leaves other items visible with a scoped partial
+  warning.
 - Nodes shows supported DNS, API, version, last-seen, update, and management
   fields. It does not invent a primary/standby role.
 - Top queried and blocked domains reuse Statistics rankings.

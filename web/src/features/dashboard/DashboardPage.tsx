@@ -20,6 +20,22 @@ import type {
   VersionHealth,
 } from "../../lib/types";
 import { useScope } from "../../shell/ScopeContext";
+import {
+  auditActionLabel,
+  auditActorLabel,
+  auditEventHref,
+  auditResourceLabel,
+} from "../audit/auditPresentation";
+
+type DashboardSource =
+  | "statistics"
+  | "operational"
+  | "ha"
+  | "versions"
+  | "revisions"
+  | "deployments"
+  | "drift"
+  | "audit";
 
 interface RecentChange {
   id: string;
@@ -45,31 +61,65 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
   const [drift, setDrift] = useState<DriftEvent[]>([]);
   const [audit, setAudit] = useState<AuditEvent[]>([]);
   const [supplementaryLoading, setSupplementaryLoading] = useState(true);
-  const [supplementaryErrors, setSupplementaryErrors] = useState(0);
+  const [sourceErrors, setSourceErrors] = useState<
+    ReadonlySet<DashboardSource>
+  >(new Set());
 
   const load = useCallback(async () => {
     setSupplementaryLoading(true);
-    setSupplementaryErrors(0);
-    const supplementary = [
-      api.statistics(cluster.id, "24h", scopeNodeId).then(setStatistics),
-      api.operationalStatus(cluster.id).then(setOperational),
-      api.haStatus(cluster.id).then(setHA),
-      api.versions(cluster.id).then((result) => setVersions(result.items)),
-      api
-        .configurationRevisions(cluster.id)
-        .then((result) => setRevisions(result.items)),
-      api
-        .deployments(cluster.id)
-        .then((result) => setDeployments(result.items)),
-      api.driftEvents(cluster.id).then((result) => setDrift(result.items)),
-      api.auditEvents().then((result) => setAudit(result.items)),
+    setSourceErrors(new Set());
+    const supplementary: [DashboardSource, Promise<unknown>][] = [
+      [
+        "statistics",
+        api.statistics(cluster.id, "24h", scopeNodeId).then(setStatistics),
+      ],
+      ["operational", api.operationalStatus(cluster.id).then(setOperational)],
+      ["ha", api.haStatus(cluster.id).then(setHA)],
+      [
+        "versions",
+        api.versions(cluster.id).then((result) => setVersions(result.items)),
+      ],
+      [
+        "revisions",
+        api
+          .configurationRevisions(cluster.id)
+          .then((result) => setRevisions(result.items)),
+      ],
+      [
+        "deployments",
+        api
+          .deployments(cluster.id)
+          .then((result) => setDeployments(result.items)),
+      ],
+      [
+        "drift",
+        api.driftEvents(cluster.id).then((result) => setDrift(result.items)),
+      ],
+      [
+        "audit",
+        api
+          .auditEvents({
+            clusterId: cluster.id,
+            includeController: true,
+            limit: 50,
+          })
+          .then((result) => setAudit(result.items)),
+      ],
     ];
-    void Promise.allSettled(supplementary).then((results) => {
-      setSupplementaryErrors(
-        results.filter((result) => result.status === "rejected").length,
-      );
-      setSupplementaryLoading(false);
-    });
+    void Promise.allSettled(supplementary.map(([, promise]) => promise)).then(
+      (results) => {
+        setSourceErrors(
+          new Set(
+            results.flatMap((result, index) =>
+              result.status === "rejected"
+                ? [supplementary[index]?.[0] as DashboardSource]
+                : [],
+            ),
+          ),
+        );
+        setSupplementaryLoading(false);
+      },
+    );
 
     try {
       const result = await api.nodes(cluster.id);
@@ -90,12 +140,18 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
 
   const currentNodes = nodes ?? [];
   const attention = useMemo(
-    () => attentionItems(operational, ha, drift, deployments),
-    [operational, ha, drift, deployments],
+    () =>
+      attentionItems(
+        operational,
+        ha,
+        drift.filter((item) => item.clusterId === cluster.id),
+        deployments.filter((item) => item.clusterId === cluster.id),
+      ),
+    [cluster.id, operational, ha, drift, deployments],
   );
   const recent = useMemo(
-    () => recentChanges(revisions, deployments, audit),
-    [revisions, deployments, audit],
+    () => recentChanges(cluster.id, revisions, deployments, audit),
+    [cluster.id, revisions, deployments, audit],
   );
 
   if (nodes === undefined && error === undefined)
@@ -125,7 +181,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
         title={cluster.name}
         description={
           <span>
-            Scope: {scopeName} · Active revision{" "}
+            Cluster: {cluster.name} · Active revision{" "}
             {activeRevisionLabel(cluster, revisions)} · Last refreshed{" "}
             {formatDate(refreshedAt)}
           </span>
@@ -137,7 +193,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
           Node health refresh failed. Showing the last available data.
         </div>
       )}
-      {supplementaryErrors > 0 && !supplementaryLoading && (
+      {sourceErrors.size > 0 && !supplementaryLoading && (
         <div className="notice notice--warning">
           Some dashboard sources are unavailable. Available operational data
           remains visible.
@@ -211,12 +267,12 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
           value={
             supplementaryLoading
               ? "Loading…"
-              : supplementaryErrors === 8
+              : sourceErrors.size === 8
                 ? "—"
                 : String(attention.length)
           }
           status={
-            supplementaryLoading || supplementaryErrors === 8
+            supplementaryLoading || sourceErrors.size === 8
               ? "unknown"
               : attention.length === 0
                 ? "healthy"
@@ -225,7 +281,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
           detail={
             supplementaryLoading
               ? "Checking operational evidence"
-              : supplementaryErrors === 8
+              : sourceErrors.size === 8
                 ? "Attention evidence unavailable"
                 : attention.length === 0
                   ? "No current warnings"
@@ -239,7 +295,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
         <article className="card dashboard-activity-card">
           <DashboardPanelHeader
             title="DNS activity"
-            eyebrow="Last 24 hours"
+            eyebrow={`Last 24 hours · Traffic scope: ${scopeName}`}
             action={{ label: "View statistics", href: "/statistics" }}
           />
           {supplementaryLoading && statistics === undefined ? (
@@ -317,6 +373,14 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
             title="Recent changes"
             action={{ label: "Audit log", href: "/system/audit" }}
           />
+          {(sourceErrors.has("revisions") ||
+            sourceErrors.has("deployments") ||
+            sourceErrors.has("audit")) && (
+            <p className="dashboard-partial-warning" role="status">
+              Recent changes is partial: {recentFailureLabels(sourceErrors)}.
+              Available sources remain visible.
+            </p>
+          )}
           {supplementaryLoading && recent.length === 0 ? (
             <Loading label="Loading recent changes…" />
           ) : recent.length === 0 ? (
@@ -372,6 +436,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
       <section className="dashboard-ranking-grid" aria-label="Top domains">
         <RankingPanel
           title="Top queried domains"
+          eyebrow={`Traffic scope: ${scopeName}`}
           values={
             statistics?.state === "unavailable"
               ? []
@@ -381,6 +446,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
         />
         <RankingPanel
           title="Top blocked domains"
+          eyebrow={`Traffic scope: ${scopeName}`}
           values={
             statistics?.state === "unavailable"
               ? []
@@ -619,10 +685,12 @@ function NodeSummaryTable({
 
 function RankingPanel({
   title,
+  eyebrow,
   values,
   loading,
 }: {
   title: string;
+  eyebrow: string;
   values: StatisticsRanking[];
   loading: boolean;
 }) {
@@ -631,6 +699,7 @@ function RankingPanel({
     <article className="card dashboard-ranking">
       <DashboardPanelHeader
         title={title}
+        eyebrow={eyebrow}
         action={{ label: "View statistics", href: "/statistics" }}
       />
       {loading ? (
@@ -761,47 +830,111 @@ function attentionItems(
   return items;
 }
 
-function recentChanges(
+export function recentChanges(
+  clusterID: string,
   revisions: ConfigurationRevision[],
   deployments: Deployment[],
   audit: AuditEvent[],
 ): RecentChange[] {
-  return [
-    ...revisions.map((revision) => ({
+  const scopedRevisions = revisions.filter(
+    (revision) =>
+      revision.clusterId === undefined || revision.clusterId === clusterID,
+  );
+  const scopedDeployments = deployments.filter(
+    (deployment) =>
+      deployment.clusterId === undefined || deployment.clusterId === clusterID,
+  );
+  const scopedAudit = audit.filter(
+    (event) =>
+      event.scope === "controller" ||
+      event.clusterId === undefined ||
+      event.clusterId === clusterID,
+  );
+  const usedAuditIDs = new Set<string>();
+  const revisionItems = scopedRevisions.map((revision) => {
+    const attribution = scopedAudit.find(
+      (event) =>
+        event.action === "configuration.revision_published" &&
+        event.resourceType === "configuration_revision" &&
+        event.resourceId === revision.id,
+    );
+    if (attribution) usedAuditIDs.add(attribution.id);
+    return {
       id: `revision-${revision.id}`,
       label:
         revision.summary || `Revision #${revision.revisionNumber} published`,
-      detail: `Configuration revision #${revision.revisionNumber}`,
+      detail: `Configuration revision #${revision.revisionNumber}${attribution ? ` · Current actor: ${auditActorLabel(attribution)}` : ""}`,
       at: revision.createdAt,
       href: `/ha/revisions?revisionId=${encodeURIComponent(revision.id)}`,
       icon: "revisions" as const,
-    })),
-    ...deployments.map((deployment) => ({
+    };
+  });
+  const deploymentItems = scopedDeployments.map((deployment) => {
+    const attribution = scopedAudit.find(
+      (event) =>
+        event.resourceType === "deployment" &&
+        event.resourceId === deployment.id &&
+        deploymentAuditMatches(deployment, event.action),
+    );
+    if (attribution) usedAuditIDs.add(attribution.id);
+    return {
       id: `deployment-${deployment.id}`,
       label: `Deployment ${titleCase(deployment.status)}`,
-      detail: `${titleCase(deployment.origin)} deployment · ${deployment.id.slice(0, 8)}`,
+      detail: `${titleCase(deployment.origin)} deployment · ${deployment.id.slice(0, 8)}${attribution ? ` · Current actor: ${auditActorLabel(attribution)}` : ""}`,
       at:
         deployment.completedAt ??
         deployment.startedAt ??
         deployment.requestedAt,
       href: `/ha/deployments?deploymentId=${encodeURIComponent(deployment.id)}`,
       icon: "deployments" as const,
-    })),
-    ...audit.map((event) => ({
+    };
+  });
+  const auditItems = scopedAudit
+    .filter((event) => !usedAuditIDs.has(event.id))
+    .map((event) => ({
       id: `audit-${event.id}`,
-      label: titleCase(event.action.replaceAll(/[._]/g, " ")),
-      detail: `${titleCase(event.resourceType.replaceAll("_", " "))} · ${event.actorType}`,
+      label:
+        event.scope === "controller"
+          ? `Controller · ${auditActionLabel(event.action)}`
+          : auditActionLabel(event.action),
+      detail: `${auditResourceLabel(event.resourceType)} · ${auditActorLabel(event)}`,
       at: event.createdAt,
-      href: "/system/audit",
+      href: auditEventHref(event.id),
       icon: "audit" as const,
-    })),
-  ]
+    }));
+  return [...revisionItems, ...deploymentItems, ...auditItems]
     .filter((item) => Boolean(item.at))
     .sort(
       (left, right) =>
-        new Date(right.at).valueOf() - new Date(left.at).valueOf(),
+        new Date(right.at).valueOf() - new Date(left.at).valueOf() ||
+        right.id.localeCompare(left.id),
     )
     .slice(0, 8);
+}
+
+function deploymentAuditMatches(deployment: Deployment, action: string) {
+  const terminalAction = `deployment.${deployment.status}`;
+  if (action === terminalAction) return true;
+  if (
+    !deployment.completedAt &&
+    [
+      "deployment.created",
+      "deployment.manual_created",
+      "deployment.reconciliation_created",
+      "deployment.rollback_created",
+    ].includes(action)
+  )
+    return true;
+  return false;
+}
+
+function recentFailureLabels(errors: ReadonlySet<DashboardSource>) {
+  const labels = [
+    errors.has("revisions") ? "Revisions unavailable" : "",
+    errors.has("deployments") ? "Deployments unavailable" : "",
+    errors.has("audit") ? "Audit Log unavailable" : "",
+  ].filter(Boolean);
+  return labels.join(", ");
 }
 
 function haStatus(ha?: HASummary): StatusKind {
@@ -842,7 +975,9 @@ function activeRevisionLabel(
   revisions: ConfigurationRevision[],
 ) {
   const active = revisions.find(
-    (revision) => revision.active || revision.id === cluster.activeRevisionId,
+    (revision) =>
+      revision.clusterId === cluster.id &&
+      (revision.active || revision.id === cluster.activeRevisionId),
   );
   return active ? `#${active.revisionNumber}` : "none";
 }
