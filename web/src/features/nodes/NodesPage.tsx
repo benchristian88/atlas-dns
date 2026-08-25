@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import { EmptyState, ErrorState, Loading } from "../../components/Feedback";
+import { PageHeader } from "../../components/Page";
 import { StatusBadge } from "../../components/StatusBadge";
 import { api, type NodePayload } from "../../lib/api";
 import type {
@@ -17,6 +18,7 @@ import type {
   DriftEvent,
   Node,
 } from "../../lib/types";
+import { nodeDetailPath } from "../../routing/routes";
 
 export function NodesPage({ cluster }: { cluster: Cluster }) {
   const [nodes, setNodes] = useState<Node[]>();
@@ -25,8 +27,6 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
   const [revisions, setRevisions] = useState<ConfigurationRevision[]>([]);
   const [drift, setDrift] = useState<DriftEvent[]>([]);
   const [error, setError] = useState<unknown>();
-  const [maintenanceError, setMaintenanceError] = useState<unknown>();
-  const [maintenanceNodeId, setMaintenanceNodeId] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Node>();
 
@@ -73,25 +73,23 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
 
   return (
     <>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">HA management</p>
-          <h1>Nodes</h1>
-          <p className="muted">
-            Health, version, and controller connectivity for {cluster.name}.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="button"
-          onClick={() => {
-            setShowAdd((value) => !value);
-            setEditing(undefined);
-          }}
-        >
-          {showAdd ? "Cancel" : "Add node"}
-        </button>
-      </header>
+      <PageHeader
+        eyebrow="HA Controller"
+        title="Nodes"
+        description={`Inventory, identity, and controller connectivity for ${cluster.name}. Open a node for operational tests and maintenance.`}
+        primaryAction={
+          <button
+            type="button"
+            className="button"
+            onClick={() => {
+              setShowAdd((value) => !value);
+              setEditing(undefined);
+            }}
+          >
+            {showAdd ? "Cancel" : "Add node"}
+          </button>
+        }
+      />
       {showAdd && (
         <NodeForm
           cluster={cluster}
@@ -116,12 +114,6 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
       )}
       {nodes === undefined && error !== undefined && (
         <ErrorState error={error} retry={() => void load()} />
-      )}
-      {maintenanceError !== undefined && (
-        <ErrorState
-          error={maintenanceError}
-          title="Unable to update maintenance mode"
-        />
       )}
       {nodes?.length === 0 && !showAdd && (
         <EmptyState title="No managed nodes">
@@ -221,7 +213,7 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
                 {nodes.map((node) => (
                   <tr key={node.id}>
                     <td>
-                      <a href={`/ha/nodes/${encodeURIComponent(node.id)}`}>
+                      <a href={nodeDetailPath(node.id)}>
                         <strong>{node.name}</strong>
                       </a>
                       <span className="table-subtitle">{node.baseUrl}</span>
@@ -288,18 +280,12 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
                     </td>
                     <td>
                       <div className="row-actions">
-                        <button
-                          type="button"
+                        <a
                           className="button button--quiet"
-                          disabled={maintenanceNodeId === node.id}
-                          onClick={() => void maintenance(node)}
+                          href={nodeDetailPath(node.id)}
                         >
-                          {maintenanceNodeId === node.id
-                            ? "Updating…"
-                            : node.maintenanceMode
-                              ? "Leave maintenance"
-                              : "Maintenance"}
-                        </button>
+                          Manage
+                        </a>
                         <button
                           type="button"
                           className="button button--quiet"
@@ -309,13 +295,6 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
                           }}
                         >
                           Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="button button--quiet"
-                          onClick={() => void test(node)}
-                        >
-                          Test
                         </button>
                         <button
                           type="button"
@@ -336,16 +315,6 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
     </>
   );
 
-  async function test(node: Node) {
-    try {
-      await api.testNode(node.id);
-      await load();
-    } catch (caught) {
-      setError(caught);
-      await load();
-    }
-  }
-
   async function remove(node: Node) {
     const confirmName = window.prompt(
       `Type ${node.name} to remove this node. Its stored credentials will be destroyed.`,
@@ -356,55 +325,6 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
       await load();
     } catch (caught) {
       setError(caught);
-    }
-  }
-
-  async function maintenance(node: Node) {
-    setMaintenanceError(undefined);
-    setMaintenanceNodeId(node.id);
-    try {
-      if (node.maintenanceMode) {
-        if (
-          !window.confirm(
-            "Run all return-to-service checks? The node stays in maintenance if any required check fails.",
-          )
-        )
-          return;
-        await api.returnToService(node);
-      } else {
-        const preflight = await api.maintenancePreflight(node.id);
-        if (!preflight.allowed) {
-          const blockingCheck = preflight.checks.find(
-            (check) => check.required && check.status === "fail",
-          );
-          throw new Error(
-            blockingCheck?.message ??
-              "Maintenance preflight contains a blocking check.",
-          );
-        }
-        let breakGlass = false;
-        let confirmation = "";
-        if (preflight.breakGlassRequired) {
-          breakGlass = window.confirm(
-            "This leaves no verified healthy DNS node. Use break glass?",
-          );
-          if (!breakGlass) return;
-          confirmation =
-            window.prompt("Type CONTINUE_WITHOUT_DNS_REDUNDANCY") ?? "";
-        } else if (
-          !window.confirm(
-            `Put ${node.name} into maintenance? Automatic deployment and reconciliation will skip it until maintenance is removed.`,
-          )
-        )
-          return;
-        await api.enterMaintenance(node, breakGlass, confirmation);
-      }
-      await load();
-    } catch (caught) {
-      setMaintenanceError(caught);
-      await load();
-    } finally {
-      setMaintenanceNodeId("");
     }
   }
 }

@@ -32,7 +32,9 @@ available, preserving audit attribution and the current authorization boundary.
 
 ## Webhooks and notifications
 
-HA Controller → Notifications owns the single notification-channel subsystem.
+HA Controller → Notifications owns the single permanent notification-channel
+management surface. HA Operations shows delivery/test evidence only and links
+back here.
 
 HA Controller → Notifications also owns the controller-wide exact-event
 policy. Event toggles are grouped by DNS, HA, certificates, node lifecycle, and
@@ -107,7 +109,7 @@ untrusted display data. Back up and preflight before following host instructions
 
 ## System Settings
 
-System → Settings controls session duration, node-health cadence and request
+Administration → System Settings controls session duration, node-health cadence and request
 timeout, Statistics cadence, Query Log collection/cadence/retention, log level,
 and Operational History retention. Changes use optimistic concurrency, are
 audited, and update runtime consumers without restart. Existing sessions retain
@@ -116,11 +118,17 @@ secrets, listener settings, and the public origin remain protected deployment
 configuration. Operational History supports 7/14/30/90/180/365 days (90-day
 default) and an exact-confirmation clear; Audit Log and other durable domains
 are unaffected. Use Operational Status to verify effective worker behavior.
+The page contains settings rather than large navigation-only cards: runtime
+configuration and the release-check control remain, while General, Backup &
+Restore, Operations, and Security cross-link/status cards are omitted. Backup,
+operational diagnostics, and security boundaries remain on their canonical
+pages and documentation.
 
 ## About
 
-System → About shows application version, commit, build time, environment,
-schema compatibility, project attribution, documentation, and licensing status.
+Administration → About presents About Atlas Project first, followed by
+application version, commit, build time, environment, and schema compatibility.
+It also includes project attribution, documentation, and licensing status.
 Use these values in a support report, but never include credentials, backup
 passphrases, Query Log records, or raw node responses.
 

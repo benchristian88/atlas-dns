@@ -131,4 +131,39 @@ describe("NotificationsPage", () => {
       expect(update).toHaveBeenCalledWith(["dns.recovered"], 1),
     );
   });
+
+  it("keeps last-known-good data visible and warns when a later refresh fails", async () => {
+    const channel = {
+      id: "channel-1",
+      clusterId: cluster.id,
+      name: "Operations",
+      channelType: "webhook" as const,
+      enabled: true,
+      destinationSet: true,
+      destinationSummary: "https://hooks.example.test",
+      subscribedCategories: ["dns"],
+      recordVersion: 1,
+      createdAt: "2026-08-24T06:00:00Z",
+      updatedAt: "2026-08-24T07:00:00Z",
+    } as NotificationChannel;
+    vi.spyOn(api, "notificationChannels")
+      .mockResolvedValueOnce({ items: [channel] })
+      .mockRejectedValueOnce(new Error("refresh unavailable"));
+    vi.spyOn(api, "updateNotificationChannel").mockResolvedValue({
+      ...channel,
+      enabled: false,
+      recordVersion: 2,
+    });
+
+    render(<NotificationsPage cluster={cluster} />);
+    expect(await screen.findByText("Operations")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Disable" }));
+
+    expect(
+      await screen.findByText("Notifications refresh failed"),
+    ).toBeTruthy();
+    expect(screen.getByText("Operations")).toBeTruthy();
+    expect(screen.getByText(/may be stale/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
 });

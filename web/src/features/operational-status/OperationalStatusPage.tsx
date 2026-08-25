@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   DataTable,
   type DataTableColumn,
@@ -7,7 +7,6 @@ import {
 } from "../../components/DataDisplay";
 import { Banner, ErrorState, Loading } from "../../components/Feedback";
 import { PageHeader } from "../../components/Page";
-import { SettingsGroup } from "../../components/Settings";
 import { StatusBadge, type StatusKind } from "../../components/StatusBadge";
 import { api } from "../../lib/api";
 import type {
@@ -42,9 +41,9 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
     return <ErrorState error={error} retry={() => void load()} />;
 
   return (
-    <>
+    <div className="operational-status-page">
       <PageHeader
-        eyebrow="Administration"
+        eyebrow="Monitoring"
         title="Operational Status"
         description="Health of the controller, collectors, storage, and background work."
         primaryAction={<StatusBadge status={badge(status.summary.state)} />}
@@ -93,38 +92,40 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
         />
       </section>
 
-      <SettingsGroup
-        title="Core Services"
-        description="Controller API and PostgreSQL readiness at the latest operational snapshot."
-        bodySpacing="padded"
-      >
-        <SummaryTileGrid
-          label="Core service status"
-          items={[
-            {
-              id: "api",
-              label: "API",
-              value: <StatusBadge status={badge(status.api)} />,
-            },
-            {
-              id: "postgresql",
-              label: "PostgreSQL",
-              value: <StatusBadge status={badge(status.database.state)} />,
-              detail: `${status.database.pingLatencyMs} ms ping`,
-            },
-            {
-              id: "schema-migration",
-              label: "Schema migration",
-              value: `Version ${status.database.schemaVersion}`,
-            },
-            {
-              id: "connection-pool",
-              label: "Connection pool",
-              value: `${status.database.poolAcquired} acquired / ${status.database.poolMax} maximum`,
-            },
-          ]}
+      <section className="section-block operational-section">
+        <OperationalSectionHeading
+          title="Core Services"
+          description="Controller API and PostgreSQL readiness."
         />
-      </SettingsGroup>
+        <div className="card operational-core-panel">
+          <SummaryTileGrid
+            label="Core service status"
+            items={[
+              {
+                id: "api",
+                label: "API",
+                value: <StatusBadge status={badge(status.api)} />,
+              },
+              {
+                id: "postgresql",
+                label: "PostgreSQL",
+                value: <StatusBadge status={badge(status.database.state)} />,
+                detail: `${status.database.pingLatencyMs} ms ping`,
+              },
+              {
+                id: "schema-migration",
+                label: "Schema migration",
+                value: `Version ${status.database.schemaVersion}`,
+              },
+              {
+                id: "connection-pool",
+                label: "Connection pool",
+                value: `${status.database.poolAcquired} acquired / ${status.database.poolMax} maximum`,
+              },
+            ]}
+          />
+        </div>
+      </section>
 
       <CollectionSection
         title="DNS service health"
@@ -144,9 +145,7 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
       />
 
       <section className="section-block">
-        <div className="section-heading">
-          <h2>Background workers</h2>
-        </div>
+        <OperationalSectionHeading title="Background workers" />
         <DataTable
           caption="Background worker health"
           rows={status.workers}
@@ -156,10 +155,10 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
       </section>
 
       <section className="section-block">
-        <div className="section-heading">
-          <h2>Storage and retention</h2>
-          <small>Estimates from PostgreSQL metadata</small>
-        </div>
+        <OperationalSectionHeading
+          title="Storage and retention"
+          aside="PostgreSQL estimates"
+        />
         <div className="storage-grid">
           {status.database.datasets.map((dataset) => (
             <article className="card" key={dataset.name}>
@@ -196,7 +195,7 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
         Generated {formatTime(status.generatedAt)}. Error codes are safe
         summaries; detailed diagnostics remain in controller logs.
       </p>
-    </>
+    </div>
   );
 }
 
@@ -209,19 +208,19 @@ function CollectionSection({
 }) {
   return (
     <section className="section-block">
-      <div className="section-heading">
-        <div>
-          <h2>{title}</h2>
-          <small>
+      <OperationalSectionHeading
+        title={title}
+        description={
+          <>
             {collection.currentNodes} / {collection.expectedNodes} current ·{" "}
             {collection.coveragePercent.toLocaleString(undefined, {
               maximumFractionDigits: 1,
             })}
             % coverage
-          </small>
-        </div>
-        <StatusBadge status={badge(collection.state)} />
-      </div>
+          </>
+        }
+        aside={<StatusBadge status={badge(collection.state)} />}
+      />
       <DataTable
         caption={`${title} per node`}
         rows={collection.nodes}
@@ -229,6 +228,28 @@ function CollectionSection({
         columns={nodeColumns}
       />
     </section>
+  );
+}
+
+function OperationalSectionHeading({
+  title,
+  description,
+  aside,
+}: {
+  title: string;
+  description?: ReactNode;
+  aside?: ReactNode;
+}) {
+  return (
+    <header className="operational-section-heading">
+      <div>
+        <h2>{title}</h2>
+        {description !== undefined && <p>{description}</p>}
+      </div>
+      {aside !== undefined && (
+        <div className="operational-section-heading__aside">{aside}</div>
+      )}
+    </header>
   );
 }
 

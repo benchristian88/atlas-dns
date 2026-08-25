@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../lib/api";
@@ -196,6 +202,52 @@ describe("HA Controller page responsibilities", () => {
         screen.getByText("Cluster has no open drift incidents"),
       ).toBeTruthy(),
     );
+  });
+
+  it("links drift evidence to exact Node Detail without owning maintenance", async () => {
+    vi.spyOn(api, "driftEvents").mockResolvedValue({
+      items: [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          clusterId: cluster.id,
+          nodeId: node.id,
+          desiredRevisionId: node.appliedRevisionId ?? "",
+          desiredHash: "desired-hash",
+          observedSnapshotId: "55555555-5555-4555-8555-555555555555",
+          observedHash: "observed-hash",
+          fingerprint: "fingerprint",
+          status: "open",
+          policy: "manual",
+          reconciliationStatus: "pending",
+          differences: [],
+          detectedAt: "2026-08-03T00:00:00Z",
+          lastSeenAt: "2026-08-03T00:05:00Z",
+        },
+      ],
+    });
+    vi.spyOn(api, "nodes").mockResolvedValue({
+      items: [node],
+      refreshedAt: "2026-08-03T00:00:00Z",
+      staleAfterSeconds: 60,
+    });
+    mockInventory();
+    const preflight = vi.spyOn(api, "maintenancePreflight");
+    const enter = vi.spyOn(api, "enterMaintenance");
+    const leave = vi.spyOn(api, "returnToService");
+
+    render(<DriftPage cluster={cluster} />);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "View drift incident details for Primary DNS",
+      }),
+    );
+    expect(
+      screen.getByRole("link", { name: "View node" }).getAttribute("href"),
+    ).toBe(`/ha/nodes/${node.id}`);
+    expect(screen.queryByRole("button", { name: /maintenance/i })).toBeNull();
+    expect(preflight).not.toHaveBeenCalled();
+    expect(enter).not.toHaveBeenCalled();
+    expect(leave).not.toHaveBeenCalled();
   });
 
   it("keeps the separated HA task pages structurally accessible", async () => {

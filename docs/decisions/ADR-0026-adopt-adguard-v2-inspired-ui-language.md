@@ -105,10 +105,13 @@ Save Draft
 
 9. Keep the five HA Controller destinations as distinct task surfaces:
 
-- Nodes owns managed infrastructure, health, compatibility, and availability.
+- Nodes owns managed infrastructure, health, compatibility, availability, and
+  candidate registration/editing. Exact Node Detail owns existing-node tests
+  and maintenance decisions.
 - Configuration Control owns the mutable-draft approval, validation, publication, and advanced adoption workflow.
 - Deployments owns durable execution events and per-node verification results.
-- Drift owns current convergence incidents, policy, and restore/adopt/maintenance decisions.
+- Drift owns current convergence incidents, policy, restore/adopt decisions,
+  and read-only maintenance context; maintenance mutation links to Node Detail.
 - Change History owns immutable revision history, semantic revision comparison, and deployment-based rollback.
 
 Shared comparison and status primitives may be reused, but canonical navigation

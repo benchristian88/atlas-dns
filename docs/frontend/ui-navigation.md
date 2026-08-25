@@ -81,3 +81,18 @@ continuing divergence belongs to `/ha/drift`.
 
 Historical route migration evidence remains in the
 [pre-1.0 frontend implementation archive](../archive/pre-1.0/frontend/implementation/).
+
+## Operational action ownership
+
+- **Nodes** owns inventory, identity, create/edit/delete, and candidate
+  validation. Existing-node tests and maintenance decisions link to exact Node
+  Detail routes.
+- **Node Detail** owns connection tests, DNS probes, maintenance entry/return,
+  lifecycle settings, and guided upgrade decisions for one node.
+- **Drift** owns divergence evidence, restore/adopt, and reconciliation policy.
+  Maintenance remains visible context but is changed only from Node Detail.
+- **Notifications** is the sole permanent webhook and event-policy management
+  surface. HA Operations retains delivery/test/transition evidence and links to
+  Notifications without recreating controls.
+
+Duplicate read-only status is intentional; duplicate mutable management is not.

@@ -27,7 +27,7 @@ const notificationCategories = [
 export function NotificationsPage({ cluster }: { cluster: Cluster }) {
   const [channels, setChannels] = useState<NotificationChannel[]>();
   const [policy, setPolicy] = useState<NotificationPolicy>();
-  const [error, setError] = useState<unknown>();
+  const [refreshError, setRefreshError] = useState<unknown>();
   const [showEditor, setShowEditor] = useState(false);
   const [editing, setEditing] = useState<NotificationChannel>();
   const [name, setName] = useState("");
@@ -52,9 +52,9 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
       ]);
       setChannels(loadedChannels.items);
       setPolicy(loadedPolicy);
-      setError(undefined);
+      setRefreshError(undefined);
     } catch (caught) {
-      setError(caught);
+      setRefreshError(caught);
     }
   }, [cluster.id]);
 
@@ -62,10 +62,13 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
     void load();
   }, [load]);
 
-  if ((channels === undefined || policy === undefined) && error === undefined)
+  if (
+    (channels === undefined || policy === undefined) &&
+    refreshError === undefined
+  )
     return <Loading label="Loading notifications…" />;
   if (channels === undefined || policy === undefined)
-    return <ErrorState error={error} retry={() => void load()} />;
+    return <ErrorState error={refreshError} retry={() => void load()} />;
 
   return (
     <>
@@ -90,6 +93,24 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
         AdGuard Home configuration, and expected DNS failures during maintenance
         are suppressed.
       </Banner>
+      {refreshError !== undefined && (
+        <Banner
+          tone="warning"
+          title="Notifications refresh failed"
+          actions={
+            <button
+              className="button button--secondary"
+              type="button"
+              onClick={() => void load()}
+            >
+              Try again
+            </button>
+          }
+        >
+          The last successful notification policy and channel list remain
+          visible and may be stale.
+        </Banner>
+      )}
       {feedback && (
         <Banner tone={feedback.tone} title={feedback.title}>
           {feedback.message}
@@ -444,9 +465,16 @@ export function NotificationsPage({ cluster }: { cluster: Cluster }) {
         title: "Notification policy saved",
         message: "New operational events will use the updated policy.",
       });
-      setError(undefined);
+      setRefreshError(undefined);
     } catch (caught) {
-      setError(caught);
+      setFeedback({
+        tone: "warning",
+        title: "Notification policy save failed",
+        message:
+          caught instanceof Error
+            ? caught.message
+            : "The notification policy could not be saved.",
+      });
     } finally {
       setBusy("");
     }

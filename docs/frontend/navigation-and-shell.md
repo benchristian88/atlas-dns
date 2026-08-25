@@ -184,3 +184,10 @@ error state. Supplementary source failures retain available dashboard data and
 show an explicit partial-source warning. Unavailable statistics remain an em
 dash or unavailable panel rather than zero. Audit summaries use safe action and
 resource labels only; metadata and secrets are never rendered.
+
+HA Operations applies the same partial-source principle to HA summary, node,
+certificate, version, upgrade, and Operational History reads. A failed source
+gets a scoped warning and retry without blanking successful sections. Retained
+last-good data is labelled stale. Notifications likewise keeps useful
+last-known-good policy/channel data visible after a refresh failure with an
+announced stale warning.

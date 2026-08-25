@@ -15,6 +15,7 @@ import type {
   QueryEventPage,
   QueryEventStatus,
 } from "../../lib/types";
+import { nodeDetailPath } from "../../routing/routes";
 import { useScope } from "../../shell/ScopeContext";
 
 const PAGE_SIZE = 50;
@@ -177,7 +178,7 @@ export function QueryLogPage({ cluster }: { cluster: Cluster }) {
   return (
     <PageContainer size="wide" className="query-log-page">
       <PageHeader
-        eyebrow={`Observability · ${scopeName}`}
+        eyebrow="Monitoring"
         title="Query Log"
         description="Controller-collected, node-attributed DNS query events. Central retention is independent of each node's query-log policy."
         primaryAction={
@@ -456,10 +457,7 @@ function QueryDetail({
             Find managed client
           </a>
         )}
-        <a
-          className="button button--quiet"
-          href={`/ha/nodes?nodeId=${encodeURIComponent(event.nodeId)}`}
-        >
+        <a className="button button--quiet" href={nodeDetailPath(event.nodeId)}>
           View node
         </a>
         <a

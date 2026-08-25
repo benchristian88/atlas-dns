@@ -30,4 +30,16 @@ describe("responsive shell contract", () => {
     expect(css).toContain(".onboarding-source { grid-template-columns: auto minmax(0, 1fr);");
     expect(css).toContain(".onboarding-page { display: grid;");
   });
+
+  it("keeps compact Operational Status headings responsive and theme-token based", () => {
+    expect(css).toMatch(
+      /\.operational-section-heading \{[^}]*flex-wrap: wrap[^}]*border-bottom: 1px solid var\(--atlas-border\)/,
+    );
+    expect(css).toContain(
+      ".operational-section-heading > div:first-child { min-width: min(100%, 280px);",
+    );
+    expect(css).toContain(
+      ".operational-section-heading__aside { flex: 0 0 auto; color: var(--atlas-text-muted);",
+    );
+  });
 });

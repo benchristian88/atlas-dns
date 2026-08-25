@@ -22,7 +22,7 @@ export function AboutPage() {
   return (
     <PageContainer size="wide">
       <PageHeader
-        eyebrow="System"
+        eyebrow="Administration"
         title="About Atlas DNS Controller"
         description="Build, compatibility, attribution, and project information."
       />
@@ -30,25 +30,7 @@ export function AboutPage() {
         <ErrorState error={error} retry={() => void load()} />
       )}
       {!info && !error && <Loading label="Loading build information…" />}
-      {info && (
-        <SettingsGroup title="Build">
-          <SettingRow title="Product" control="Atlas DNS Controller" />
-          <SettingRow title="Version" control={<code>{info.version}</code>} />
-          <SettingRow
-            title="Build / commit"
-            control={<code>{info.commit}</code>}
-          />
-          <SettingRow
-            title="Build date"
-            control={<span>{info.builtAt}</span>}
-          />
-          <SettingRow
-            title="Database schema"
-            control={<code>{info.databaseSchemaVersion}</code>}
-          />
-        </SettingsGroup>
-      )}
-      <SettingsGroup title="Project">
+      <SettingsGroup title="About Atlas Project">
         <div className="settings-group-content about-project">
           <p>
             Atlas DNS Controller is an independent project. It is not AdGuard
@@ -87,6 +69,24 @@ export function AboutPage() {
           </p>
         </div>
       </SettingsGroup>
+      {info && (
+        <SettingsGroup title="Build">
+          <SettingRow title="Product" control="Atlas DNS Controller" />
+          <SettingRow title="Version" control={<code>{info.version}</code>} />
+          <SettingRow
+            title="Build / commit"
+            control={<code>{info.commit}</code>}
+          />
+          <SettingRow
+            title="Build date"
+            control={<span>{info.builtAt}</span>}
+          />
+          <SettingRow
+            title="Database schema"
+            control={<code>{info.databaseSchemaVersion}</code>}
+          />
+        </SettingsGroup>
+      )}
     </PageContainer>
   );
 }

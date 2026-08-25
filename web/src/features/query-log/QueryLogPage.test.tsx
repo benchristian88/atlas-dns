@@ -87,6 +87,12 @@ describe("QueryLogPage", () => {
     );
     expect(screen.getByText("FilteredBlackList")).toBeTruthy();
     expect(
+      screen.getByRole("link", { name: "View node" }).getAttribute("href"),
+    ).toBe(`/ha/nodes/${node.id}`);
+    expect(
+      screen.getByText("Monitoring", { selector: ".eyebrow" }),
+    ).toBeTruthy();
+    expect(
       screen.getByRole("link", { name: "Block domain" }).getAttribute("href"),
     ).toContain("/filters/custom-rules?action=block&domain=ads.example.org");
     expect(screen.getByText(/never publish, deploy/i)).toBeTruthy();

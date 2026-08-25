@@ -218,3 +218,7 @@ export function preserveRouteState(
 ): string {
   return `${pathname}${search}${hash}`;
 }
+
+export function nodeDetailPath(nodeId: string): string {
+  return `/ha/nodes/${encodeURIComponent(nodeId)}`;
+}
