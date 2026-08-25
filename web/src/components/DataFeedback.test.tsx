@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ConvergenceSummary,
   DataTable,
+  HealthSummaryCard,
   MetricCard,
   NodeBadge,
   Pagination,
@@ -125,6 +126,23 @@ describe("data primitives", () => {
     expect(card?.querySelector("span")?.textContent).toBe("DNS serving");
     expect(card?.querySelector("strong")?.textContent).toBe("2 / 2");
     expect(card?.querySelector("small")?.textContent).toBe("All managed nodes");
+  });
+
+  it("renders compact health summaries with icon, status, and detail", () => {
+    render(
+      <HealthSummaryCard
+        icon="dns"
+        label="DNS serving"
+        value="2 / 2"
+        status="healthy"
+        detail="nodes serving DNS"
+      />,
+    );
+    const card = screen.getByRole("article", { name: "DNS serving" });
+    expect(card.classList.contains("health-summary-card")).toBe(true);
+    expect(card.textContent).toContain("2 / 2");
+    expect(card.textContent).toContain("Healthy");
+    expect(card.textContent).toContain("nodes serving DNS");
   });
 
   it("renders structured differences, progress, and partial success", () => {

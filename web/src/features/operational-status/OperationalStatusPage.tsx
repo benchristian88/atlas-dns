@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   DataTable,
   type DataTableColumn,
-  MetricCard,
+  HealthSummaryCard,
   SummaryTileGrid,
 } from "../../components/DataDisplay";
 import { Banner, ErrorState, Loading } from "../../components/Feedback";
 import { PageHeader } from "../../components/Page";
-import { SettingsGroup } from "../../components/Settings";
 import { StatusBadge, type StatusKind } from "../../components/StatusBadge";
 import { api } from "../../lib/api";
 import type {
@@ -42,9 +41,9 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
     return <ErrorState error={error} retry={() => void load()} />;
 
   return (
-    <>
+    <div className="operational-status-page">
       <PageHeader
-        eyebrow="Administration"
+        eyebrow="Monitoring"
         title="Operational Status"
         description="Health of the controller, collectors, storage, and background work."
         primaryAction={<StatusBadge status={badge(status.summary.state)} />}
@@ -60,71 +59,92 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
         </Banner>
       )}
 
-      <section className="metrics" aria-label="Overall controller health">
-        <MetricCard
+      <section
+        className="health-summary-grid"
+        aria-label="Overall controller health"
+      >
+        <HealthSummaryCard
+          icon="system"
           label="Controller"
           value={status.summary.state.replaceAll("_", " ")}
+          status={badge(status.summary.state)}
+          detail={status.summary.message}
           valueClassName="operational-value"
         />
-        <MetricCard
+        <HealthSummaryCard
+          icon="ha"
           label="HA redundancy"
-          value={status.ha.state.replaceAll("_", " ")}
-          valueClassName="operational-value"
+          value={`${status.ha.servingDnsNodes} / ${status.ha.totalNodes}`}
+          status={haBadge(status.ha.state)}
+          detail="nodes serving DNS"
         />
-        <MetricCard
+        <HealthSummaryCard
+          icon="dns"
           label="DNS service"
-          value={status.dnsService.state.replaceAll("_", " ")}
-          valueClassName="operational-value"
+          value={`${status.dnsService.currentNodes} / ${status.dnsService.expectedNodes}`}
+          status={badge(status.dnsService.state)}
+          detail="nodes current"
         />
-        <MetricCard
+        <HealthSummaryCard
+          icon="nodes"
           label="Nodes"
-          value={`${status.summary.healthyNodes} / ${status.summary.expectedNodes} healthy`}
-          valueClassName="operational-value"
+          value={`${status.summary.healthyNodes} / ${status.summary.expectedNodes}`}
+          status={coverageBadge(
+            status.summary.healthyNodes,
+            status.summary.expectedNodes,
+          )}
+          detail="healthy APIs"
         />
-        <MetricCard
+        <HealthSummaryCard
+          icon="statistics"
           label="Statistics"
-          value={status.statistics.state.replaceAll("_", " ")}
-          valueClassName="operational-value"
+          value={`${status.statistics.currentNodes} / ${status.statistics.expectedNodes}`}
+          status={badge(status.statistics.state)}
+          detail="collectors current"
         />
-        <MetricCard
+        <HealthSummaryCard
+          icon="activity"
           label="Query Log"
-          value={status.queryLog.state.replaceAll("_", " ")}
-          valueClassName="operational-value"
+          value={`${status.queryLog.currentNodes} / ${status.queryLog.expectedNodes}`}
+          status={badge(status.queryLog.state)}
+          detail="collectors current"
         />
       </section>
 
-      <SettingsGroup
-        title="Core Services"
-        description="Controller API and PostgreSQL readiness at the latest operational snapshot."
-        bodySpacing="padded"
-      >
-        <SummaryTileGrid
-          label="Core service status"
-          items={[
-            {
-              id: "api",
-              label: "API",
-              value: <StatusBadge status={badge(status.api)} />,
-            },
-            {
-              id: "postgresql",
-              label: "PostgreSQL",
-              value: <StatusBadge status={badge(status.database.state)} />,
-              detail: `${status.database.pingLatencyMs} ms ping`,
-            },
-            {
-              id: "schema-migration",
-              label: "Schema migration",
-              value: `Version ${status.database.schemaVersion}`,
-            },
-            {
-              id: "connection-pool",
-              label: "Connection pool",
-              value: `${status.database.poolAcquired} acquired / ${status.database.poolMax} maximum`,
-            },
-          ]}
+      <section className="section-block operational-section">
+        <OperationalSectionHeading
+          title="Core Services"
+          description="Controller API and PostgreSQL readiness."
         />
-      </SettingsGroup>
+        <div className="card operational-core-panel">
+          <SummaryTileGrid
+            label="Core service status"
+            items={[
+              {
+                id: "api",
+                label: "API",
+                value: <StatusBadge status={badge(status.api)} />,
+              },
+              {
+                id: "postgresql",
+                label: "PostgreSQL",
+                value: <StatusBadge status={badge(status.database.state)} />,
+                detail: `${status.database.pingLatencyMs} ms ping`,
+              },
+              {
+                id: "schema-migration",
+                label: "Schema migration",
+                value: `Version ${status.database.schemaVersion}`,
+              },
+              {
+                id: "connection-pool",
+                label: "Connection pool",
+                value: `${status.database.poolAcquired} acquired / ${status.database.poolMax} maximum`,
+              },
+            ]}
+          />
+        </div>
+      </section>
 
       <CollectionSection
         title="DNS service health"
@@ -144,9 +164,7 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
       />
 
       <section className="section-block">
-        <div className="section-heading">
-          <h2>Background workers</h2>
-        </div>
+        <OperationalSectionHeading title="Background workers" />
         <DataTable
           caption="Background worker health"
           rows={status.workers}
@@ -156,10 +174,10 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
       </section>
 
       <section className="section-block">
-        <div className="section-heading">
-          <h2>Storage and retention</h2>
-          <small>Estimates from PostgreSQL metadata</small>
-        </div>
+        <OperationalSectionHeading
+          title="Storage and retention"
+          aside="PostgreSQL estimates"
+        />
         <div className="storage-grid">
           {status.database.datasets.map((dataset) => (
             <article className="card" key={dataset.name}>
@@ -196,7 +214,7 @@ export function OperationalStatusPage({ cluster }: { cluster: Cluster }) {
         Generated {formatTime(status.generatedAt)}. Error codes are safe
         summaries; detailed diagnostics remain in controller logs.
       </p>
-    </>
+    </div>
   );
 }
 
@@ -209,19 +227,19 @@ function CollectionSection({
 }) {
   return (
     <section className="section-block">
-      <div className="section-heading">
-        <div>
-          <h2>{title}</h2>
-          <small>
+      <OperationalSectionHeading
+        title={title}
+        description={
+          <>
             {collection.currentNodes} / {collection.expectedNodes} current ·{" "}
             {collection.coveragePercent.toLocaleString(undefined, {
               maximumFractionDigits: 1,
             })}
             % coverage
-          </small>
-        </div>
-        <StatusBadge status={badge(collection.state)} />
-      </div>
+          </>
+        }
+        aside={<StatusBadge status={badge(collection.state)} />}
+      />
       <DataTable
         caption={`${title} per node`}
         rows={collection.nodes}
@@ -229,6 +247,28 @@ function CollectionSection({
         columns={nodeColumns}
       />
     </section>
+  );
+}
+
+function OperationalSectionHeading({
+  title,
+  description,
+  aside,
+}: {
+  title: string;
+  description?: ReactNode;
+  aside?: ReactNode;
+}) {
+  return (
+    <header className="operational-section-heading">
+      <div>
+        <h2>{title}</h2>
+        {description !== undefined && <p>{description}</p>}
+      </div>
+      {aside !== undefined && (
+        <div className="operational-section-heading__aside">{aside}</div>
+      )}
+    </header>
   );
 }
 
@@ -321,6 +361,14 @@ const workerColumns: readonly DataTableColumn<
 
 function badge(state: OperationalStatus["api"]): StatusKind {
   return state;
+}
+function haBadge(state: OperationalStatus["ha"]["state"]): StatusKind {
+  return state === "at_risk" ? "warning" : state;
+}
+function coverageBadge(current: number, expected: number): StatusKind {
+  if (expected === 0) return "unknown";
+  if (current >= expected) return "healthy";
+  return current === 0 ? "failed" : "degraded";
 }
 function formatNumber(value: number) {
   return new Intl.NumberFormat().format(value);

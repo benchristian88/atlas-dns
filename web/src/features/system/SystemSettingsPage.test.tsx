@@ -147,6 +147,19 @@ describe("SystemSettingsPage", () => {
     expect(
       screen.getAllByRole("button", { name: "Save runtime settings" }),
     ).toHaveLength(2);
+    expect(screen.getByRole("heading", { name: "Updates" })).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "Enabled" })).toBeTruthy();
+    for (const removed of [
+      "General",
+      "Backup & Restore",
+      "Operations",
+      "Security",
+    ]) {
+      expect(screen.queryByRole("heading", { name: removed })).toBeNull();
+    }
+    expect(
+      screen.getByText("Administration", { selector: ".eyebrow" }),
+    ).toBeTruthy();
   });
 });
 

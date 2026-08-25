@@ -70,9 +70,9 @@ export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
   return (
     <PageContainer size="wide">
       <PageHeader
-        eyebrow="System"
+        eyebrow="Administration"
         title="System Settings"
-        description="Controller-wide data, recovery, update, operations, and security boundaries."
+        description="Configure how Atlas itself runs, collects data, retains operational evidence, and checks for releases."
       />
       {error !== undefined && (
         <ErrorState error={error} retry={() => void load()} />
@@ -80,14 +80,6 @@ export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
       {!settings && error === undefined && (
         <Loading label="Loading system settings…" />
       )}
-      <SettingsGroup title="General">
-        <SettingRow title="Product name" control="Atlas DNS Controller" />
-        <SettingRow
-          title="Configuration source"
-          description="Operational runtime policy is stored in PostgreSQL. Bootstrap, networking, and secrets remain external."
-          control="Database + bootstrap environment"
-        />
-      </SettingsGroup>
       <SettingsGroup
         title="Runtime configuration"
         description="These controller-wide settings are saved together, audited, and applied without a restart where supported."
@@ -356,13 +348,6 @@ export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
           </button>
         </div>
       </SettingsGroup>
-      <SettingsGroup title="Backup & Restore">
-        <p className="settings-group-content settings-group-action">
-          <a className="button button--secondary" href="/system/backups">
-            Open Backup & Restore
-          </a>
-        </p>
-      </SettingsGroup>
       <SettingsGroup title="Updates">
         <SettingRow
           title="Stable release checks"
@@ -383,21 +368,6 @@ export function SystemSettingsPage({ cluster }: { cluster?: Cluster }) {
           <a className="button button--secondary" href="/system/updates">
             Open Updates
           </a>
-        </p>
-      </SettingsGroup>
-      <SettingsGroup title="Operations">
-        <p className="settings-group-content settings-group-copy">
-          Operational thresholds and worker evidence are available from{" "}
-          <a href="/system/operational-status">Operational Status</a>. Node
-          lifecycle settings remain node-specific.
-        </p>
-      </SettingsGroup>
-      <SettingsGroup title="Security">
-        <p className="settings-group-content settings-group-copy">
-          Secure HTTP-only sessions, CSRF protection, Argon2id passwords,
-          AES-256-GCM credential envelopes, passphrase-encrypted backups, and
-          server-side administrator enforcement are active architecture
-          boundaries.
         </p>
       </SettingsGroup>
     </PageContainer>

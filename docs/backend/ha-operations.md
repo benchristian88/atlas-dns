@@ -60,12 +60,13 @@ certificate SAN list. HTTPS management transport and its expected hostname are
 covered by the separate API check. Private keys, certificate chains, paths, and
 raw node responses remain outside validation messages and logs.
 
-The Nodes and Node Detail surfaces both use this canonical lifecycle rather
-than clearing a browser-local flag. Successful transitions are persisted and
-audited before the UI reloads canonical node state. Failed return validation is
-audited, remains visible to the operator, and leaves the node in maintenance.
-Repeating an already-completed enter or return request is an idempotent success
-and does not create another transition event.
+Node Detail is the sole existing-node UI surface for this canonical lifecycle;
+Nodes and Drift retain read-only maintenance summaries and exact Node Detail
+links. Successful transitions are persisted and audited before the UI reloads
+canonical node state. Failed return validation is audited, remains visible to
+the operator, and leaves the node in maintenance. Repeating an already-completed
+enter or return request is an idempotent success and does not create another
+transition event.
 
 ## Certificate and version awareness
 
@@ -133,7 +134,8 @@ channel enablement, channel category subscription, and encrypted destination
 configuration are independent gates. Policy-disabled delivery rows are retained
 as `suppressed`, not failures.
 
-Administration supports add, edit, enable/disable, delete, and test:
+HA Controller → Notifications supports add, edit, enable/disable, delete, and
+test and is the sole permanent policy/channel management surface:
 
 - List/read returns name, safe scheme/host summary, explicit enabled state, the
   currently fixed HA-transition subscription, timestamps, and safe delivery
@@ -186,3 +188,10 @@ bodies and destination path/query never enter history. The authenticated list
 uses 50-row (maximum 100) opaque keyset pages ordered by
 `(occurred_at DESC, id DESC)`. Delivery creation time is the stable ordering
 timestamp; completion remains supplemental evidence.
+
+The HA Operations UI reads HA summary, node inventory, certificates, versions,
+guided upgrades, and Operational History as independent sources. One failure
+does not blank successful panels. Each failed source receives scoped retryable
+feedback; retained last-good values are labelled stale and missing values are
+not converted to zero or healthy state. HA Operations links to Notifications
+and does not load or mutate notification channel configuration.

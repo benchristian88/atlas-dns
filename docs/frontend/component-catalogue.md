@@ -125,6 +125,7 @@ documented in `theme-brand-and-pwa.md`.
 
 ## HA display
 
+- `HealthSummaryCard`
 - `MetricCard`
 - `SummaryTileGrid`
 - `StatusBadge`
@@ -135,10 +136,16 @@ documented in `theme-brand-and-pwa.md`.
 - `ProgressTimeline`
 - `PartialSuccessPanel`
 
-`MetricCard` is the single summary/stat tile for Dashboard, Statistics,
-Operational Status, HA Operations, and Node Lifecycle. It owns the primary
-surface, label/value gap, optional supporting detail, and responsive wrapping;
-feature pages provide content only.
+`HealthSummaryCard` is the dense icon/value/status/detail tile used by
+Operational Status, HA Operations, Nodes, and Node Detail. Its six-, five-, and
+four-card grid variants share three-, two-, and one-column responsive fallbacks.
+Dashboard uses the same visual anatomy with linked cards. Each feature supplies
+its own evidence-specific status rather than inheriting an unrelated overall
+health state.
+
+`MetricCard` remains the general-purpose statistic tile for Statistics. It owns
+the primary surface, label/value gap, optional supporting detail, and responsive
+wrapping; feature pages provide content only.
 
 `SummaryTileGrid` is the shared definition-list treatment for two-by-two inset
 status/value summaries. Dashboard controller/DNS summaries and Operational

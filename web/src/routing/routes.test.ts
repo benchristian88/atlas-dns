@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CANONICAL_PATHS,
   LEGACY_REDIRECTS,
+  nodeDetailPath,
   preserveRouteState,
   resolveRoute,
   routePageWidth,
@@ -63,6 +64,12 @@ describe("canonical route safety", () => {
   it("renders an explicit not-found result for unknown paths", () => {
     expect(resolveRoute("/mistyped-dashboard")).toEqual({ kind: "not-found" });
     expect(resolveRoute("/settings/not-real")).toEqual({ kind: "not-found" });
+  });
+
+  it("builds an encoded exact Node Detail path", () => {
+    expect(nodeDetailPath("node/id with spaces")).toBe(
+      "/ha/nodes/node%2Fid%20with%20spaces",
+    );
   });
 
   it("gives every canonical application route the dashboard width", () => {

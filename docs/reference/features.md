@@ -27,6 +27,9 @@ records.
   DNS service, desired-state convergence, and collector health.
 - Coordinates maintenance entry/return with remaining-capacity, active DHCP,
   deployment, drift, TLS, version, and collection checks.
+- Keeps existing-node tests and maintenance decisions on exact Node Detail;
+  Nodes remains inventory/create/edit/delete/candidate validation and Drift
+  remains divergence/reconciliation evidence.
 - Detects direct managed changes as drift and supports Manual, Alert, and
   Enforce reconciliation policies.
 - Provides node lifecycle detail and cluster HA event history without carrying
@@ -59,6 +62,9 @@ records.
   version, maintenance, and upgrade categories. A separate grouped exact-event
   policy controls meaningful transitions without turning suppressed events into
   delivery failures.
+- Keeps notification policy/channel mutation solely on Notifications while HA
+  Operations preserves delivery/test evidence and renders independent source
+  failures without blanking healthy panels.
 
 ## Administration
 

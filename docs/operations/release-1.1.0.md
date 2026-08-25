@@ -33,3 +33,18 @@ events/deliveries, Statistics, Query Log events, DNS probes, and sessions. Full
 Backup includes retained operational data. Audit Log, revisions, deployments,
 drift, and upgrade records are unaffected by Operational History retention or
 the clear action.
+
+The v1.1 administration UI now enforces canonical action ownership. Notifications
+is the only webhook/event-policy management page; HA Operations retains delivery
+and webhook-test evidence with partial-source warnings. Node Detail owns
+existing-node connection tests and maintenance entry/return, while Nodes keeps
+inventory/create/edit/delete/candidate validation and Drift keeps
+restore/adopt/reconciliation. Query Log and Drift now link to exact Node Detail
+routes.
+
+Operational Status is labelled Monitoring and uses compact accessible section
+headers plus a Dashboard-style responsive health summary. HA Operations, Nodes,
+and Node Detail use the same compact health-card anatomy for their top-level
+evidence. System Settings removes non-setting General, Backup & Restore,
+Operations, and Security cards while retaining every runtime setting and the
+release-check control. About Atlas Project now precedes technical build data.

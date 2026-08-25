@@ -30,4 +30,31 @@ describe("responsive shell contract", () => {
     expect(css).toContain(".onboarding-source { grid-template-columns: auto minmax(0, 1fr);");
     expect(css).toContain(".onboarding-page { display: grid;");
   });
+
+  it("keeps compact health summaries responsive and theme-token based", () => {
+    expect(css).toContain(
+      ".health-summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));",
+    );
+    expect(css).toContain(
+      ".health-summary-grid--five { grid-template-columns: repeat(5, minmax(0, 1fr)); }",
+    );
+    expect(css).toContain(
+      ".health-summary-grid--four { grid-template-columns: repeat(4, minmax(0, 1fr)); }",
+    );
+    expect(css).toContain(
+      ".dashboard-health-grid, .health-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }",
+    );
+    expect(css).toContain(
+      ".dashboard-health-grid, .health-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }",
+    );
+    expect(css).toMatch(
+      /\.operational-section-heading \{[^}]*flex-wrap: wrap[^}]*border-bottom: 1px solid var\(--atlas-border\)/,
+    );
+    expect(css).toContain(
+      ".operational-section-heading > div:first-child { min-width: min(100%, 280px);",
+    );
+    expect(css).toContain(
+      ".operational-section-heading__aside { flex: 0 0 auto; color: var(--atlas-text-muted);",
+    );
+  });
 });

@@ -137,23 +137,41 @@ describe("OperationalStatusPage", () => {
         )
         .closest(".page-header__description"),
     ).not.toBeNull();
+    expect(
+      screen.getByText("Monitoring", { selector: ".eyebrow" }),
+    ).not.toBeNull();
+    const overallHealth = container.querySelector(
+      '[aria-label="Overall controller health"]',
+    );
+    expect(overallHealth).not.toBeNull();
+    expect(
+      overallHealth?.querySelectorAll(".health-summary-card"),
+    ).toHaveLength(6);
+    expect(overallHealth?.querySelector(".metric-card")).toBeNull();
+    expect(
+      screen.getByRole("article", { name: "Query Log" }).textContent,
+    ).toContain("1 / 2");
     expect(screen.getByText("dns-secondary")).not.toBeNull();
     expect(screen.getByText("QUERY_LOG_NODE_RETENTION_GAP")).not.toBeNull();
     expect(screen.getByText("query log collection")).not.toBeNull();
     expect(screen.getByText("1 KiB")).not.toBeNull();
     const coreServices = screen
       .getByRole("heading", { name: "Core Services" })
-      .closest(".settings-group");
+      .closest(".operational-section");
     expect(coreServices).not.toBeNull();
     expect(
-      coreServices?.querySelector(".settings-group__body--padded"),
+      coreServices?.querySelector(".operational-section-heading"),
     ).not.toBeNull();
+    expect(coreServices?.querySelector(".settings-group__header")).toBeNull();
     expect(
       coreServices?.querySelectorAll(".summary-tile-grid > div"),
     ).toHaveLength(4);
     expect(
       container.querySelector('[aria-label="Core service status"]'),
     ).not.toBeNull();
+    expect(
+      container.querySelectorAll(".operational-section-heading h2"),
+    ).toHaveLength(7);
   });
 
   it("has no automated structural WCAG A/AA violations", async () => {

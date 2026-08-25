@@ -110,15 +110,17 @@ started or produced an effect and no other record references it.
 
 Drift compares the active desired revision with fresh node observations. Manual
 policy leaves resolution to the operator; Alert records a visible incident;
-Enforce creates a targeted verified deployment. You can restore desired state,
-adopt an observation into the draft, or place the node in maintenance. Adoption
-still requires validation, publication, and deployment.
+Enforce creates a targeted verified deployment. You can restore desired state
+or adopt an observation into the draft. Maintenance state remains visible, but
+entry and return are owned by the exact Node Detail page. Adoption still
+requires validation, publication, and deployment.
 
 ## Nodes and Node Detail
 
 Nodes lists managed infrastructure, health, compatibility, latest observation,
-and convergence. Open a node to answer: “What is this node's current operational
-state, and what can I safely do next?”
+and convergence. It owns create/edit/delete and candidate validation, but not
+existing-node connection tests or maintenance mutation. Open a node to answer:
+“What is this node's current operational state, and what can I safely do next?”
 
 Node Detail groups overview, DNS service, maintenance/DHCP, TLS, software,
 collectors, and operational history. Its actions test connectivity, refresh
@@ -142,16 +144,21 @@ and Request ID instead of treating it as a successful exit.
 
 HA Operations presents serving capacity, DNS probe evidence, certificate and
 version warnings, lifecycle event history, notification delivery outcomes, and
-guided upgrade history. A guided upgrade records operator progress and
-validation; it never runs host or node package commands.
+guided upgrade history. Notification policy/channel management links to
+Notifications and is not duplicated. Independent source failures leave healthy
+sections visible, show a scoped retryable warning, and label retained last-good
+data stale. A guided upgrade records operator progress and validation; it never
+runs host or node package commands.
 
 ## Notifications
 
 Notifications is an Atlas HA Controller function, not an AdGuard Home setting.
-It manages the exact grouped event policy and the existing HA lifecycle webhook
-channels. Conservative failure, recovery, and redundancy events are enabled by
-default; informational lifecycle events are opt-in. Delivery outcomes remain in
-HA Operations history.
+It is the sole permanent management surface for the exact grouped event policy
+and HA lifecycle webhook channels. Conservative failure, recovery, and
+redundancy events are enabled by default; informational lifecycle events are
+opt-in. Delivery outcomes remain in HA Operations history. If a later refresh
+fails, last-known-good policy/channel data stays visible with an explicit stale
+warning and retry.
 
 Webhook endpoints are write-only secrets. The list shows only a safe
 scheme/host summary. Administrators can add, edit, pause, resume, test, or delete
@@ -163,7 +170,9 @@ retains delivery evidence with a safe channel-name snapshot.
 
 Operational Status separates API/PostgreSQL health, node reachability, complete
 observation, Statistics, Query Log, background worker, retention, and storage
-state. Use it when a Dashboard or feature page reports partial/stale data. Public
-`/health` is liveness; `/ready` includes PostgreSQL readiness.
+state under Monitoring. Compact section headers preserve accessible heading
+hierarchy while reducing diagnostic-page height. Use it when a Dashboard or
+feature page reports partial/stale data. Public `/health` is liveness; `/ready`
+includes PostgreSQL readiness.
 
 For recovery procedures, continue with the [operations runbook](../operations/runbook.md).

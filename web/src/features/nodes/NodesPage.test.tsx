@@ -62,124 +62,78 @@ function nodeResponse(value: Node) {
   };
 }
 
-describe("Nodes maintenance lifecycle", () => {
-  it("uses the Nodes-only five-card summary layout", async () => {
+describe("Nodes page ownership", () => {
+  it("uses the compact five-card fleet summary layout", async () => {
     mockSupportingRequests();
     vi.spyOn(api, "nodes").mockResolvedValue(nodeResponse(node));
 
     render(<NodesPage cluster={cluster} />);
 
     const summary = await screen.findByLabelText("Cluster node summary");
-    expect(summary.classList.contains("convergence-summary--five")).toBe(true);
-    expect(summary.querySelectorAll("dl > div")).toHaveLength(5);
-  });
-
-  it("enters maintenance through preflight and the canonical lifecycle action", async () => {
-    mockSupportingRequests();
-    const maintenanceNode: Node = {
-      ...node,
-      maintenanceMode: true,
-      convergenceStatus: "maintenance",
-      recordVersion: 5,
-    };
-    vi.spyOn(api, "nodes")
-      .mockResolvedValueOnce(nodeResponse(node))
-      .mockResolvedValue(nodeResponse(maintenanceNode));
-    vi.spyOn(api, "maintenancePreflight").mockResolvedValue({
-      nodeId: node.id,
-      allowed: true,
-      breakGlassRequired: false,
-      healthyDnsNodesRemaining: 1,
-      expectedRedundancy: "healthy",
-      activeDeployment: false,
-      openDrift: false,
-      activeDhcp: false,
-      checks: [],
-    });
-    const enter = vi
-      .spyOn(api, "enterMaintenance")
-      .mockResolvedValue(maintenanceNode);
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-
-    render(<NodesPage cluster={cluster} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Maintenance" }));
-
-    await waitFor(() => expect(enter).toHaveBeenCalledWith(node, false, ""));
+    expect(summary.classList.contains("health-summary-grid--five")).toBe(true);
     expect(
-      await screen.findByRole("button", { name: "Leave maintenance" }),
-    ).toBeTruthy();
+      summary.querySelectorAll(":scope > .health-summary-card"),
+    ).toHaveLength(5);
+    expect(summary.querySelector(".convergence-summary")).toBeNull();
   });
 
-  it("returns to service and reloads canonical normal state", async () => {
+  it("routes existing-node operational work to exact Node Detail", async () => {
     mockSupportingRequests();
-    const maintenanceNode: Node = {
-      ...node,
-      maintenanceMode: true,
-      convergenceStatus: "maintenance",
-    };
-    const normalNode: Node = { ...node, recordVersion: 5 };
-    vi.spyOn(api, "nodes")
-      .mockResolvedValueOnce(nodeResponse(maintenanceNode))
-      .mockResolvedValue(nodeResponse(normalNode));
-    const returnToService = vi.spyOn(api, "returnToService").mockResolvedValue({
-      nodeId: node.id,
-      succeeded: true,
-      checks: [],
-    });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(api, "nodes").mockResolvedValue(nodeResponse(node));
+    const testConnection = vi.spyOn(api, "testNode");
+    const preflight = vi.spyOn(api, "maintenancePreflight");
+    const enter = vi.spyOn(api, "enterMaintenance");
+    const leave = vi.spyOn(api, "returnToService");
 
     render(<NodesPage cluster={cluster} />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Leave maintenance" }),
-    );
+    const manage = await screen.findByRole("link", { name: "Manage" });
+    expect(manage.getAttribute("href")).toBe(`/ha/nodes/${node.id}`);
+    expect(screen.queryByRole("button", { name: "Test" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Maintenance" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Leave maintenance" }),
+    ).toBeNull();
+    expect(testConnection).not.toHaveBeenCalled();
+    expect(preflight).not.toHaveBeenCalled();
+    expect(enter).not.toHaveBeenCalled();
+    expect(leave).not.toHaveBeenCalled();
+  });
 
+  it("keeps candidate validation for add and probed save for edit", async () => {
+    mockSupportingRequests();
+    vi.spyOn(api, "nodes").mockResolvedValue(nodeResponse(node));
+    const validate = vi.spyOn(api, "validateNodeCandidate").mockResolvedValue({
+      version: "v0.107.78",
+      compatibility: "supported",
+      onboardingCompatibility: "supported",
+      running: true,
+      latencyMs: 4,
+    });
+    const create = vi.spyOn(api, "createNode").mockResolvedValue(node);
+    const update = vi.spyOn(api, "updateNode").mockResolvedValue(node);
+
+    render(<NodesPage cluster={cluster} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add node" }));
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Candidate" },
+    });
+    fireEvent.change(screen.getByLabelText("Administration URL"), {
+      target: { value: "https://candidate.example.test" },
+    });
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "admin" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "secret" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Test and save" }));
+    await waitFor(() => expect(validate).toHaveBeenCalled());
+    expect(create).toHaveBeenCalled();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Test and save" }));
     await waitFor(() =>
-      expect(returnToService).toHaveBeenCalledWith(maintenanceNode),
+      expect(update).toHaveBeenCalledWith(node.id, expect.any(Object)),
     );
-    expect(
-      await screen.findByRole("button", { name: "Maintenance" }),
-    ).toBeTruthy();
-
-    cleanup();
-    render(<NodesPage cluster={cluster} />);
-    expect(
-      await screen.findByRole("button", { name: "Maintenance" }),
-    ).toBeTruthy();
-  });
-
-  it("keeps canonical maintenance state and exposes return failures", async () => {
-    mockSupportingRequests();
-    const maintenanceNode: Node = {
-      ...node,
-      maintenanceMode: true,
-      convergenceStatus: "maintenance",
-    };
-    const nodes = vi
-      .spyOn(api, "nodes")
-      .mockResolvedValue(nodeResponse(maintenanceNode));
-    vi.spyOn(api, "returnToService").mockRejectedValue(
-      new Error(
-        "Node remains in maintenance because return-to-service validation failed.",
-      ),
-    );
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-
-    render(<NodesPage cluster={cluster} />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Leave maintenance" }),
-    );
-
-    expect(
-      await screen.findByRole("heading", {
-        name: "Unable to update maintenance mode",
-      }),
-    ).toBeTruthy();
-    expect(
-      screen.getByText(/Node remains in maintenance because/),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Leave maintenance" }),
-    ).toBeTruthy();
-    expect(nodes).toHaveBeenCalledTimes(2);
   });
 });
