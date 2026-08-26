@@ -36,6 +36,8 @@ export type RouteResolution =
   | { kind: "onboarding" }
   | { kind: "system-settings" }
   | { kind: "about" }
+  | { kind: "account" }
+  | { kind: "preferences" }
   | { kind: "redirect"; to: string }
   | { kind: "not-found" };
 
@@ -71,6 +73,8 @@ export const CANONICAL_PATHS = [
   "/system/backups",
   "/system/updates",
   "/system/about",
+  "/account",
+  "/account/preferences",
 ] as const;
 
 export const LEGACY_REDIRECTS: Readonly<Record<string, string>> = {
@@ -196,6 +200,10 @@ export function resolveRoute(pathname: string): RouteResolution {
       return { kind: "system-settings" };
     case "/system/about":
       return { kind: "about" };
+    case "/account":
+      return { kind: "account" };
+    case "/account/preferences":
+      return { kind: "preferences" };
     default:
       return { kind: "not-found" };
   }

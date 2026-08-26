@@ -111,3 +111,28 @@ func (s *Store) ResetUserPassword(ctx context.Context, id, passwordHash string, 
 	}
 	return tx.Commit(ctx)
 }
+
+func (s *Store) ChangeOwnPassword(ctx context.Context, userID, currentSessionID, passwordHash string, now time.Time, event domain.AuditEvent) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin own password change: %w", err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	tag, err := tx.Exec(ctx, `UPDATE users SET password_hash=$2,updated_at=$3 WHERE id=$1 AND enabled`, userID, passwordHash, now)
+	if err != nil {
+		return fmt.Errorf("change own password: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.NewError(domain.ErrorAuthentication, "authentication is required")
+	}
+	if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at=$3 WHERE user_id=$1 AND id<>$2 AND revoked_at IS NULL`, userID, currentSessionID, now); err != nil {
+		return fmt.Errorf("revoke other sessions after password change: %w", err)
+	}
+	if err := audit(ctx, tx, event); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit own password change: %w", err)
+	}
+	return nil
+}

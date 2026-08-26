@@ -3,23 +3,12 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
 import { AtlasBrand } from "../components/Brand";
 import { Icon } from "../components/Icon";
-import { StatusBadge } from "../components/StatusBadge";
-import { api } from "../lib/api";
-import { clusterHealth } from "../lib/freshness";
-import type {
-  Cluster,
-  ConfigurationRevision,
-  Deployment,
-  Node,
-  User,
-} from "../lib/types";
-import { ThemeControl } from "../theme/ThemeControl";
+import type { User } from "../lib/types";
 import {
   groupForPath,
   isGroupActive,
@@ -30,14 +19,10 @@ import {
   PRIMARY_NAVIGATION,
   UTILITY_NAVIGATION,
 } from "./navigation";
-import { ScopeProvider } from "./ScopeContext";
 
 interface ApplicationShellProps {
   user: User;
-  clusters: Cluster[];
-  selected?: Cluster;
   pathname: string;
-  onSelectCluster: (clusterID: string) => void;
   onLogout: () => void;
   children: ReactNode;
 }
@@ -46,10 +31,7 @@ const SIDEBAR_STORAGE_KEY = "atlas-dns.sidebar-collapsed";
 
 export function ApplicationShell({
   user,
-  clusters,
-  selected,
   pathname,
-  onSelectCluster,
   onLogout,
   children,
 }: ApplicationShellProps) {
@@ -60,58 +42,13 @@ export function ApplicationShell({
     () => new Set(activeGroup ? [activeGroup.id] : []),
   );
   const [mobileGroup, setMobileGroup] = useState(activeGroup?.id);
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [revisions, setRevisions] = useState<ConfigurationRevision[]>([]);
-  const [activeDeployment, setActiveDeployment] = useState<Deployment>();
-  const [refreshedAt, setRefreshedAt] = useState<string>();
-  const [contextAvailable, setContextAvailable] = useState(true);
-  const [scopeNodeID, setScopeNodeID] = useState("");
   const drawerTrigger = useRef<HTMLButtonElement>(null);
   const drawerClose = useRef<HTMLButtonElement>(null);
-  const accountRoot = useRef<HTMLDivElement>(null);
 
   const closeDrawer = useCallback(() => {
     setDrawerOpen(false);
     window.requestAnimationFrame(() => drawerTrigger.current?.focus());
   }, []);
-
-  const loadContext = useCallback(async () => {
-    if (selected === undefined) {
-      setNodes([]);
-      setRevisions([]);
-      setActiveDeployment(undefined);
-      setRefreshedAt(undefined);
-      return;
-    }
-    try {
-      const [nodeResult, revisionResult, deploymentResult] = await Promise.all([
-        api.nodes(selected.id),
-        api.configurationRevisions(selected.id),
-        api.deployments(selected.id),
-      ]);
-      const active = deploymentResult.items.find((deployment) =>
-        ["queued", "validating", "running", "cancelling"].includes(
-          deployment.status,
-        ),
-      );
-      const detailed = active ? await api.deployment(active.id) : undefined;
-      setNodes(nodeResult.items);
-      setRefreshedAt(nodeResult.refreshedAt);
-      setRevisions(revisionResult.items);
-      setActiveDeployment(detailed);
-      setContextAvailable(true);
-    } catch {
-      setContextAvailable(false);
-    }
-  }, [selected]);
-
-  useEffect(() => {
-    setScopeNodeID("");
-    void loadContext();
-    const interval = window.setInterval(() => void loadContext(), 15_000);
-    return () => window.clearInterval(interval);
-  }, [loadContext]);
 
   useEffect(() => {
     const group = groupForPath(pathname);
@@ -132,45 +69,11 @@ export function ApplicationShell({
     if (!drawerOpen) return;
     drawerClose.current?.focus();
     const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setDrawerOpen(false);
-        window.requestAnimationFrame(() => drawerTrigger.current?.focus());
-      }
+      if (event.key === "Escape") closeDrawer();
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [drawerOpen]);
-
-  useEffect(() => {
-    if (!accountOpen) return;
-    const close = (event: PointerEvent) => {
-      if (
-        event.target instanceof globalThis.Node &&
-        !accountRoot.current?.contains(event.target)
-      )
-        setAccountOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setAccountOpen(false);
-    };
-    document.addEventListener("pointerdown", close);
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [accountOpen]);
-
-  const activeRevision = revisions.find(
-    (revision) => revision.active || revision.id === selected?.activeRevisionId,
-  );
-  const activeTask = activeDeployment?.nodes.find((node) =>
-    ["validating", "applying", "verifying"].includes(node.status),
-  );
-  const nodeNames = useMemo(
-    () => new Map(nodes.map((node) => [node.id, node.name])),
-    [nodes],
-  );
+  }, [closeDrawer, drawerOpen]);
 
   const toggleGroup = (group: NavigationGroup) => {
     if (collapsed) {
@@ -222,129 +125,26 @@ export function ApplicationShell({
             <Icon name="collapse" />
             <span>{collapsed ? "Expand" : "Collapse"}</span>
           </button>
+          <AccountMenu
+            id="sidebar-account-menu"
+            user={user}
+            collapsed={collapsed}
+            onLogout={onLogout}
+          />
         </div>
       </aside>
 
-      <header className="app-topbar">
-        <button
-          ref={drawerTrigger}
-          className="drawer-toggle"
-          type="button"
-          aria-expanded={drawerOpen}
-          aria-controls="mobile-navigation"
-          aria-label="Open navigation"
-          onClick={() => setDrawerOpen(true)}
-        >
-          <Icon name="menu" />
-        </button>
-        <a
-          className="topbar-brand"
-          href="/"
-          aria-label="Atlas DNS Controller dashboard"
-        >
-          <AtlasBrand placement="header" />
-        </a>
-        <section className="topbar-context" aria-label="Controller context">
-          <label className="topbar-select">
-            <span>Cluster</span>
-            <select
-              value={selected?.id ?? ""}
-              onChange={(event) => onSelectCluster(event.target.value)}
-              disabled={clusters.length === 0}
-            >
-              {clusters.map((cluster) => (
-                <option key={cluster.id} value={cluster.id}>
-                  {cluster.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="topbar-select topbar-select--scope">
-            <span>Scope</span>
-            <select
-              value={scopeNodeID}
-              onChange={(event) => setScopeNodeID(event.target.value)}
-              disabled={nodes.length === 0}
-            >
-              <option value="">Entire Cluster</option>
-              {nodes.map((node) => (
-                <option key={node.id} value={node.id}>
-                  {node.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <span className="topbar-fact topbar-fact--revision">
-            <small>Revision</small>
-            <strong>
-              {contextAvailable
-                ? activeRevision
-                  ? `#${activeRevision.revisionNumber}`
-                  : "None"
-                : "Unavailable"}
-            </strong>
-          </span>
-          <span className="topbar-fact topbar-fact--health">
-            <small>Health</small>
-            {contextAvailable ? (
-              <StatusBadge status={clusterHealth(nodes)} />
-            ) : (
-              <strong>Unavailable</strong>
-            )}
-          </span>
-          {activeDeployment && (
-            <a className="topbar-deployment" href="/ha/deployments">
-              {activeTask
-                ? `${activeTask.status} ${nodeNames.get(activeTask.nodeId) ?? "node"}`
-                : activeDeployment.status}
-            </a>
-          )}
-        </section>
-        <span className="topbar-updated" title={formatDate(refreshedAt)}>
-          <Icon name="updates" />
-          <span>
-            {contextAvailable
-              ? formatRelative(refreshedAt)
-              : "Refresh unavailable"}
-          </span>
-        </span>
-        <ThemeControl />
-        <a
-          className="topbar-icon-button"
-          href="/ha/notifications"
-          aria-label="Notifications"
-          title="Notifications"
-        >
-          <Icon name="notifications" />
-        </a>
-        <div className="account-menu" ref={accountRoot}>
-          <button
-            type="button"
-            className="account-trigger"
-            aria-expanded={accountOpen}
-            aria-haspopup="menu"
-            aria-controls="account-menu"
-            onClick={() => setAccountOpen((current) => !current)}
-          >
-            <span className="account-avatar" aria-hidden="true">
-              {initials(user.displayName)}
-            </span>
-            <span className="account-identity">
-              <strong>{user.displayName}</strong>
-              <small>{user.role}</small>
-            </span>
-            <Icon name="chevron" />
-          </button>
-          {accountOpen && (
-            <div className="account-popover" id="account-menu" role="menu">
-              <p>{user.email}</p>
-              <button type="button" role="menuitem" onClick={onLogout}>
-                Sign Out
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+      <button
+        ref={drawerTrigger}
+        className="drawer-toggle shell-drawer-toggle"
+        type="button"
+        aria-expanded={drawerOpen}
+        aria-controls="mobile-navigation"
+        aria-label="Open navigation"
+        onClick={() => setDrawerOpen(true)}
+      >
+        <Icon name="menu" />
+      </button>
 
       {drawerOpen && (
         <>
@@ -402,21 +202,100 @@ export function ApplicationShell({
               {UTILITY_NAVIGATION.map((item) => (
                 <SidebarLink key={item.href} item={item} pathname={pathname} />
               ))}
-              <button
-                className="drawer-signout"
-                type="button"
-                onClick={onLogout}
-              >
-                Sign Out · {user.displayName}
-              </button>
+              <AccountMenu
+                id="drawer-account-menu"
+                user={user}
+                onLogout={onLogout}
+              />
             </div>
           </aside>
         </>
       )}
 
-      <ScopeProvider value={{ nodeId: scopeNodeID, nodes }}>
-        <main className="content">{children}</main>
-      </ScopeProvider>
+      <main className="content">{children}</main>
+    </div>
+  );
+}
+
+function AccountMenu({
+  id,
+  user,
+  collapsed = false,
+  onLogout,
+}: {
+  id: string;
+  user: User;
+  collapsed?: boolean;
+  onLogout: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (
+        event.target instanceof globalThis.Node &&
+        !root.current?.contains(event.target)
+      )
+        setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        window.requestAnimationFrame(() => trigger.current?.focus());
+      }
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return (
+    <div className="account-menu" ref={root}>
+      <button
+        ref={trigger}
+        type="button"
+        className="account-trigger"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-controls={id}
+        aria-label={
+          collapsed ? `Account menu for ${user.displayName}` : undefined
+        }
+        title={collapsed ? user.displayName : undefined}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="account-avatar" aria-hidden="true">
+          {initials(user.displayName)}
+        </span>
+        <span className="account-identity">
+          <strong>{user.displayName}</strong>
+          <small>{roleLabel(user.role)}</small>
+        </span>
+        <Icon name="chevron" />
+      </button>
+      {open && (
+        <div className="account-popover" id={id} role="menu">
+          <div className="account-popover__identity">
+            <strong>{user.displayName}</strong>
+            <span>{user.email}</span>
+          </div>
+          <a role="menuitem" href="/account">
+            My Account
+          </a>
+          <a role="menuitem" href="/account/preferences">
+            Preferences
+          </a>
+          <button type="button" role="menuitem" onClick={onLogout}>
+            Sign out
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -592,24 +471,6 @@ function readCollapsedPreference() {
   }
 }
 
-function formatDate(value?: string) {
-  if (!value) return "Not refreshed yet";
-  const date = new Date(value);
-  return Number.isNaN(date.valueOf())
-    ? "Refresh time unavailable"
-    : date.toLocaleString();
-}
-
-function formatRelative(value?: string) {
-  if (!value) return "Waiting for refresh";
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return "Refresh time unavailable";
-  const seconds = Math.max(0, Math.round((Date.now() - date.valueOf()) / 1000));
-  if (seconds < 60) return "Updated just now";
-  const minutes = Math.round(seconds / 60);
-  return `Updated ${minutes}m ago`;
-}
-
 function initials(name: string) {
   return (
     name
@@ -619,4 +480,8 @@ function initials(name: string) {
       .map((part) => part[0]?.toUpperCase())
       .join("") || "A"
   );
+}
+
+function roleLabel(role: User["role"]) {
+  return role === "administrator" ? "Administrator" : role;
 }

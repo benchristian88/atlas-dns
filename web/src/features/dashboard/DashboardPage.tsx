@@ -19,7 +19,6 @@ import type {
   StatisticsReport,
   VersionHealth,
 } from "../../lib/types";
-import { useScope } from "../../shell/ScopeContext";
 import {
   auditActionLabel,
   auditActorLabel,
@@ -47,7 +46,6 @@ interface RecentChange {
 }
 
 export function DashboardPage({ cluster }: { cluster: Cluster }) {
-  const { nodeId: scopeNodeId, nodes: scopedNodes } = useScope();
   const [nodes, setNodes] = useState<Node[]>();
   const [refreshedAt, setRefreshedAt] = useState<string>();
   const [staleAfterMs, setStaleAfterMs] = useState(90_000);
@@ -69,10 +67,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
     setSupplementaryLoading(true);
     setSourceErrors(new Set());
     const supplementary: [DashboardSource, Promise<unknown>][] = [
-      [
-        "statistics",
-        api.statistics(cluster.id, "24h", scopeNodeId).then(setStatistics),
-      ],
+      ["statistics", api.statistics(cluster.id, "24h", "").then(setStatistics)],
       ["operational", api.operationalStatus(cluster.id).then(setOperational)],
       ["ha", api.haStatus(cluster.id).then(setHA)],
       [
@@ -130,7 +125,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
     } catch (caught) {
       setError(caught);
     }
-  }, [cluster.id, scopeNodeId]);
+  }, [cluster.id]);
 
   useEffect(() => {
     void load();
@@ -159,11 +154,6 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
   if (nodes === undefined)
     return <ErrorState error={error} retry={() => void load()} />;
 
-  const scopeName =
-    scopeNodeId === ""
-      ? "Entire Cluster"
-      : (scopedNodes.find((node) => node.id === scopeNodeId)?.name ??
-        "Selected node");
   const apiReachable = currentNodes.filter(
     (node) => node.healthStatus === "healthy",
   ).length;
@@ -295,14 +285,14 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
         <article className="card dashboard-activity-card">
           <DashboardPanelHeader
             title="DNS activity"
-            eyebrow={`Last 24 hours · Traffic scope: ${scopeName}`}
+            eyebrow="Last 24 hours · Entire Cluster"
             action={{ label: "View statistics", href: "/statistics" }}
           />
           {supplementaryLoading && statistics === undefined ? (
             <Loading label="Loading DNS activity…" />
           ) : statistics === undefined || statistics.state === "unavailable" ? (
             <UnavailablePanel
-              message="No usable 24-hour Statistics snapshot is available for this scope."
+              message="No usable cluster-wide 24-hour Statistics snapshot is available."
               href="/system/operational-status"
             />
           ) : (
@@ -436,7 +426,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
       <section className="dashboard-ranking-grid" aria-label="Top domains">
         <RankingPanel
           title="Top queried domains"
-          eyebrow={`Traffic scope: ${scopeName}`}
+          eyebrow="Entire Cluster"
           values={
             statistics?.state === "unavailable"
               ? []
@@ -446,7 +436,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
         />
         <RankingPanel
           title="Top blocked domains"
-          eyebrow={`Traffic scope: ${scopeName}`}
+          eyebrow="Entire Cluster"
           values={
             statistics?.state === "unavailable"
               ? []

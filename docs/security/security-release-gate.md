@@ -26,6 +26,10 @@ finding or defined release-blocking security property remains unresolved.
 - [x] Administrator-only endpoints use server-derived roles.
   Evidence: `TestUserAdministrationRequiresServerSideAdministratorAndCSRF` and
   `TestControlPlaneLifecycleRoutesRequireAdministratorAndCSRF`.
+- [x] Self-service password change uses authenticated identity and current
+  session, verifies the current credential, and never accepts a target user ID.
+  Evidence: `TestChangeOwnPasswordVerifiesCurrentCredentialAndKeepsCurrentSession`
+  and `TestOwnPasswordChangeUsesAuthenticatedIdentityAndCurrentSession`.
 - [x] Setup is one-time and credentials never appear in normal node/audit API
   responses or database ciphertext.
   Evidence: integration `TestRelease01OperatorWorkflow`,

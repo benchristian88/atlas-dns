@@ -89,3 +89,25 @@ func (s *Server) handleResetUserPassword(response http.ResponseWriter, request *
 	}
 	response.WriteHeader(http.StatusNoContent)
 }
+
+func (s *Server) handleChangeOwnPassword(response http.ResponseWriter, request *http.Request) {
+	var input struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+	if err := decodeJSON(response, request, &input); err != nil {
+		s.writeError(response, request, err)
+		return
+	}
+	if err := s.users.ChangeOwnPassword(
+		request.Context(),
+		actor(request.Context()),
+		authenticatedSession(request.Context()).ID,
+		input.CurrentPassword,
+		input.NewPassword,
+	); err != nil {
+		s.writeError(response, request, err)
+		return
+	}
+	response.WriteHeader(http.StatusNoContent)
+}

@@ -19,7 +19,7 @@ audit event, revision, or deployment.
 - `System`, the default, resolved through `prefers-color-scheme`;
 - explicit `Light` and `Dark` preferences;
 - the resolved light/dark theme used by theme-specific artwork; and
-- one setter used by the header control.
+- one setter used by Account → Preferences.
 
 The preference is stored under `atlas-dns.theme` in browser
 `localStorage`. Invalid, unavailable, or unwritable storage falls back to
@@ -47,14 +47,13 @@ Shared border and semantic foreground/soft/border mappings are documented in
 `design-system.md`. Pages and feature components must not introduce local
 theme colours.
 
-## Theme control and artwork
+## Appearance preferences and artwork
 
-The compact theme icon button is in the utility top bar beside notification and
-account actions and remains available beside the mobile drawer button. Its
-icon and accessible name reflect the selected preference. Activating it opens a
-three-option menu for Light, Dark, and System with checked state, arrow/Home/End
-navigation, Escape close/focus return, outside-click close, and ordinary touch
-activation. System is always explicit; there is no hidden gesture.
+Account → Preferences is the sole appearance surface. It provides labelled
+System, Light, and Dark radio choices. System is always explicit and follows
+live `prefers-color-scheme` changes; there is no accent colour, colour picker,
+custom brand colour, font, or density setting. Theme selection remains
+browser-local and does not create a database setting or Audit Log event.
 
 The header and authentication layout use the supplied light/dark Atlas DNS
 lockup SVGs. The header uses the approved symbol-only fallback at phone widths.
@@ -116,9 +115,8 @@ runtime branding set, and removal of the legacy neutral icon references.
 
 ## Accessibility and browser validation
 
-- Theme selection uses a labelled button/menu, checked preference state, visible
-  focus styling, keyboard navigation, and a 44px touch target.
-- Menus remain available through click/touch and keyboard without hover.
+- Theme selection uses labelled native radio controls with checked state and
+  visible focus styling.
 - Theme-specific SVGs are selected as assets rather than transformed.
 - Status meaning remains text-backed and independent from brand colour.
 - Header and login layouts retain max-width constraints and symbol fallback.

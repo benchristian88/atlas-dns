@@ -27,8 +27,10 @@ describe("AboutPage", () => {
     const sections = screen.getAllByRole("heading", { level: 2 });
     expect(sections.map((heading) => heading.textContent)).toEqual([
       "About Atlas Project",
-      "Build",
+      "Installation / Build Information",
+      "Licensing / Attribution",
     ]);
+    expect(container.querySelector(".about-metadata")).toBeTruthy();
     expect(
       screen.getByText("Administration", { selector: ".eyebrow" }),
     ).toBeTruthy();

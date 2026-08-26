@@ -210,6 +210,11 @@ export const api = {
   me: () => request<AuthResponse>("/api/v1/auth/me"),
   logout: () =>
     request<void>("/api/v1/auth/logout", { method: "POST", body: "{}" }),
+  changeOwnPassword: (currentPassword: string, newPassword: string) =>
+    request<void>("/api/v1/auth/password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
   users: () => request<{ items: AdminUser[] }>("/api/v1/users"),
   createUser: (input: {
     email: string;

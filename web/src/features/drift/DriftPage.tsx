@@ -204,7 +204,7 @@ export function DriftPage({ cluster }: { cluster: Cluster }) {
             aria-label={`${expanded ? "Hide" : "View"} drift incident details for ${nodeByID.get(item.nodeId)?.name ?? item.nodeId}`}
             onClick={() => toggle(item.id)}
           >
-            <span aria-hidden="true">{expanded ? "⌃" : "⌄"}</span>
+            <span aria-hidden="true">{expanded ? "−" : "+"}</span>
           </button>
         );
       },

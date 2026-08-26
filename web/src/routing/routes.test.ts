@@ -46,6 +46,8 @@ describe("canonical route safety", () => {
       "/system/backups": "backups",
       "/system/updates": "updates",
       "/system/about": "about",
+      "/account": "account",
+      "/account/preferences": "preferences",
     } as const;
 
     expect(Object.keys(expectedKinds)).toEqual([...CANONICAL_PATHS]);

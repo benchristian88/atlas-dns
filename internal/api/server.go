@@ -127,6 +127,7 @@ type UserAdministrationService interface {
 	Create(context.Context, domain.Actor, useradmin.CreateInput) (domain.User, error)
 	Update(context.Context, domain.Actor, string, useradmin.UpdateInput) (domain.User, error)
 	ResetPassword(context.Context, domain.Actor, string, string) error
+	ChangeOwnPassword(context.Context, domain.Actor, string, string, string) error
 }
 
 type BackupService interface {
@@ -236,6 +237,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
 	s.mux.Handle("POST /api/v1/auth/logout", s.authenticated(true, http.HandlerFunc(s.handleLogout)))
 	s.mux.Handle("GET /api/v1/auth/me", s.authenticated(false, http.HandlerFunc(s.handleMe)))
+	s.mux.Handle("POST /api/v1/auth/password", s.authenticated(true, http.HandlerFunc(s.handleChangeOwnPassword)))
 	s.mux.Handle("GET /api/v1/users", s.administrator(false, http.HandlerFunc(s.handleListUsers)))
 	s.mux.Handle("POST /api/v1/users", s.administrator(true, http.HandlerFunc(s.handleCreateUser)))
 	s.mux.Handle("PATCH /api/v1/users/{userId}", s.administrator(true, http.HandlerFunc(s.handleUpdateUser)))

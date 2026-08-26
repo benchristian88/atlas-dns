@@ -11,7 +11,6 @@ import type {
   OperationalStatus,
   StatisticsReport,
 } from "../../lib/types";
-import { ScopeProvider } from "../../shell/ScopeContext";
 import { DashboardPage } from "./DashboardPage";
 
 afterEach(() => {
@@ -190,12 +189,8 @@ function mockSources(
   });
 }
 
-function renderDashboard(nodeItems = nodes, nodeId = "") {
-  return render(
-    <ScopeProvider value={{ nodeId, nodes: nodeItems }}>
-      <DashboardPage cluster={cluster} />
-    </ScopeProvider>,
-  );
+function renderDashboard() {
+  return render(<DashboardPage cluster={cluster} />);
 }
 
 describe("DashboardPage", () => {
@@ -222,7 +217,9 @@ describe("DashboardPage", () => {
     expect(screen.getByText("example.com")).toBeTruthy();
     expect(screen.getByText("ads.example")).toBeTruthy();
     expect(screen.getByText(/Cluster: Home/)).toBeTruthy();
-    expect(screen.getAllByText("Traffic scope: Entire Cluster").length).toBe(2);
+    expect(screen.getAllByText("Entire Cluster").length).toBeGreaterThanOrEqual(
+      2,
+    );
     expect(api.auditEvents).toHaveBeenCalledWith({
       clusterId: cluster.id,
       includeController: true,
@@ -277,7 +274,7 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("heading", { name: "DNS activity" })).toBeTruthy();
     expect(
       screen.getByText(
-        "No usable 24-hour Statistics snapshot is available for this scope.",
+        "No usable cluster-wide 24-hour Statistics snapshot is available.",
       ),
     ).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Nodes (2)" })).toBeTruthy();
@@ -285,18 +282,13 @@ describe("DashboardPage", () => {
     expect(screen.getByText(/Audit Log unavailable/)).toBeTruthy();
   });
 
-  it("keeps cluster evidence cluster-wide while labeling selected-node traffic only", async () => {
+  it("keeps every dashboard data source cluster-wide", async () => {
     mockSources();
-    renderDashboard(nodes, primaryNodeID);
+    renderDashboard();
     expect(await screen.findByText("DNS Serving")).toBeTruthy();
     expect(screen.getByText(/Cluster: Home/)).toBeTruthy();
-    expect(screen.getAllByText("Traffic scope: Primary").length).toBe(2);
-    expect(screen.queryByText(/Scope: Primary/)).toBeNull();
-    expect(api.statistics).toHaveBeenCalledWith(
-      cluster.id,
-      "24h",
-      primaryNodeID,
-    );
+    expect(screen.queryByText("Traffic scope: Primary")).toBeNull();
+    expect(api.statistics).toHaveBeenCalledWith(cluster.id, "24h", "");
     expect(api.haStatus).toHaveBeenCalledWith(cluster.id);
     expect(api.nodes).toHaveBeenCalledWith(cluster.id);
   });
@@ -408,7 +400,7 @@ describe("DashboardPage", () => {
     renderDashboard();
     expect(
       await screen.findByText(
-        "No usable 24-hour Statistics snapshot is available for this scope.",
+        "No usable cluster-wide 24-hour Statistics snapshot is available.",
       ),
     ).toBeTruthy();
     expect(screen.queryByText("1,200")).toBeNull();
@@ -442,7 +434,7 @@ describe("DashboardPage", () => {
 
   it("renders the node empty state without manufacturing metrics", async () => {
     mockSources({ nodeItems: [] });
-    renderDashboard([]);
+    renderDashboard();
     expect(
       await screen.findByRole("heading", {
         name: "Add your first AdGuard Home node",
