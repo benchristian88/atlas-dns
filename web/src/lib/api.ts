@@ -27,7 +27,11 @@ import type {
   HAHistoryPage,
   HASummary,
   LifecycleSettings,
+  LoginResponse,
   MaintenancePreflight,
+  MFAEnrollment,
+  MFARecoveryResult,
+  MFAStatus,
   Node,
   NodeLifecycle,
   NotificationChannel,
@@ -203,17 +207,60 @@ export const api = {
       { method: "POST", body: JSON.stringify({ recordVersion }) },
     ),
   login: (input: { email: string; password: string }) =>
-    request<AuthResponse>("/api/v1/auth/login", {
+    request<LoginResponse>("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify(input),
     }),
   me: () => request<AuthResponse>("/api/v1/auth/me"),
+  verifyMFA: (challenge: string, code: string) =>
+    request<AuthResponse>("/api/v1/auth/mfa/verify", {
+      method: "POST",
+      body: JSON.stringify({ challenge, code }),
+    }),
+  verifyMFARecovery: (challenge: string, recoveryCode: string) =>
+    request<AuthResponse>("/api/v1/auth/mfa/recovery", {
+      method: "POST",
+      body: JSON.stringify({ challenge, recoveryCode }),
+    }),
+  cancelMFA: (challenge: string) =>
+    request<void>("/api/v1/auth/mfa/cancel", {
+      method: "POST",
+      body: JSON.stringify({ challenge }),
+    }),
   logout: () =>
     request<void>("/api/v1/auth/logout", { method: "POST", body: "{}" }),
-  changeOwnPassword: (currentPassword: string, newPassword: string) =>
+  changeOwnPassword: (
+    currentPassword: string,
+    newPassword: string,
+    totpCode = "",
+  ) =>
     request<void>("/api/v1/auth/password", {
       method: "POST",
-      body: JSON.stringify({ currentPassword, newPassword }),
+      body: JSON.stringify({ currentPassword, newPassword, totpCode }),
+    }),
+  mfaStatus: () => request<MFAStatus>("/api/v1/account/mfa"),
+  startMFAEnrollment: (currentPassword: string) =>
+    request<MFAEnrollment>("/api/v1/account/mfa/enroll/start", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword }),
+    }),
+  verifyMFAEnrollment: (code: string) =>
+    request<MFARecoveryResult>("/api/v1/account/mfa/enroll/verify", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+  regenerateMFARecoveryCodes: (currentPassword: string, code: string) =>
+    request<MFARecoveryResult>(
+      "/api/v1/account/mfa/recovery-codes/regenerate",
+      {
+        method: "POST",
+        body: JSON.stringify({ currentPassword, code }),
+      },
+    ),
+  disableMFA: (currentPassword: string, code: string) =>
+    request<void>("/api/v1/account/mfa/disable", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, code }),
     }),
   users: () => request<{ items: AdminUser[] }>("/api/v1/users"),
   createUser: (input: {

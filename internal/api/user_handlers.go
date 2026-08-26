@@ -17,10 +17,11 @@ type administeredUserResponse struct {
 	CreatedAt   time.Time       `json:"createdAt"`
 	UpdatedAt   time.Time       `json:"updatedAt"`
 	LastLoginAt *time.Time      `json:"lastLoginAt,omitempty"`
+	MFAEnabled  bool            `json:"mfaEnabled"`
 }
 
 func administeredUser(user domain.User) administeredUserResponse {
-	return administeredUserResponse{ID: user.ID, Email: user.Email, DisplayName: user.DisplayName, Role: user.Role, Enabled: user.Enabled, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt, LastLoginAt: user.LastLoginAt}
+	return administeredUserResponse{ID: user.ID, Email: user.Email, DisplayName: user.DisplayName, Role: user.Role, Enabled: user.Enabled, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt, LastLoginAt: user.LastLoginAt, MFAEnabled: user.MFAEnabled}
 }
 
 func (s *Server) handleListUsers(response http.ResponseWriter, request *http.Request) {
@@ -94,6 +95,7 @@ func (s *Server) handleChangeOwnPassword(response http.ResponseWriter, request *
 	var input struct {
 		CurrentPassword string `json:"currentPassword"`
 		NewPassword     string `json:"newPassword"`
+		TOTPCode        string `json:"totpCode,omitempty"`
 	}
 	if err := decodeJSON(response, request, &input); err != nil {
 		s.writeError(response, request, err)
@@ -105,6 +107,7 @@ func (s *Server) handleChangeOwnPassword(response http.ResponseWriter, request *
 		authenticatedSession(request.Context()).ID,
 		input.CurrentPassword,
 		input.NewPassword,
+		input.TOTPCode,
 	); err != nil {
 		s.writeError(response, request, err)
 		return

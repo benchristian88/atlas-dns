@@ -24,6 +24,14 @@ type authResponse struct {
 	ExpiresAt time.Time    `json:"expiresAt"`
 }
 
+type loginResponse struct {
+	User               *userResponse `json:"user,omitempty"`
+	ExpiresAt          *time.Time    `json:"expiresAt,omitempty"`
+	MFARequired        bool          `json:"mfaRequired,omitempty"`
+	MFAChallenge       string        `json:"mfaChallenge,omitempty"`
+	ChallengeExpiresAt *time.Time    `json:"challengeExpiresAt,omitempty"`
+}
+
 func safeUser(user domain.User) userResponse {
 	return userResponse{ID: user.ID, Email: user.Email, DisplayName: user.DisplayName, Role: user.Role}
 }
@@ -96,8 +104,15 @@ func (s *Server) handleLogin(response http.ResponseWriter, request *http.Request
 		s.writeError(response, request, err)
 		return
 	}
+	if result.MFARequired {
+		writeJSON(response, http.StatusAccepted, loginResponse{
+			MFARequired: true, MFAChallenge: result.MFAChallenge, ChallengeExpiresAt: &result.ChallengeExpiresAt,
+		})
+		return
+	}
 	s.setAuthCookies(response, result)
-	writeJSON(response, http.StatusOK, authResponse{User: safeUser(result.User), ExpiresAt: result.Session.ExpiresAt})
+	user := safeUser(result.User)
+	writeJSON(response, http.StatusOK, loginResponse{User: &user, ExpiresAt: &result.Session.ExpiresAt})
 }
 
 func (s *Server) handleLogout(response http.ResponseWriter, request *http.Request) {

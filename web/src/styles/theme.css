@@ -718,6 +718,13 @@ th[data-align="right"], td[data-align="right"] { text-align: right; }
 .account-page > .page-header { margin-bottom: 0; }
 .account-password-form { max-width: 560px; }
 .account-password-form .button { justify-self: start; }
+.mfa-form { max-width: 560px; }
+.mfa-actions { display: flex; flex-wrap: wrap; gap: var(--atlas-space-2); }
+.mfa-status > :first-child, .mfa-enrollment > :first-child, .mfa-recovery-display > :first-child { margin-top: 0; }
+.mfa-qr-code { display: block; width: min(256px, 100%); height: auto; margin-block: var(--atlas-space-4); border: 8px solid white; border-radius: var(--atlas-radius-control); }
+.mfa-manual-secret { overflow-wrap: anywhere; user-select: all; }
+.mfa-recovery-codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--atlas-space-2); margin-block: var(--atlas-space-4); padding: 0; list-style: none; }
+.mfa-recovery-codes li { padding: var(--atlas-space-2); border-radius: var(--atlas-radius-control); background: var(--atlas-page-subtle); text-align: center; }
 .appearance-options { display: grid; gap: var(--atlas-space-2); margin: 0; padding: 0; border: 0; }
 .appearance-options label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--atlas-space-3); padding: var(--atlas-space-3); border: 1px solid var(--atlas-border); border-radius: var(--atlas-radius-control); cursor: pointer; }
 .appearance-options label:has(input:checked) { border-color: var(--atlas-primary); background: var(--atlas-primary-soft); }
@@ -765,6 +772,8 @@ th[data-align="right"], td[data-align="right"] { text-align: right; }
 @media (max-width: 620px) {
   .user-card__summary, .user-card__details { align-items: stretch; flex-direction: column; gap: var(--atlas-space-2); }
   .user-card__details .button { align-self: flex-start; }
+  .mfa-recovery-codes { grid-template-columns: 1fr; }
+  .mfa-actions { align-items: stretch; flex-direction: column; }
   .setup-guide li { grid-template-columns: 28px minmax(0, 1fr); }
   .setup-guide__action { grid-column: 2; text-align: left; }
   .onboarding-progress { display: flex; overflow-x: auto; padding-bottom: var(--atlas-space-2); scroll-snap-type: x proximity; }

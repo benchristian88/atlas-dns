@@ -139,7 +139,10 @@ export function UsersPage({ currentUser }: { currentUser: User }) {
                 <header className="user-card__summary">
                   <div>
                     <h3>{user.displayName}</h3>
-                    <p className="muted">{user.email} · Administrator</p>
+                    <p className="muted">
+                      {user.email} · Administrator · 2FA:{" "}
+                      {user.mfaEnabled ? "Enabled" : "Not enabled"}
+                    </p>
                   </div>
                   <span
                     className={`status ${

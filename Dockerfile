@@ -22,6 +22,9 @@ RUN mkdir -p /tmp/go-build && \
 RUN CGO_ENABLED=0 GOCACHE=/tmp/go-build GOTMPDIR=/tmp/go-build go build -p 1 -trimpath \
     -ldflags "-s -w -X github.com/benchristian88/atlas-dns/internal/version.Version=${VERSION} -X github.com/benchristian88/atlas-dns/internal/version.Commit=${COMMIT} -X github.com/benchristian88/atlas-dns/internal/version.BuiltAt=${BUILT_AT}" \
     -o /out/atlas-dns-backup ./cmd/atlas-dns-backup
+RUN CGO_ENABLED=0 GOCACHE=/tmp/go-build GOTMPDIR=/tmp/go-build go build -p 1 -trimpath \
+    -ldflags "-s -w -X github.com/benchristian88/atlas-dns/internal/version.Version=${VERSION} -X github.com/benchristian88/atlas-dns/internal/version.Commit=${COMMIT} -X github.com/benchristian88/atlas-dns/internal/version.BuiltAt=${BUILT_AT}" \
+    -o /out/atlas-dns-admin ./cmd/atlas-dns-admin
 
 FROM postgres:17-bookworm
 ARG VERSION=1.0.2-dev
@@ -41,6 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && install -d -o 10001 -g 10001 -m 0700 /var/lib/atlas-dns/tmp
 COPY --from=controller /out/atlas-dns /usr/local/bin/atlas-dns
 COPY --from=controller /out/atlas-dns-backup /usr/local/bin/atlas-dns-backup
+COPY --from=controller /out/atlas-dns-admin /usr/local/bin/atlas-dns-admin
 COPY --from=web /src/web/dist /usr/local/share/atlas-dns/web
 COPY LICENSE /usr/local/share/atlas-dns/LICENSE
 USER 10001:10001

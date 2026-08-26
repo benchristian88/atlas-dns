@@ -25,11 +25,14 @@ type Repository interface {
 }
 
 type Service struct {
-	repository      Repository
-	tokens          *TokenManager
-	limiter         *LoginLimiter
-	sessionDuration time.Duration
-	runtime         interface {
+	repository       Repository
+	mfaRepository    MFARepository
+	tokens           *TokenManager
+	limiter          *LoginLimiter
+	factorLimiter    *LoginLimiter
+	credentialCipher *CredentialCipher
+	sessionDuration  time.Duration
+	runtime          interface {
 		RuntimeSettings() systemsettings.RuntimeSettings
 	}
 	dummyHash string
@@ -50,21 +53,29 @@ func (s *Service) currentSessionDuration() time.Duration {
 }
 
 type SessionResult struct {
-	User      domain.User
-	Session   domain.Session
-	Token     string
-	CSRFToken string
+	User               domain.User
+	Session            domain.Session
+	Token              string
+	CSRFToken          string
+	MFARequired        bool
+	MFAChallenge       string
+	ChallengeExpiresAt time.Time
 }
 
-func NewService(repository Repository, tokens *TokenManager, sessionDuration time.Duration) (*Service, error) {
+func NewService(repository Repository, tokens *TokenManager, sessionDuration time.Duration, ciphers ...*CredentialCipher) (*Service, error) {
 	dummyHash, err := HashPassword("not-a-real-password-value")
 	if err != nil {
 		return nil, fmt.Errorf("create authentication timing hash: %w", err)
 	}
-	return &Service{
+	service := &Service{
 		repository: repository, tokens: tokens, limiter: NewLoginLimiter(5, 15*time.Minute),
-		sessionDuration: sessionDuration, dummyHash: dummyHash, now: time.Now,
-	}, nil
+		factorLimiter: NewLoginLimiter(5, 15*time.Minute), sessionDuration: sessionDuration, dummyHash: dummyHash, now: time.Now,
+	}
+	service.mfaRepository, _ = repository.(MFARepository)
+	if len(ciphers) > 0 {
+		service.credentialCipher = ciphers[0]
+	}
+	return service, nil
 }
 
 func (s *Service) SetupRequired(ctx context.Context) (bool, error) {
@@ -144,6 +155,9 @@ func (s *Service) Login(ctx context.Context, email, password, requestID, sourceI
 		return SessionResult{}, domain.NewError(domain.ErrorInvalidCredentials, "email or password is incorrect")
 	}
 	s.limiter.Success(key)
+	if user.MFAEnabled {
+		return s.createMFAChallenge(ctx, user, sourceIP, userAgent)
+	}
 	return s.createSession(ctx, user, requestID, sourceIP, userAgent)
 }
 

@@ -54,3 +54,4 @@ Released schema milestones:
 - `000016_release_1_1_onboarding`: durable onboarding acknowledgement and completion state.
 - `000017_release_1_1_runtime_policy_history`: database-owned runtime settings, notification policy, and Operational History retention.
 - `000018_release_1_1_audit_keyset`: stable `(created_at DESC, id DESC)` Audit Log keyset paging.
+- `000019_release_1_1_totp_mfa`: encrypted per-user TOTP enrollment, hashed one-time recovery codes, and short-lived single-use MFA challenges.

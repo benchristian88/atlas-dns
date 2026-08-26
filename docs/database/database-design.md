@@ -52,6 +52,11 @@ Migration `000004_release_0_4` widens the existing schema-version checks on capa
 
 Release 0.1 mutable cluster and node records use integer optimistic versions. Node health updates do not increment the operator-facing `record_version`, so polling cannot create false edit conflicts.
 
+Migration `000019_release_1_1_totp_mfa` adds one optional `user_mfa` envelope
+per user, one-time `user_mfa_recovery_codes`, and transient `mfa_challenges`.
+User deletion cascades through all three. Challenge and recovery consumption use
+transactions and conditional updates so concurrent reuse cannot succeed.
+
 ### users
 
 - id
@@ -75,6 +80,35 @@ Release 0.1 mutable cluster and node records use integer optimistic versions. No
 - revoked_at
 - ip_metadata
 - user_agent
+
+### user_mfa
+
+- user_id
+- encrypted_secret / secret_nonce / secret_key_version / secret_algorithm
+- enrollment_started_at / enrollment_expires_at
+- enabled_at
+
+### user_mfa_recovery_codes
+
+- id
+- user_id
+- code_hash
+- created_at
+- used_at
+
+### mfa_challenges
+
+- id
+- user_id
+- token_hash
+- created_at / expires_at / consumed_at
+- failed_attempts
+- ip_metadata / user_agent
+
+The TOTP seed is AES-256-GCM encrypted with the existing credential key and
+user-specific associated data. Recovery and challenge values are never stored
+in plaintext. MFA challenges are not authenticated sessions and are excluded
+from backups; cleanup deletes expired or old consumed rows.
 
 ### clusters
 

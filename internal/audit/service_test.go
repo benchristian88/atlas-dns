@@ -127,6 +127,10 @@ func TestMetadataIsPreservedAndDefensivelyRedacted(t *testing.T) {
 		"password":                 "do-not-expose",
 		"apiToken":                 "do-not-expose",
 		"webhookDestination":       "do-not-expose",
+		"totpCode":                 "123456",
+		"recoveryCode":             "aaaaa-bbbbb-ccccc-ddddd",
+		"provisioningUri":          "otpauth://do-not-expose",
+		"qrCodePayload":            "do-not-expose",
 		"nested":                   map[string]any{"token": "do-not-expose", "errorCode": "SAFE_CODE"},
 		"queryLogRetentionSeconds": 720,
 	})
@@ -138,6 +142,11 @@ func TestMetadataIsPreservedAndDefensivelyRedacted(t *testing.T) {
 	}
 	if metadata["apiToken"] != "[REDACTED]" || metadata["webhookDestination"] != "[REDACTED]" {
 		t.Fatalf("repository-equivalent secrets were not redacted: %#v", metadata)
+	}
+	for _, key := range []string{"totpCode", "recoveryCode", "provisioningUri", "qrCodePayload"} {
+		if metadata[key] != "[REDACTED]" {
+			t.Fatalf("MFA metadata %q was not redacted: %#v", key, metadata)
+		}
 	}
 	nested := metadata["nested"].(map[string]any)
 	if nested["token"] != "[REDACTED]" || nested["errorCode"] != "SAFE_CODE" {

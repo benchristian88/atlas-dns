@@ -66,7 +66,7 @@ fi
 
 tar -C "${download_dir}" -xzf "${download_dir}/${archive_name}"
 bundle_dir="${download_dir}/${archive_name%.tar.gz}"
-for required in bin/atlas-dns bin/atlas-dns-backup bin/atlas-dns-migrate web/index.html systemd/atlas-dns.service LICENSE; do
+for required in bin/atlas-dns bin/atlas-dns-backup bin/atlas-dns-admin bin/atlas-dns-migrate web/index.html systemd/atlas-dns.service LICENSE; do
   if [[ ! -f ${bundle_dir}/${required} ]]; then
     echo "Verified release archive is missing ${required}." >&2
     exit 1
@@ -94,6 +94,7 @@ install -d -o "${service_user}" -g "${service_group}" -m 0750 "${state_dir}"
 install -d -o root -g root -m 0755 "${web_dir}"
 install -o root -g root -m 0755 "${bundle_dir}/bin/atlas-dns" /usr/local/bin/atlas-dns
 install -o root -g root -m 0755 "${bundle_dir}/bin/atlas-dns-backup" /usr/local/bin/atlas-dns-backup
+install -o root -g root -m 0755 "${bundle_dir}/bin/atlas-dns-admin" /usr/local/bin/atlas-dns-admin
 install -o root -g root -m 0755 "${bundle_dir}/bin/atlas-dns-migrate" /usr/local/bin/atlas-dns-migrate
 cp -a "${bundle_dir}/web/." "${web_dir}/"
 chown -R root:root "${web_dir}"

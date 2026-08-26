@@ -36,7 +36,7 @@ func TestProtectedRouteInventoryRequiresAuthentication(t *testing.T) {
 
 	protectedPattern := regexp.MustCompile(`s\.mux\.Handle\("([A-Z]+) ([^"]+)", s\.(authenticated|administrator)\(`)
 	protected := protectedPattern.FindAllSubmatch(source, -1)
-	if got, want := len(protected), 96; got != want {
+	if got, want := len(protected), 101; got != want {
 		t.Fatalf("protected route inventory contains %d routes, want %d; review every route before changing this gate", got, want)
 	}
 	if got := bytes.Count(source, []byte("s.mux.Handle(")); got != len(protected) {
@@ -46,13 +46,16 @@ func TestProtectedRouteInventoryRequiresAuthentication(t *testing.T) {
 	publicPattern := regexp.MustCompile(`s\.mux\.HandleFunc\("([^"]+)"`)
 	public := publicPattern.FindAllSubmatch(source, -1)
 	publicAllowlist := map[string]bool{
-		"GET /health":              true,
-		"GET /ready":               true,
-		"GET /metrics":             true,
-		"GET /api/v1/setup/status": true,
-		"POST /api/v1/setup":       true,
-		"POST /api/v1/auth/login":  true,
-		"/":                        true,
+		"GET /health":                    true,
+		"GET /ready":                     true,
+		"GET /metrics":                   true,
+		"GET /api/v1/setup/status":       true,
+		"POST /api/v1/setup":             true,
+		"POST /api/v1/auth/login":        true,
+		"POST /api/v1/auth/mfa/verify":   true,
+		"POST /api/v1/auth/mfa/recovery": true,
+		"POST /api/v1/auth/mfa/cancel":   true,
+		"/":                              true,
 	}
 	if len(public) != len(publicAllowlist) {
 		t.Fatalf("public route inventory contains %d routes, want %d", len(public), len(publicAllowlist))

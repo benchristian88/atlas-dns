@@ -93,7 +93,7 @@ func TestRelease11AuditKeysetScopeAndHistoricalRedaction(t *testing.T) {
 	if err := store.Pool().QueryRow(ctx, `SELECT max(version) FROM schema_migrations`).Scan(&schemaVersion); err != nil {
 		t.Fatal(err)
 	}
-	if schemaVersion != 18 {
-		t.Fatalf("schema version = %d, want 18", schemaVersion)
+	if schemaVersion != 19 {
+		t.Fatalf("schema version = %d, want 19", schemaVersion)
 	}
 }

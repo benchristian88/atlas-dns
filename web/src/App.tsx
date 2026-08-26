@@ -7,7 +7,11 @@ import {
 } from "./features/account/AccountPages";
 import { AllowlistsPage } from "./features/allowlists/AllowlistsPage";
 import { AuditPage } from "./features/audit/AuditPage";
-import { LoginPage, SetupPage } from "./features/auth/AuthPages";
+import {
+  LoginPage,
+  MFAChallengePage,
+  SetupPage,
+} from "./features/auth/AuthPages";
 import { BlockedServicesPage } from "./features/blockedservices/BlockedServicesPage";
 import { BlocklistsPage } from "./features/blocklists/BlocklistsPage";
 import { ClientsPage } from "./features/clients/ClientsPage";
@@ -56,6 +60,7 @@ type BootState =
       secureCookies: boolean;
     }
   | { kind: "login" }
+  | { kind: "mfa"; challenge: string; expiresAt: string }
   | { kind: "authenticated"; user: User }
   | { kind: "error"; error: unknown };
 
@@ -112,6 +117,18 @@ export function App() {
       return (
         <LoginPage
           onAuthenticated={(user) => setState({ kind: "authenticated", user })}
+          onMFARequired={(challenge, expiresAt) =>
+            setState({ kind: "mfa", challenge, expiresAt })
+          }
+        />
+      );
+    case "mfa":
+      return (
+        <MFAChallengePage
+          challenge={state.challenge}
+          expiresAt={state.expiresAt}
+          onAuthenticated={(user) => setState({ kind: "authenticated", user })}
+          onCancel={() => setState({ kind: "login" })}
         />
       );
     case "authenticated":

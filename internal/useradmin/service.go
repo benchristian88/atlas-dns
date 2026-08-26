@@ -22,7 +22,13 @@ type Repository interface {
 type Service struct {
 	repository      Repository
 	passwordLimiter *auth.LoginLimiter
+	mfa             SecondFactorVerifier
 	now             func() time.Time
+}
+
+type SecondFactorVerifier interface {
+	RequiresMFA(context.Context, string) (bool, error)
+	VerifyTOTPForUser(context.Context, string, string, string) error
 }
 
 type CreateInput struct {
@@ -39,12 +45,16 @@ type UpdateInput struct {
 	Enabled     bool
 }
 
-func NewService(repository Repository) *Service {
-	return &Service{
+func NewService(repository Repository, verifiers ...SecondFactorVerifier) *Service {
+	service := &Service{
 		repository:      repository,
 		passwordLimiter: auth.NewLoginLimiter(5, 15*time.Minute),
 		now:             time.Now,
 	}
+	if len(verifiers) > 0 {
+		service.mfa = verifiers[0]
+	}
+	return service
 }
 
 func (s *Service) List(ctx context.Context) ([]domain.User, error) {
@@ -143,7 +153,7 @@ func (s *Service) ResetPassword(ctx context.Context, actor domain.Actor, targetI
 	return s.repository.ResetUserPassword(ctx, targetID, passwordHash, now, e)
 }
 
-func (s *Service) ChangeOwnPassword(ctx context.Context, actor domain.Actor, currentSessionID, currentPassword, newPassword string) error {
+func (s *Service) ChangeOwnPassword(ctx context.Context, actor domain.Actor, currentSessionID, currentPassword, newPassword, totpCode string) error {
 	if !domain.ValidID(actor.UserID) {
 		return domain.NewError(domain.ErrorAuthentication, "authentication is required")
 	}
@@ -164,6 +174,17 @@ func (s *Service) ChangeOwnPassword(ctx context.Context, actor domain.Actor, cur
 	if !valid {
 		s.passwordLimiter.Failure(actor.UserID)
 		return domain.NewError(domain.ErrorInvalidCredentials, "current password is incorrect")
+	}
+	if s.mfa != nil {
+		required, err := s.mfa.RequiresMFA(ctx, actor.UserID)
+		if err != nil {
+			return err
+		}
+		if required {
+			if err := s.mfa.VerifyTOTPForUser(ctx, actor.UserID, totpCode, "password-change-code"); err != nil {
+				return err
+			}
+		}
 	}
 	passwordHash, err := auth.HashPassword(newPassword)
 	if err != nil {
