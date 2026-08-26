@@ -217,7 +217,9 @@ describe("DashboardPage", () => {
     expect(screen.getByText("example.com")).toBeTruthy();
     expect(screen.getByText("ads.example")).toBeTruthy();
     expect(screen.getByText(/Cluster: Home/)).toBeTruthy();
-    expect(screen.getAllByText("Entire Cluster").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Entire Cluster").length).toBeGreaterThanOrEqual(
+      2,
+    );
     expect(api.auditEvents).toHaveBeenCalledWith({
       clusterId: cluster.id,
       includeController: true,

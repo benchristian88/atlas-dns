@@ -67,10 +67,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
     setSupplementaryLoading(true);
     setSourceErrors(new Set());
     const supplementary: [DashboardSource, Promise<unknown>][] = [
-      [
-        "statistics",
-        api.statistics(cluster.id, "24h", "").then(setStatistics),
-      ],
+      ["statistics", api.statistics(cluster.id, "24h", "").then(setStatistics)],
       ["operational", api.operationalStatus(cluster.id).then(setOperational)],
       ["ha", api.haStatus(cluster.id).then(setHA)],
       [

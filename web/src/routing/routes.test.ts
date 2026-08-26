@@ -74,11 +74,9 @@ describe("canonical route safety", () => {
     );
   });
 
-  it("uses focused account widths without changing other canonical widths", () => {
-    for (const path of CANONICAL_PATHS) {
-      const expected = path.startsWith("/account") ? "standard" : "wide";
-      expect(routePageWidth(resolveRoute(path))).toBe(expected);
-    }
+  it("gives every canonical application route the dashboard width", () => {
+    for (const path of CANONICAL_PATHS)
+      expect(routePageWidth(resolveRoute(path))).toBe("wide");
 
     expect(routePageWidth(resolveRoute("/mistyped-dashboard"))).toBe("narrow");
     expect(routePageWidth(resolveRoute("/ha/history"))).toBe("narrow");

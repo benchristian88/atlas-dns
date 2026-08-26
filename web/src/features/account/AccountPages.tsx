@@ -4,10 +4,7 @@ import { PageHeader } from "../../components/Page";
 import { Field, SettingRow, SettingsGroup } from "../../components/Settings";
 import { api } from "../../lib/api";
 import type { User } from "../../lib/types";
-import {
-  type ThemePreference,
-  useTheme,
-} from "../../theme/ThemeProvider";
+import { type ThemePreference, useTheme } from "../../theme/ThemeProvider";
 
 export function MyAccountPage({ user }: { user: User }) {
   const [currentPassword, setCurrentPassword] = useState("");

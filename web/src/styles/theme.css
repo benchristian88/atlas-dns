@@ -144,8 +144,12 @@ h3 { font-size: 1rem; }
 .health-summary-card__body em { min-width: 0; overflow: hidden; color: var(--atlas-text-muted); font-size: .62rem; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
 .statistics-range { display: flex; min-width: 0; max-width: 100%; flex-wrap: wrap; gap: var(--atlas-space-2); margin: 0; padding: 0; border: 0; }
 .statistics-range .button[aria-pressed="true"] { box-shadow: inset 0 -2px var(--atlas-on-primary); }
-.statistics-controls { display: flex; min-width: min(100%, 360px); flex-wrap: wrap; align-items: end; justify-content: flex-end; gap: var(--atlas-space-2) var(--atlas-space-4); }
-.statistics-scope { display: grid; min-width: min(100%, 190px); gap: var(--atlas-space-1); color: var(--atlas-text-muted); font-size: .72rem; font-weight: 650; }
+.statistics-toolbar { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--atlas-space-4) var(--atlas-space-6); margin-bottom: var(--atlas-space-5); }
+.statistics-toolbar h2 { margin: 0 0 var(--atlas-space-1); }
+.statistics-toolbar p { max-width: 46rem; margin: 0; color: var(--atlas-text-muted); }
+.statistics-controls { display: flex; min-width: 0; flex: 1 1 520px; flex-wrap: wrap; align-items: end; justify-content: flex-start; gap: var(--atlas-space-2) var(--atlas-space-4); }
+.statistics-scope, .statistics-range-control { display: grid; gap: var(--atlas-space-1); color: var(--atlas-text-muted); font-size: .72rem; font-weight: 650; }
+.statistics-scope { min-width: min(100%, 220px); }
 .statistics-scope select { min-height: 38px; }
 .statistics-chart-card { margin-bottom: var(--atlas-space-6); overflow: hidden; }
 .statistics-chart-card .section-heading p { margin-bottom: 0; }

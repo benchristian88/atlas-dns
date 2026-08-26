@@ -180,8 +180,14 @@ describe("v1.1 application shell", () => {
 
     expect(container.querySelector(".app-topbar")).toBeNull();
     expect(container.querySelector(".topbar-context")).toBeNull();
-    expect(screen.queryByLabelText("Notifications", { selector: ".topbar-icon-button" })).toBeNull();
-    expect(container.querySelector(".content")?.getAttribute("style")).toBeNull();
+    expect(
+      screen.queryByLabelText("Notifications", {
+        selector: ".topbar-icon-button",
+      }),
+    ).toBeNull();
+    expect(
+      container.querySelector(".content")?.getAttribute("style"),
+    ).toBeNull();
 
     const sidebar = screen.getByRole("complementary", {
       name: "Application sidebar",
@@ -190,8 +196,12 @@ describe("v1.1 application shell", () => {
       name: /Operator Administrator/,
     });
     await interaction.click(account);
-    expect(within(sidebar).getByRole("menuitem", { name: "My Account" })).toBeTruthy();
-    expect(within(sidebar).getByRole("menuitem", { name: "Preferences" })).toBeTruthy();
+    expect(
+      within(sidebar).getByRole("menuitem", { name: "My Account" }),
+    ).toBeTruthy();
+    expect(
+      within(sidebar).getByRole("menuitem", { name: "Preferences" }),
+    ).toBeTruthy();
     await interaction.click(
       within(sidebar).getByRole("menuitem", { name: "Sign out" }),
     );

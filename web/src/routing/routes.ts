@@ -214,9 +214,6 @@ export function routePageWidth(route: RouteResolution): RoutePageWidth {
     case "not-found":
     case "redirect":
       return "narrow";
-    case "account":
-    case "preferences":
-      return "standard";
     default:
       return "wide";
   }

@@ -46,7 +46,9 @@ describe("account surfaces", () => {
       screen.getByLabelText(/Confirm new password/),
       "replacement secure password",
     );
-    await interaction.click(screen.getByRole("button", { name: "Change password" }));
+    await interaction.click(
+      screen.getByRole("button", { name: "Change password" }),
+    );
 
     await waitFor(() =>
       expect(change).toHaveBeenCalledWith(
@@ -54,7 +56,9 @@ describe("account surfaces", () => {
         "replacement secure password",
       ),
     );
-    expect(await screen.findByText(/Other active sessions were revoked/)).toBeTruthy();
+    expect(
+      await screen.findByText(/Other active sessions were revoked/),
+    ).toBeTruthy();
     const result = await axe.run(container, {
       rules: { "color-contrast": { enabled: false } },
     });

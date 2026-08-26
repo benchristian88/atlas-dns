@@ -62,8 +62,8 @@ interfaces.
 - Kept Settings and Filters exclusive to managed AdGuard Home configuration;
   Atlas controller behavior now has explicit HA Controller or Administration
   ownership. Setup Guide is a bottom-rail help/reference utility.
-- Standardized primary authenticated pages on the Dashboard's wide content
-  frame while keeping focused account routes on the standard frame.
+- Standardized all canonical authenticated pages, including account and
+  preferences, on the Dashboard's wide content frame.
 - Removed the global top utility bar, cluster selector, shell scope, revision,
   health, freshness, notification, and theme controls. Canonical feature pages
   retain their owning information and Statistics owns node/cluster traffic scope.

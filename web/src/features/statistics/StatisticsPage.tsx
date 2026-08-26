@@ -78,30 +78,42 @@ export function StatisticsPage({ cluster }: { cluster: Cluster }) {
         eyebrow={`Observability · ${scopeName}`}
         title="Statistics"
         description={`Cluster: ${cluster.name} · Last refreshed ${formatDate(report.generatedAt)}. Controller-collected DNS activity; no Query Log records are used.`}
-        primaryAction={
-          <div className="statistics-controls">
-            <label className="statistics-scope">
-              <span>Traffic scope</span>
-              <select
-                value={nodeId}
-                onChange={(event) => setNodeId(event.target.value)}
-              >
-                <option value="">Entire Cluster</option>
-                {nodes.map((node) => (
-                  <option key={node.id} value={node.id}>
-                    {node.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+      />
+
+      <section
+        className="card statistics-toolbar"
+        aria-labelledby="statistics-scope-heading"
+      >
+        <div>
+          <h2 id="statistics-scope-heading">Traffic scope</h2>
+          <p>
+            Choose the entire cluster or one node, then select the reporting
+            range.
+          </p>
+        </div>
+        <div className="statistics-controls">
+          <label className="statistics-scope">
+            <span>Node</span>
+            <select
+              value={nodeId}
+              onChange={(event) => setNodeId(event.target.value)}
+            >
+              <option value="">Entire Cluster</option>
+              {nodes.map((node) => (
+                <option key={node.id} value={node.id}>
+                  {node.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="statistics-range-control">
+            <span>Time range</span>
             <fieldset className="statistics-range">
               <legend className="visually-hidden">Statistics range</legend>
               {ranges.map((item) => (
                 <button
                   className={
-                    item.value === range
-                      ? "button"
-                      : "button button--secondary"
+                    item.value === range ? "button" : "button button--secondary"
                   }
                   type="button"
                   key={item.value}
@@ -113,8 +125,8 @@ export function StatisticsPage({ cluster }: { cluster: Cluster }) {
               ))}
             </fieldset>
           </div>
-        }
-      />
+        </div>
+      </section>
 
       {nodeError !== undefined && (
         <div className="notice notice--warning">

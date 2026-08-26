@@ -93,8 +93,8 @@ export function AboutPage() {
             permitted; commercial hosting or resale is prohibited.
           </p>
           <p>
-            The Change License is Apache License 2.0, effective no later than
-            12 August 2032 for this release. AdGuard Home is a separate project;
+            The Change License is Apache License 2.0, effective no later than 12
+            August 2032 for this release. AdGuard Home is a separate project;
             Atlas does not copy its source code or proprietary assets.
           </p>
         </div>

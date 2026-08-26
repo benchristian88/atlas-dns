@@ -489,8 +489,9 @@ available desktop width. No current canonical route uses Full.
 Primary application routes share the Dashboard's Wide
 primary-application measure. This keeps Monitoring, Settings, Filters, HA
 Controller, Administration, and Setup Guide aligned as operators move between
-sections. Account routes use Standard for focused forms. Mobile always uses the available inline size regardless of the
-desktop maximum.
+sections. Account routes use the same Wide measure so transitions into
+self-service pages do not change the application frame. Mobile always uses the
+available inline size regardless of the desktop maximum.
 
 ### Canonical route assignment
 
@@ -504,7 +505,7 @@ desktop maximum.
 | `/ha/nodes`, `/ha/nodes/{nodeId}`, `/ha/operations`, `/ha/notifications`, `/ha/configuration`, `/ha/revisions`, `/ha/deployments`, `/ha/drift` | Wide | Operational tables, comparisons, grids, and lifecycle controls. |
 | `/setup-guide` | Wide | Aligns reference/help with the primary application frame. |
 | `/system/users`, `/system/audit`, `/system/operational-status`, `/system/settings`, `/system/backups`, `/system/updates`, `/system/about` | Wide | Aligns Administration and Monitoring with Dashboard; dense tables remain locally scrollable. |
-| `/account`, `/account/preferences` | Standard | Focused self-service identity, credential, and appearance forms. |
+| `/account`, `/account/preferences` | Wide | Self-service identity, credential, and appearance forms aligned with the rest of the application. |
 
 ---
 

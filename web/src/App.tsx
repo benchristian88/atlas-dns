@@ -1,9 +1,12 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Banner, EmptyState, ErrorState, Loading } from "./components/Feedback";
 import { PageContainer } from "./components/Page";
+import {
+  MyAccountPage,
+  PreferencesPage,
+} from "./features/account/AccountPages";
 import { AllowlistsPage } from "./features/allowlists/AllowlistsPage";
 import { AuditPage } from "./features/audit/AuditPage";
-import { MyAccountPage, PreferencesPage } from "./features/account/AccountPages";
 import { LoginPage, SetupPage } from "./features/auth/AuthPages";
 import { BlockedServicesPage } from "./features/blockedservices/BlockedServicesPage";
 import { BlocklistsPage } from "./features/blocklists/BlocklistsPage";

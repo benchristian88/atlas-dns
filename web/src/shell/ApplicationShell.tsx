@@ -264,7 +264,9 @@ function AccountMenu({
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={id}
-        aria-label={collapsed ? `Account menu for ${user.displayName}` : undefined}
+        aria-label={
+          collapsed ? `Account menu for ${user.displayName}` : undefined
+        }
         title={collapsed ? user.displayName : undefined}
         onClick={() => setOpen((current) => !current)}
       >
@@ -384,7 +386,10 @@ function SidebarGroup({
         <Icon className="sidebar-chevron" name="chevron" />
       </button>
       {expanded && (
-        <div className="sidebar-group__children" id={`sidebar-group-${group.id}`}>
+        <div
+          className="sidebar-group__children"
+          id={`sidebar-group-${group.id}`}
+        >
           {group.children.map((item) => (
             <SidebarLink key={item.href} item={item} pathname={pathname} />
           ))}
@@ -419,7 +424,10 @@ function MobileGroup({
         <Icon className="sidebar-chevron" name="chevron" />
       </button>
       {open && (
-        <div className="sidebar-group__children" id={`mobile-group-${group.id}`}>
+        <div
+          className="sidebar-group__children"
+          id={`mobile-group-${group.id}`}
+        >
           {group.children.map((item) => (
             <SidebarLink key={item.href} item={item} pathname={pathname} />
           ))}

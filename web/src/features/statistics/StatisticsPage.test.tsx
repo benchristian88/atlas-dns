@@ -5,7 +5,11 @@ import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../lib/api";
-import type { Cluster, Node, StatisticsReport } from "../../lib/types";
+import type {
+  Cluster,
+  Node as ManagedNode,
+  StatisticsReport,
+} from "../../lib/types";
 import { StatisticsPage } from "./StatisticsPage";
 
 afterEach(() => {
@@ -21,7 +25,7 @@ const node = {
   id: "22222222-2222-4222-8222-222222222222",
   clusterId: cluster.id,
   name: "Primary",
-} as Node;
+} as ManagedNode;
 
 const report: StatisticsReport = {
   range: "24h",
@@ -104,6 +108,21 @@ describe("StatisticsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Statistics" }),
     ).toBeTruthy();
+    const trafficScope = screen.getByRole("heading", {
+      name: "Traffic scope",
+    });
+    const toolbar = trafficScope.closest("section");
+    const firstMetric = screen.getByText("DNS queries").closest("article");
+    if (
+      !(toolbar instanceof HTMLElement) ||
+      !(firstMetric instanceof HTMLElement)
+    ) {
+      throw new Error("Expected the traffic scope and metrics sections");
+    }
+    expect(
+      toolbar.compareDocumentPosition(firstMetric) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getAllByText("1,000").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("12.5% of queries")).toBeTruthy();
     expect(screen.getByText("example.com")).toBeTruthy();
@@ -119,7 +138,7 @@ describe("StatisticsPage", () => {
     });
     expect(accessibility.violations).toEqual([]);
     expect(statistics).toHaveBeenCalledWith(cluster.id, "24h", "");
-    const scope = await screen.findByRole("combobox", { name: "Traffic scope" });
+    const scope = await screen.findByRole("combobox", { name: "Node" });
     expect(screen.getByRole("option", { name: "Entire Cluster" })).toBeTruthy();
     expect(screen.getByRole("option", { name: "Primary" })).toBeTruthy();
     await userEvent.selectOptions(scope, node.id);
