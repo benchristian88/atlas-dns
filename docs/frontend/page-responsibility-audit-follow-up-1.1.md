@@ -18,10 +18,10 @@ database schema, and frontend design system.
 - Canonical links target existing Node, Revision, Deployment, Drift, Users,
   Settings, Notifications, Configuration, and HA routes. No audit-only resource
   route was invented.
-- Dashboard remains a selected-cluster overview. Health, HA, collection,
-  Attention, Nodes, revisions/deployments, drift, and Recent Changes remain
-  cluster-wide. Only Statistics-backed activity/rankings follow and label
-  `Traffic scope`.
+- Dashboard remains a current-cluster overview. Health, HA, collection,
+  Attention, Nodes, revisions/deployments, drift, Recent Changes, DNS activity,
+  and rankings are cluster-wide. Statistics alone owns the optional Entire
+  Cluster/individual-node traffic selector.
 - Recent Changes reads a database-scoped selected-cluster audit feed plus an
   explicit Controller-global allowlist. Other clusters are excluded before the
   query limit. Dashboard never renders audit metadata.

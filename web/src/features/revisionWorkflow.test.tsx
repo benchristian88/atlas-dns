@@ -274,6 +274,7 @@ describe("revision lifecycle workflow", () => {
       name: "Hide revision 42 details",
     });
     expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure.textContent).toBe("−");
     expect(
       disclosure
         .closest("tr")
@@ -399,6 +400,7 @@ describe("revision lifecycle workflow", () => {
       name: /Hide deployment/,
     });
     expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure.textContent).toBe("−");
     expect(
       new URLSearchParams(window.location.search).get("deploymentId"),
     ).toBe(deployment.id);
@@ -485,10 +487,14 @@ describe("revision lifecycle workflow", () => {
     const disclosure = await screen.findByRole("button", {
       name: "View drift incident details for Primary DNS",
     });
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(disclosure.textContent).toBe("+");
     expect(
       screen.queryByRole("button", { name: "Restore desired state" }),
     ).toBeNull();
     await user.click(disclosure);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure.textContent).toBe("−");
     expect(
       screen.getByRole("button", { name: "Restore desired state" }),
     ).toBeTruthy();

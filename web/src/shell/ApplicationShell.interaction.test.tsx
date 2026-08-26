@@ -10,13 +10,6 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../lib/api";
-import type {
-  Cluster,
-  ConfigurationRevision,
-  Deployment,
-  Node,
-} from "../lib/types";
 import { ThemeProvider } from "../theme/ThemeProvider";
 import { installMatchMedia } from "../theme/testMatchMedia";
 import { ApplicationShell } from "./ApplicationShell";
@@ -33,9 +26,11 @@ beforeEach(() => installMatchMedia());
 function ShellTest({
   children = <p>Page</p>,
   pathname = "/settings/dns",
+  onLogout = () => undefined,
 }: {
   children?: ReactNode;
   pathname?: string;
+  onLogout?: () => void;
 }) {
   return (
     <ThemeProvider>
@@ -46,10 +41,8 @@ function ShellTest({
           displayName: "Operator",
           role: "administrator",
         }}
-        clusters={[]}
         pathname={pathname}
-        onSelectCluster={() => undefined}
-        onLogout={() => undefined}
+        onLogout={onLogout}
       >
         {children}
       </ApplicationShell>
@@ -58,6 +51,25 @@ function ShellTest({
 }
 
 describe("v1.1 application shell", () => {
+  it("uses the resolved appearance for sidebar branding", () => {
+    window.localStorage.setItem("atlas-dns.theme", "light");
+    const light = render(<ShellTest />);
+    expect(
+      light.container.querySelector<HTMLImageElement>(
+        ".app-sidebar .atlas-brand__lockup",
+      )?.src,
+    ).toContain("atlas-dns-lockup-light.svg");
+    light.unmount();
+
+    window.localStorage.setItem("atlas-dns.theme", "dark");
+    const dark = render(<ShellTest />);
+    expect(
+      dark.container.querySelector<HTMLImageElement>(
+        ".app-sidebar .atlas-brand__lockup",
+      )?.src,
+    ).toContain("atlas-dns-lockup-dark.svg");
+  });
+
   it("keeps the active child current and its owning sidebar group open", () => {
     render(<ShellTest />);
     const primary = screen.getByRole("navigation", {
@@ -140,6 +152,18 @@ describe("v1.1 application shell", () => {
         .getByRole("button", { name: "Settings" })
         .getAttribute("aria-expanded"),
     ).toBe("false");
+    await interaction.click(
+      within(drawer).getByRole("button", { name: /Operator Administrator/ }),
+    );
+    expect(
+      within(drawer).getByRole("menuitem", { name: "My Account" }),
+    ).toBeTruthy();
+    expect(
+      within(drawer).getByRole("menuitem", { name: "Preferences" }),
+    ).toBeTruthy();
+    expect(
+      within(drawer).getByRole("menuitem", { name: "Sign out" }),
+    ).toBeTruthy();
     await interaction.keyboard("{Escape}");
     expect(
       screen.queryByRole("dialog", { name: "Navigation drawer" }),
@@ -147,79 +171,30 @@ describe("v1.1 application shell", () => {
     await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 
-  it("shows cluster, scope, revision, health, refresh, and deployment context", async () => {
-    const cluster = {
-      id: "cluster-1",
-      name: "Home DNS",
-      activeRevisionId: "revision-1",
-    } as Cluster;
-    const node = {
-      id: "node-1",
-      clusterId: cluster.id,
-      name: "Primary",
-      enabled: true,
-      healthStatus: "healthy",
-    } as Node;
-    const revision = {
-      id: "revision-1",
-      revisionNumber: 24,
-      active: true,
-    } as ConfigurationRevision;
-    const deployment = {
-      id: "deployment-12345678",
-      status: "running",
-      nodes: [{ id: "task-1", nodeId: node.id, status: "applying" }],
-    } as Deployment;
-    vi.spyOn(api, "nodes").mockResolvedValue({
-      items: [node],
-      refreshedAt: "2026-08-24T07:00:00Z",
-      staleAfterSeconds: 60,
-    });
-    vi.spyOn(api, "configurationRevisions").mockResolvedValue({
-      items: [revision],
-    });
-    vi.spyOn(api, "deployments").mockResolvedValue({ items: [deployment] });
-    vi.spyOn(api, "deployment").mockResolvedValue(deployment);
-
-    render(
-      <ThemeProvider>
-        <ApplicationShell
-          user={{
-            id: "user-1",
-            email: "operator@example.test",
-            displayName: "Operator",
-            role: "administrator",
-          }}
-          clusters={[cluster]}
-          selected={cluster}
-          pathname="/ha/drift"
-          onSelectCluster={() => undefined}
-          onLogout={() => undefined}
-        >
-          <p>Page</p>
-        </ApplicationShell>
-      </ThemeProvider>,
+  it("removes the top bar and exposes account destinations at the rail bottom", async () => {
+    const interaction = userEvent.setup();
+    const logout = vi.fn();
+    const { container } = render(
+      <ShellTest pathname="/ha/drift" onLogout={logout} />,
     );
 
-    await waitFor(() => expect(screen.getByText("#24")).toBeTruthy());
-    const context = screen.getByRole("region", { name: "Controller context" });
-    expect(
-      within(context).getByRole("option", { name: "Home DNS" }),
-    ).toBeTruthy();
-    expect(
-      within(context).getByRole("option", { name: "Entire Cluster" }),
-    ).toBeTruthy();
-    expect(
-      within(context).getByRole("option", { name: "Primary" }),
-    ).toBeTruthy();
-    expect(within(context).getByText("Healthy")).toBeTruthy();
-    expect(
-      within(context).getByRole("link", { name: "applying Primary" }),
-    ).toBeTruthy();
-    expect(
-      screen
-        .getAllByRole("link", { name: "Notifications" })
-        .some((link) => link.classList.contains("topbar-icon-button")),
-    ).toBe(true);
+    expect(container.querySelector(".app-topbar")).toBeNull();
+    expect(container.querySelector(".topbar-context")).toBeNull();
+    expect(screen.queryByLabelText("Notifications", { selector: ".topbar-icon-button" })).toBeNull();
+    expect(container.querySelector(".content")?.getAttribute("style")).toBeNull();
+
+    const sidebar = screen.getByRole("complementary", {
+      name: "Application sidebar",
+    });
+    const account = within(sidebar).getByRole("button", {
+      name: /Operator Administrator/,
+    });
+    await interaction.click(account);
+    expect(within(sidebar).getByRole("menuitem", { name: "My Account" })).toBeTruthy();
+    expect(within(sidebar).getByRole("menuitem", { name: "Preferences" })).toBeTruthy();
+    await interaction.click(
+      within(sidebar).getByRole("menuitem", { name: "Sign out" }),
+    );
+    expect(logout).toHaveBeenCalledOnce();
   });
 });

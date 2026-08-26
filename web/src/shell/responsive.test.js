@@ -8,6 +8,8 @@ describe("responsive shell contract", () => {
     expect(css).toContain(
       "grid-template-columns: var(--atlas-sidebar-width) minmax(0, 1fr)",
     );
+    expect(css).toContain("grid-template-rows: minmax(100vh, auto)");
+    expect(css).not.toContain(".app-topbar {");
     expect(css).toContain("@media (max-width: 1080px)");
     expect(css).toContain("@media (max-width: 760px)");
     expect(css).toContain("@media (max-width: 560px)");

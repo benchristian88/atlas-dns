@@ -41,9 +41,7 @@ describe("WCAG structural regression", () => {
       <ThemeProvider>
         <ApplicationShell
           user={user}
-          clusters={[]}
           pathname="/mistyped"
-          onSelectCluster={() => undefined}
           onLogout={() => undefined}
         >
           <NotFoundPage pathname="/mistyped" />
@@ -60,9 +58,7 @@ describe("WCAG structural regression", () => {
       <ThemeProvider>
         <ApplicationShell
           user={user}
-          clusters={[]}
           pathname="/statistics"
-          onSelectCluster={() => undefined}
           onLogout={() => undefined}
         >
           <h1>Statistics</h1>

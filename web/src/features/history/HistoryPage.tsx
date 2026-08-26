@@ -253,7 +253,7 @@ export function RevisionsPage({ cluster }: { cluster: Cluster }) {
             aria-label={`${expanded ? "Hide" : "View"} revision ${revision.revisionNumber} details`}
             onClick={() => toggle(revision.id)}
           >
-            <span aria-hidden="true">{expanded ? "⌃" : "⌄"}</span>
+            <span aria-hidden="true">{expanded ? "−" : "+"}</span>
           </button>
         );
       },

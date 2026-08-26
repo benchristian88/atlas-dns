@@ -10,8 +10,7 @@ The application uses:
 
 - A persistent, collapsible desktop left rail.
 - A responsive mobile navigation drawer with the same hierarchy.
-- A thin utility top bar for cluster, scope, health, refresh, theme, notification,
-  and account context.
+- No global top utility bar; context and controls live on their owning pages.
 - Semantic light and dark themes.
 - Shared form, table, dialog, status, and feedback components.
 - Clear separation between Save Draft, Publish Revision, Deploy, Verify, and Reconcile.
@@ -127,35 +126,31 @@ Administration contains:
 - Updates
 - About
 
-Setup Guide is a utility item at the bottom of the rail. It is reference/help,
-not first-run onboarding. Sign Out remains in the account menu. Settings and
+Setup Guide is a utility item near the bottom of the rail. It is reference/help,
+not first-run onboarding. The signed-in account menu is the final rail item and
+opens My Account, Preferences, and Sign out. Settings and
 Filters contain only AdGuard Home configuration; Notifications remains an
 Atlas HA Controller function. Do not add an Integrations destination.
 
-The compact theme icon button sits in the utility top bar and opens explicit
-Light, Dark, and System choices. Atlas theme-specific lockup assets provide the visual
-brand foundation; phone layouts use the approved symbol-only asset rather than
+Preferences contains only explicit System, Light, and Dark choices. Atlas
+theme-specific lockup assets provide the visual brand foundation; collapsed
+rail and drawer layouts may use the approved symbol-only asset rather than
 compressing the lockup.
 
-### Utility top bar
+### Page-owned context
 
-The top bar appears beside the rail and does not repeat primary navigation.
+The application has no global top utility bar. Main content begins with the
+page's own PageHeader/content. Ownership is:
 
-It contains:
+- Current cluster is read-only page context where useful; cluster switching is
+  not exposed in v1.1.
+- Dashboard is cluster-wide; Statistics owns traffic scope and range.
+- Revision, health, deployment, notification, and freshness evidence stays on
+  canonical feature pages.
+- Preferences owns appearance; the rail account menu owns identity and sign out.
 
-- Cluster selector.
-- Scope selector.
-- Active revision.
-- Cluster health.
-- Active deployment indicator.
-- Last-refreshed state.
-- Theme, notification, and account actions.
-
-Example:
-
-```text
-[Home DNS ▾] [Entire Cluster ▾] Revision 24  ● Healthy
-```
+Atlas retains cluster-scoped domain models, IDs, persistence, and APIs for
+future multi-cluster workflows despite hiding cluster selection in v1.1.
 
 ### Mobile
 
@@ -165,7 +160,7 @@ Below the desktop breakpoint:
 - Preserve the same navigation hierarchy.
 - Show Monitoring, Settings, Filters, HA Controller, and Administration as
   expandable groups.
-- Keep cluster and scope context visible or accessible through a context sheet.
+- Keep page-specific controls inside their owning page.
 - Do not invent a separate mobile-only information architecture.
 - Keep the authenticated shell within the layout viewport on first render.
   Document-level horizontal scrolling or clipping is not a responsive strategy;
@@ -491,10 +486,10 @@ Use for:
 Reserved for a future route whose content demonstrably requires the complete
 available desktop width. No current canonical route uses Full.
 
-Every canonical authenticated application route shares the Dashboard's Wide
+Primary application routes share the Dashboard's Wide
 primary-application measure. This keeps Monitoring, Settings, Filters, HA
 Controller, Administration, and Setup Guide aligned as operators move between
-sections. Mobile always uses the available inline size regardless of the
+sections. Account routes use Standard for focused forms. Mobile always uses the available inline size regardless of the
 desktop maximum.
 
 ### Canonical route assignment
@@ -509,6 +504,7 @@ desktop maximum.
 | `/ha/nodes`, `/ha/nodes/{nodeId}`, `/ha/operations`, `/ha/notifications`, `/ha/configuration`, `/ha/revisions`, `/ha/deployments`, `/ha/drift` | Wide | Operational tables, comparisons, grids, and lifecycle controls. |
 | `/setup-guide` | Wide | Aligns reference/help with the primary application frame. |
 | `/system/users`, `/system/audit`, `/system/operational-status`, `/system/settings`, `/system/backups`, `/system/updates`, `/system/about` | Wide | Aligns Administration and Monitoring with Dashboard; dense tables remain locally scrollable. |
+| `/account`, `/account/preferences` | Standard | Focused self-service identity, credential, and appearance forms. |
 
 ---
 
@@ -670,7 +666,10 @@ Table rules:
 - Operational record details use an adjacent expandable table row with a real
   disclosure button, `aria-expanded`, and `aria-controls`. Only one row is open
   per table. Revisions, Deployments, and Drift persist the selected ID in the
-  URL and scroll a valid deep link into view once after loading.
+  URL and scroll a valid deep link into view once after loading. Equivalent
+  Revisions, Deployments, Drift, Query Log, and Audit Log controls display `+`
+  when collapsed and `−` when expanded; the icon is hidden from the accessible
+  name and every button has a descriptive label.
 - Audit Log uses the same adjacent expanded-row and query-selection pattern.
   Its compact row is Time, human Action, Resource, current Actor label, and a
   labelled disclosure. Request ID, immutable actor UUID, raw action, canonical
@@ -722,12 +721,11 @@ of each node.
 - DNS activity uses the canonical 24-hour Statistics report for Queries,
   Blocked percentage, Safety Interventions, and Average Processing. Coverage
   diagnostics remain on Statistics and Operational Status.
-- Dashboard header and all health, HA, collection, attention, node,
-  revision/deployment, drift, and Recent Changes evidence remain explicitly
-  cluster-wide. Only DNS activity and top-domain rankings follow the shell node
-  selection, and each of those panels says `Traffic scope: Entire Cluster` or
-  names the selected node. The page header says `Cluster: <name>` and never
-  implies that node selection changes cluster health semantics.
+- Dashboard header, health, HA, collection, attention, node,
+  revision/deployment, drift, Recent Changes, DNS activity, and top-domain
+  rankings remain explicitly cluster-wide. Statistics is the only surface that
+  owns the Entire Cluster/individual-node traffic selector. The page header says
+  `Cluster: <name>` and never implies node-scoped health semantics.
 - Recent Changes composes safe revision, deployment, and database-scoped audit
   summaries for the selected cluster, plus controller-global administration
   and security events labelled `Controller`. Events from other clusters are

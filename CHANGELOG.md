@@ -31,8 +31,10 @@ interfaces.
   all-category behavior.
 - Added append-only migration `000017_release_1_1_runtime_policy_history`.
 - Added the responsive v1.1 application shell with a collapsible desktop left
-  rail, equivalent mobile drawer, project-owned line icons, utility-focused top
-  bar, and accessible active/open navigation ancestry.
+  rail, equivalent mobile drawer, project-owned line icons, bottom-rail account
+  menu, and accessible active/open navigation ancestry.
+- Added My Account with current-password-verified self-service password change
+  and Preferences with browser-local System, Light, and Dark appearance.
 - Added the dedicated HA Controller → Notifications presentation route for the
   existing encrypted webhook capability.
 - Redesigned Dashboard around evidence-backed DNS Serving, API Reachable, HA,
@@ -60,11 +62,16 @@ interfaces.
 - Kept Settings and Filters exclusive to managed AdGuard Home configuration;
   Atlas controller behavior now has explicit HA Controller or Administration
   ownership. Setup Guide is a bottom-rail help/reference utility.
-- Standardized every canonical authenticated page on the Dashboard's wide
-  content frame, including Operational Status, Administration, and Setup Guide.
-- Dashboard now states cluster-wide versus traffic-only scope explicitly and
+- Standardized primary authenticated pages on the Dashboard's wide content
+  frame while keeping focused account routes on the standard frame.
+- Removed the global top utility bar, cluster selector, shell scope, revision,
+  health, freshness, notification, and theme controls. Canonical feature pages
+  retain their owning information and Statistics owns node/cluster traffic scope.
+- Dashboard is cluster-wide for operational and traffic evidence and
   builds Recent Changes from selected-cluster plus labelled Controller events,
   with durable-ID de-duplication, exact drill-down, and scoped partial warnings.
+- Standardized Revisions, Deployments, Drift, Query Log, and Audit Log inline
+  disclosures on accessible `+`/`−` controls and improved About page hierarchy.
 
 ### Fixed
 

@@ -3,6 +3,7 @@ import { Banner, EmptyState, ErrorState, Loading } from "./components/Feedback";
 import { PageContainer } from "./components/Page";
 import { AllowlistsPage } from "./features/allowlists/AllowlistsPage";
 import { AuditPage } from "./features/audit/AuditPage";
+import { MyAccountPage, PreferencesPage } from "./features/account/AccountPages";
 import { LoginPage, SetupPage } from "./features/auth/AuthPages";
 import { BlockedServicesPage } from "./features/blockedservices/BlockedServicesPage";
 import { BlocklistsPage } from "./features/blocklists/BlocklistsPage";
@@ -177,6 +178,8 @@ function Application({ user, onLogout }: { user: User; onLogout: () => void }) {
   else if (route.kind === "backups") content = <BackupPage />;
   else if (route.kind === "updates") content = <UpdatesPage />;
   else if (route.kind === "about") content = <AboutPage />;
+  else if (route.kind === "account") content = <MyAccountPage user={user} />;
+  else if (route.kind === "preferences") content = <PreferencesPage />;
   else if (route.kind === "system-settings")
     content = <SystemSettingsPage cluster={selected} />;
   else if (selected === undefined && route.kind === "onboarding")
@@ -281,10 +284,7 @@ function Application({ user, onLogout }: { user: User; onLogout: () => void }) {
   return (
     <ApplicationShell
       user={user}
-      clusters={clusters ?? []}
-      selected={selected}
       pathname={path}
-      onSelectCluster={setSelectedID}
       onLogout={() => void logout()}
     >
       <PageContainer size={routePageWidth(route)}>

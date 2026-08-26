@@ -49,7 +49,8 @@ headers plus a Dashboard-style responsive health summary. HA Operations, Nodes,
 and Node Detail use the same compact health-card anatomy for their top-level
 evidence. System Settings removes non-setting General, Backup & Restore,
 Operations, and Security cards while retaining every runtime setting and the
-release-check control. About Atlas Project now precedes technical build data.
+release-check control. About Atlas Project now precedes a readable Installation /
+Build Information definition list and Licensing / Attribution.
 
 Audit Log now uses server-side opaque keyset pagination and exact
 `auditEventId` deep links. Rows expand inline to show current actor labels,
@@ -58,13 +59,24 @@ change evidence. Metadata is redacted and bounded before persistence and again
 at representation; unknown historical metadata uses a defensive redacted
 fallback.
 
-Dashboard health, HA, Attention, Nodes, revision/deployment, drift, and Recent
-Changes evidence remains cluster-wide. Only DNS activity and domain rankings
-follow the selected traffic node and are labelled `Traffic scope`. Recent
+The global top utility bar has been removed. Dashboard health, HA, Attention,
+Nodes, revision/deployment, drift, Recent Changes, DNS activity, and domain
+rankings are cluster-wide. Statistics owns the Entire Cluster/individual-node
+traffic selector and contextual freshness. Recent
 Changes uses a database-scoped selected-cluster audit query, includes explicitly
 labelled Controller administration/security events, excludes other clusters,
 de-duplicates exact revision/deployment audit twins in favor of domain records,
 and retains valid sources under a scoped partial warning.
+
+The bottom of the desktop rail and mobile drawer now contains the signed-in
+account menu. My Account provides a current-password-verified self-service
+password change that revokes other sessions; Preferences provides only System,
+Light, and Dark browser-local appearance. Revisions, Deployments, Drift, Query
+Log, and Audit Log use consistent accessible `+`/`−` inline disclosures.
+
+Atlas retains cluster-scoped domain/API architecture, but v1.1 exposes only the
+current cluster because no supported multi-cluster creation/switch workflow
+exists yet. No cluster IDs, models, persistence, or API contracts were removed.
 
 Failed, non-archived deployments may still remain in Dashboard Attention as
 historical evidence. Acknowledgement/resolution semantics require a separate

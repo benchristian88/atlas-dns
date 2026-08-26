@@ -21,6 +21,11 @@ require the existing same-origin CSRF token.
   session material. The only accepted role is `administrator`.
 - `POST /api/v1/users/{userId}/password-reset` replaces the Argon2id credential and
   revokes every target session. No credential is returned.
+- `POST /api/v1/auth/password` accepts only `currentPassword` and `newPassword`.
+  It derives the target user and current session from authentication, rate-limits
+  failed current-password checks, replaces the Argon2id credential, retains the
+  current session, revokes other sessions, and records `user.password_changed`.
+  It never accepts a client-supplied target user ID or returns credential data.
 - `POST /api/v1/system/backups` accepts `{type, passphrase}` and streams a Standard or
   Full `.atlasdnsbackup`. Passphrases are transient. Archive creation is audited.
 - `POST /api/v1/system/restore-preflight` accepts bounded multipart `archive` and
@@ -104,6 +109,7 @@ POST /api/v1/setup
 POST /api/v1/auth/login
 POST /api/v1/auth/logout
 GET  /api/v1/auth/me
+POST /api/v1/auth/password
 ```
 
 Setup status reports whether setup is required, the configured public URL, controller time, cookie security mode, and prerequisite checks. Initial setup is serialized in PostgreSQL and cannot be repeated after the first user exists.

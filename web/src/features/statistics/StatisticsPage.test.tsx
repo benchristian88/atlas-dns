@@ -6,7 +6,6 @@ import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../lib/api";
 import type { Cluster, Node, StatisticsReport } from "../../lib/types";
-import { ScopeProvider } from "../../shell/ScopeContext";
 import { StatisticsPage } from "./StatisticsPage";
 
 afterEach(() => {
@@ -93,13 +92,14 @@ const report: StatisticsReport = {
 };
 
 describe("StatisticsPage", () => {
-  it("renders weighted presentation data and follows global node scope", async () => {
+  it("renders weighted presentation data and owns cluster/node scope", async () => {
     const statistics = vi.spyOn(api, "statistics").mockResolvedValue(report);
-    const { container } = render(
-      <ScopeProvider value={{ nodeId: node.id, nodes: [node] }}>
-        <StatisticsPage cluster={cluster} />
-      </ScopeProvider>,
-    );
+    vi.spyOn(api, "nodes").mockResolvedValue({
+      items: [node],
+      refreshedAt: "2026-08-09T00:00:00Z",
+      staleAfterSeconds: 60,
+    });
+    const { container } = render(<StatisticsPage cluster={cluster} />);
 
     expect(
       await screen.findByRole("heading", { name: "Statistics" }),
@@ -118,7 +118,14 @@ describe("StatisticsPage", () => {
       rules: { "color-contrast": { enabled: false } },
     });
     expect(accessibility.violations).toEqual([]);
-    expect(statistics).toHaveBeenCalledWith(cluster.id, "24h", node.id);
+    expect(statistics).toHaveBeenCalledWith(cluster.id, "24h", "");
+    const scope = await screen.findByRole("combobox", { name: "Traffic scope" });
+    expect(screen.getByRole("option", { name: "Entire Cluster" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Primary" })).toBeTruthy();
+    await userEvent.selectOptions(scope, node.id);
+    await waitFor(() =>
+      expect(statistics).toHaveBeenLastCalledWith(cluster.id, "24h", node.id),
+    );
 
     await userEvent.click(screen.getByRole("button", { name: "7 days" }));
     await waitFor(() =>
@@ -127,6 +134,11 @@ describe("StatisticsPage", () => {
   });
 
   it("renders the explicit unavailable state", async () => {
+    vi.spyOn(api, "nodes").mockResolvedValue({
+      items: [],
+      refreshedAt: "2026-08-09T00:00:00Z",
+      staleAfterSeconds: 60,
+    });
     vi.spyOn(api, "statistics").mockResolvedValue({
       ...report,
       state: "unavailable",

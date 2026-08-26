@@ -6,7 +6,6 @@ import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../lib/api";
 import type { Cluster, Node, QueryEventPage } from "../../lib/types";
-import { ScopeProvider } from "../../shell/ScopeContext";
 import { QueryLogPage } from "./QueryLogPage";
 
 afterEach(() => {
@@ -72,19 +71,19 @@ const page: QueryEventPage = {
 describe("QueryLogPage", () => {
   it("renders node-attributed rows, coverage, detail, and safe draft links", async () => {
     const queryEvents = vi.spyOn(api, "queryEvents").mockResolvedValue(page);
-    const { container } = render(
-      <ScopeProvider value={{ nodeId: "", nodes: [node] }}>
-        <QueryLogPage cluster={cluster} />
-      </ScopeProvider>,
-    );
+    const { container } = render(<QueryLogPage cluster={cluster} />);
 
     expect(await screen.findByText("ads.example.org")).toBeTruthy();
     expect(screen.getByText("dns-a")).toBeTruthy();
     expect(screen.getByText(/1 of 2 enabled nodes/)).toBeTruthy();
     expect(screen.getByText(/Central retention: 7 days/)).toBeTruthy();
-    await userEvent.click(
-      screen.getByRole("button", { name: "View details for ads.example.org" }),
-    );
+    const disclosure = screen.getByRole("button", {
+      name: "View details for ads.example.org",
+    });
+    expect(disclosure.textContent).toBe("+");
+    await userEvent.click(disclosure);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure.textContent).toBe("−");
     expect(screen.getByText("FilteredBlackList")).toBeTruthy();
     expect(
       screen.getByRole("link", { name: "View node" }).getAttribute("href"),

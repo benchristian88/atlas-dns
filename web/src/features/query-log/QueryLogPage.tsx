@@ -16,13 +16,11 @@ import type {
   QueryEventStatus,
 } from "../../lib/types";
 import { nodeDetailPath } from "../../routing/routes";
-import { useScope } from "../../shell/ScopeContext";
 
 const PAGE_SIZE = 50;
 const REFRESH_INTERVAL_MS = 30_000;
 
 export function QueryLogPage({ cluster }: { cluster: Cluster }) {
-  const { nodeId, nodes } = useScope();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -38,7 +36,7 @@ export function QueryLogPage({ cluster }: { cluster: Cluster }) {
   const [expanded, setExpanded] = useState("");
   const [newerCount, setNewerCount] = useState(0);
 
-  const filterKey = `${nodeId}\u0000${search}\u0000${status}\u0000${queryType}\u0000${client}`;
+  const filterKey = `${search}\u0000${status}\u0000${queryType}\u0000${client}`;
   const cursorStack = cursorState.key === filterKey ? cursorState.stack : [""];
   const cursor = cursorStack.at(-1) ?? "";
   const pageNumber = cursorStack.length;
@@ -56,7 +54,7 @@ export function QueryLogPage({ cluster }: { cluster: Cluster }) {
 
   const request = useMemo(
     () => ({
-      nodeId,
+      nodeId: "",
       cursor,
       limit: PAGE_SIZE,
       search,
@@ -64,7 +62,7 @@ export function QueryLogPage({ cluster }: { cluster: Cluster }) {
       queryType,
       client: client.trim(),
     }),
-    [client, cursor, nodeId, queryType, search, status],
+    [client, cursor, queryType, search, status],
   );
 
   const load = useCallback(
@@ -105,8 +103,6 @@ export function QueryLogPage({ cluster }: { cluster: Cluster }) {
     return () => window.clearInterval(timer);
   }, [cluster.id, cursor, expanded, load, report?.items, request]);
 
-  const scopeName =
-    nodes.find((node) => node.id === nodeId)?.name ?? "Entire cluster";
   const columns: readonly DataTableColumn<QueryEvent>[] = [
     {
       id: "time",
@@ -169,7 +165,7 @@ export function QueryLogPage({ cluster }: { cluster: Cluster }) {
           aria-label={`${expanded === event.id ? "Close" : "View"} details for ${event.query}`}
           onClick={() => setExpanded(expanded === event.id ? "" : event.id)}
         >
-          {expanded === event.id ? "−" : "+"}
+          <span aria-hidden="true">{expanded === event.id ? "−" : "+"}</span>
         </button>
       ),
     },
@@ -287,7 +283,7 @@ export function QueryLogPage({ cluster }: { cluster: Cluster }) {
         columns={columns}
         rows={report?.items ?? []}
         rowKey={(event) => event.id}
-        caption={`Query events for ${scopeName}; every row identifies its source node`}
+        caption="Query events for the entire cluster; every row identifies its source node"
         loading={loading && report === undefined}
         error={report === undefined ? error : undefined}
         retry={() => void load()}
@@ -521,8 +517,8 @@ function emptyDescription(report?: QueryEventPage) {
     report.coverage.disabledNodes === report.coverage.expectedNodes &&
     report.coverage.expectedNodes > 0
   )
-    return "Query logging is disabled on every node in this scope.";
-  return "Wait for the next collection pass, change the selected scope, or clear the current filters.";
+    return "Query logging is disabled on every node in this cluster.";
+  return "Wait for the next collection pass or clear the current filters.";
 }
 
 function statusLabel(status: QueryEventStatus) {

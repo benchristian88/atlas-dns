@@ -222,7 +222,7 @@ export function DeploymentsPage({ cluster }: { cluster: Cluster }) {
             aria-label={`${expanded ? "Hide" : "View"} deployment ${shortID(deployment.id)} details`}
             onClick={() => toggle(deployment.id)}
           >
-            <span aria-hidden="true">{expanded ? "⌃" : "⌄"}</span>
+            <span aria-hidden="true">{expanded ? "−" : "+"}</span>
           </button>
         );
       },

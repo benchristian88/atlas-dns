@@ -10,6 +10,10 @@ hierarchy opens in a navigation drawer. Monitoring contains Statistics, Query
 Log, and Operational Status. Settings and Filters contain only AdGuard Home
 configuration; Atlas functions live under HA Controller or Administration.
 Setup Guide remains available near the bottom of the rail as reference/help.
+The signed-in account menu sits at the bottom of the rail and opens My Account,
+Preferences, and Sign out. Atlas retains cluster-scoped backend and API data,
+but v1.1 shows only the current cluster because cluster creation/switching is not
+a supported UI workflow yet.
 
 ## Guided onboarding
 
@@ -33,11 +37,12 @@ node state, and top queried/blocked domains. A healthy controller summary does
 not imply that every node is serving DNS, and partial collector coverage is
 shown rather than averaged away. Use the links on each panel for the
 authoritative detail.
+Dashboard traffic and domain rankings are always cluster-wide.
 
 ## Statistics
 
-Statistics aggregates supported node counters for fixed time ranges. Select the
-whole cluster or one node. Coverage identifies current, stale, unsupported,
+Statistics aggregates supported node counters for fixed time ranges and owns
+the traffic selector for Entire Cluster or one node. Coverage identifies current, stale, unsupported,
 maintenance, and failed nodes. Totals are additive; percentages and latency
 metrics use the relevant query/response weighting. Node-local statistics policy
 is edited under General settings, while controller collection cadence is an
@@ -46,7 +51,7 @@ operator setting.
 ## Query Log
 
 Query Log stores bounded, node-attributed events collected from supported node
-APIs. Search by domain/client and filter by status, query type, client, or node.
+APIs. Search by domain/client and filter by status, query type, or client.
 Every row and detail view retains the source node. Context links can prefill an
 allow/block rule, DNS rewrite, or client search, but never bypass the desired
 configuration workflow.
@@ -54,6 +59,17 @@ configuration workflow.
 Collection cannot recover events already removed by a node and preserves
 anonymized client data as received. Coverage reports known gaps and collection
 state. Treat all retained query data as sensitive.
+
+## My Account and Preferences
+
+My Account shows the current display identity, email, and role. Changing your
+own password requires the current password, retains the current session, revokes
+other sessions, and is audited without password material. Administration →
+Users remains the separate surface for creating, enabling/disabling, or resetting
+another administrator.
+
+Preferences contains only System, Light, and Dark appearance. The preference is
+stored in this browser; System follows the browser/operating-system appearance.
 
 ## Settings and Filters
 

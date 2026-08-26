@@ -2,11 +2,16 @@
 
 ## v1.1 outcome
 
-Atlas uses a persistent left rail for product navigation and a thin top bar for
-shared context and utilities. The shell makes the distinction between managed
+Atlas uses a persistent left rail for product navigation, help, and signed-in
+identity. There is no global top utility bar. The shell makes the distinction between managed
 AdGuard Home configuration and Atlas controller functions explicit. It does
-not imply multi-controller or multi-cluster orchestration that the backend does
-not provide.
+not imply multi-controller or multi-cluster orchestration that the current UI
+does not provide.
+
+Atlas retains cluster-scoped domain/API architecture, but v1.1 exposes only the
+current cluster because no supported multi-cluster creation/switch workflow
+exists yet. Cluster IDs, models, persistence, and cluster-scoped API contracts
+remain authoritative and must not be removed as a consequence of this UI choice.
 
 ## Information architecture
 
@@ -93,6 +98,8 @@ second permanent navigation section.
 | `/system/backups` | Administration | Backups |
 | `/system/updates` | Administration | Updates |
 | `/system/about` | Administration | About |
+| `/account` | Account menu | My Account |
+| `/account/preferences` | Account menu | Preferences |
 | `/setup-guide` | Help utility | Setup Guide |
 | `/onboarding` | Setup Guide/manual offer | Guided onboarding or completed review |
 
@@ -108,7 +115,12 @@ Groups are native buttons with `aria-expanded` and `aria-controls`. The group
 that owns the current route remains visibly active and open; node-detail routes
 keep Nodes current. Operators may open or close inactive groups.
 
-The collapse control is at the bottom of the rail. Collapsed state is
+Setup Guide, the collapse control, and the signed-in account menu are at the
+bottom of the rail. The account menu shows the actual display name and role and
+opens My Account, Preferences, and Sign out. My Account and Preferences are not
+primary navigation items and do not duplicate Administration → Users.
+
+Collapsed state is
 browser-local presentation state under `atlas-dns.sidebar-collapsed`; it does
 not create an API setting or database record. Collapsed links and group buttons
 retain accessible names and native title tooltips. Selecting a group while
@@ -122,28 +134,27 @@ Keyboard behavior:
 - visible focus uses the shared Atlas focus token;
 - the current link uses `aria-current="page"`.
 
-## Utility top bar
+## Page ownership without a top bar
 
-The top bar contains existing shared capabilities only:
-
-- selected cluster;
-- Entire Cluster or selected-node scope;
-- active revision and aggregate health where space permits;
-- active deployment link when present;
-- last node-inventory refresh state;
-- Light, Dark, or System theme control;
-- notification shortcut when notification support is available; and
-- user/account menu and Sign Out.
-
-It does not repeat primary navigation. Smaller viewports progressively hide
-secondary facts while preserving cluster selection, theme, notifications, and
-the account action.
+- Dashboard is always the current cluster overview. Its DNS activity and domain
+  rankings use the cluster-wide Statistics report.
+- Statistics owns the Entire Cluster/individual-node traffic selector and fixed
+  range choices. Its generated/collection time is dataset-local freshness.
+- Revision, health, active deployment, attention, and freshness remain on their
+  canonical Dashboard, Configuration Control, Revisions, Deployments,
+  Operational Status, and HA Operations surfaces.
+- HA Controller → Notifications remains the notification management surface;
+  there is no global bell or alert badge.
+- Preferences owns System, Light, and Dark appearance. My Account owns current
+  identity and the authenticated current-password-verified password change.
 
 ## Mobile and responsive contract
 
-At tablet and phone widths the left rail becomes a left-hand modal drawer. The
+At tablet and phone widths the left rail becomes a left-hand modal drawer opened
+by a compact floating navigation trigger rather than a replacement utility bar. The
 drawer uses the same labels, order, grouping, active state, and utility item as
-desktop. Escape and the close control dismiss it and restore focus to the menu
+desktop. Its bottom account menu keeps My Account, Preferences, and Sign out
+reachable. Escape and the close control dismiss it and restore focus to the menu
 trigger. Group disclosures never depend on hover.
 
 The shell uses `minmax(0, 1fr)`, explicit inline-size containment, and local
@@ -171,7 +182,7 @@ What needs attention?
 What changed recently?
 ```
 
-It composes existing Nodes, HA status, Operational Status, Statistics,
+It composes existing Nodes, HA status, Operational Status, cluster-wide Statistics,
 versions, revisions, deployments, drift, and safe audit summaries. It does not
 create a second alert engine, derive traffic from Query Log, invent node roles,
 or manufacture unavailable metrics. Detailed action and coverage remain on the
@@ -184,6 +195,11 @@ error state. Supplementary source failures retain available dashboard data and
 show an explicit partial-source warning. Unavailable statistics remain an em
 dash or unavailable panel rather than zero. Audit summaries use safe action and
 resource labels only; metadata and secrets are never rendered.
+
+Equivalent authenticated table row disclosures use `+` while collapsed and `−`
+while expanded, with `aria-expanded`, `aria-controls`, and a descriptive label.
+This applies to Revisions, Deployments, Drift, Query Log, and Audit Log, not to
+select menus, sorting, navigation groups, or independent native details blocks.
 
 HA Operations applies the same partial-source principle to HA summary, node,
 certificate, version, upgrade, and Operational History reads. A failed source

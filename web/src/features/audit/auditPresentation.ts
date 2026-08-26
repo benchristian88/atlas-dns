@@ -54,6 +54,7 @@ const actionLabels: Readonly<Record<string, string>> = {
   "user.disabled": "User disabled",
   "user.enabled": "User enabled",
   "user.login_identifier_changed": "User login identifier changed",
+  "user.password_changed": "Own password changed",
   "user.password_reset": "User password reset",
   "user.updated": "User updated",
 };
@@ -296,6 +297,7 @@ function knownFields(
       ["loginIdentifierChanged", "Login identifier changed", yesNo],
       ["displayNameChanged", "Display name changed", yesNo],
       ["sessionsRevoked", "Sessions revoked", yesNo],
+      ["otherSessionsRevoked", "Other sessions revoked", yesNo],
     ]);
   }
   return undefined;

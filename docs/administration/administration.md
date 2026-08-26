@@ -30,6 +30,14 @@ sessions. The controller prevents self-disable and prevents disabling the final
 enabled administrator. User hard deletion and additional roles are not
 available, preserving audit attribution and the current authorization boundary.
 
+The bottom-rail account menu is separate from Users. My Account changes only
+the authenticated user's own password after current-password verification; the
+server derives the user and current session rather than accepting a target user
+ID. A successful change revokes other sessions, retains the current session,
+and records `user.password_changed` without password material. Preferences is
+browser-local and contains only System, Light, and Dark appearance; appearance
+changes are not security audit events.
+
 ## Webhooks and notifications
 
 HA Controller → Notifications owns the single permanent notification-channel
@@ -126,9 +134,10 @@ pages and documentation.
 
 ## About
 
-Administration → About presents About Atlas Project first, followed by
-application version, commit, build time, environment, and schema compatibility.
-It also includes project attribution, documentation, and licensing status.
+Administration → About presents About Atlas Project first, followed by a compact
+Installation / Build Information definition list and Licensing / Attribution.
+It includes application version, commit, build time, schema, supported AdGuard
+Home range, reference platforms, project links, and licensing status.
 Use these values in a support report, but never include credentials, backup
 passphrases, Query Log records, or raw node responses.
 
