@@ -7,9 +7,13 @@ management system even though it is outside the DNS request path.
 ## Authentication and authorization
 
 The first-run flow creates the initial local administrator exactly once. All
-current accounts have the administrator role. Passwords are hashed; successful
-login creates a server-side session represented by a Secure, HTTP-only,
-same-site cookie in production. Authentication endpoints are rate-limited.
+current accounts have the administrator role. Passwords are hashed. Optional
+per-user TOTP uses RFC 6238-compatible six-digit SHA-1 codes with a 30-second
+period, server UTC time, and a ±1-step skew. For an MFA-enabled user, a valid
+password creates only a five-minute, single-use, server-side challenge. A normal
+session is created through the existing session path only after valid TOTP or
+atomic one-time recovery-code verification. Authentication and factor endpoints
+are rate-limited.
 
 Disabling an account or resetting credentials revokes its sessions. The server
 prevents self-disable and removal of the final enabled administrator. Every
@@ -42,8 +46,14 @@ Test Webhook keep their existing dedicated audit/transaction boundaries.
 
 ## Secrets
 
-Node credentials and webhook destinations are encrypted at rest with
-`CREDENTIAL_ENCRYPTION_KEY`. They are write-only through API/UI contracts and
+Node credentials, webhook destinations, and TOTP seeds are encrypted at rest
+with `CREDENTIAL_ENCRYPTION_KEY`. TOTP encryption is bound to the user UUID;
+challenge tokens are stored only as purpose-separated HMAC hashes. Recovery
+codes have 80 bits of CSPRNG entropy and use purpose-separated SHA-256 hashes,
+which remain valid when an offline restore keeps deployment configuration but
+rotates the unrelated session secret. Plaintext seeds, provisioning URIs, QR payloads, entered codes, and
+recovery codes are never logs or audit fields and exist in browser memory only
+during their one-time flows. They are write-only through API/UI contracts and
 must never be logged, echoed in responses, copied into audit metadata, or exposed
 through diagnostics. Webhook summaries include only scheme and host; userinfo,
 path, fragment, and query-token detail is excluded.
@@ -120,7 +130,11 @@ derive or expose raw Query Log events.
 ## Backup and restore
 
 Portable archives combine the database dump and credential key inside a
-passphrase-encrypted authenticated envelope. Passphrases must be supplied from a
+passphrase-encrypted authenticated envelope. This established format-v1
+recovery contract means the external runtime key is not present in plaintext or
+in the outer manifest, but is intentionally included inside the authenticated
+encrypted payload. MFA seeds remain encrypted database values and recovery
+codes remain hashes. Passphrases must be supplied from a
 protected regular file to the CLI, never a command argument. Restore requires a
 stopped controller and new empty database and emits the recovered key to an
 explicit protected path.
@@ -150,7 +164,8 @@ backup first.
 
 ## Known security boundaries
 
-The stable 1.x product is local-administrator-only and does not provide OIDC,
-fine-grained RBAC, distributed login throttling, automatic secret rotation,
-signed release artifacts, or controller HA. Do not infer those controls from the
-current UI.
+The stable 1.x product is local-administrator-only. MFA is optional per user;
+there is no mandatory policy, web administrator bypass, trusted-device mode,
+WebAuthn, OIDC/SAML, SMS/email OTP, fine-grained RBAC, distributed login
+throttling, automatic secret rotation, signed release artifacts, or controller
+HA. Do not infer those controls from the current UI.

@@ -21,11 +21,17 @@ require the existing same-origin CSRF token.
   session material. The only accepted role is `administrator`.
 - `POST /api/v1/users/{userId}/password-reset` replaces the Argon2id credential and
   revokes every target session. No credential is returned.
-- `POST /api/v1/auth/password` accepts only `currentPassword` and `newPassword`.
+- `POST /api/v1/auth/password` accepts `currentPassword`, `newPassword`, and an
+  optional `totpCode` that is required when the authenticated user has MFA.
   It derives the target user and current session from authentication, rate-limits
   failed current-password checks, replaces the Argon2id credential, retains the
   current session, revokes other sessions, and records `user.password_changed`.
   It never accepts a client-supplied target user ID or returns credential data.
+- `GET /api/v1/account/mfa` returns only `enabled` and
+  `recoveryCodesRemaining`. Enrollment start/verify, recovery-code regeneration,
+  and disable use the authenticated user rather than a request target. Every
+  mutation requires CSRF; enrollment start requires current password, while
+  regeneration and disable require current password plus current TOTP.
 - `POST /api/v1/system/backups` accepts `{type, passphrase}` and streams a Standard or
   Full `.atlasdnsbackup`. Passphrases are transient. Archive creation is audited.
 - `POST /api/v1/system/restore-preflight` accepts bounded multipart `archive` and
@@ -79,12 +85,20 @@ generation. Normal node creation probes again before encrypting credentials.
 
 ## Authentication and CSRF
 
-Successful setup or login creates:
+Successful setup, non-MFA login, or completed MFA challenge creates:
 
 - `atlas_dns_session`: opaque, HTTP-only, SameSite=Strict session cookie;
 - `atlas_dns_csrf`: opaque, SameSite=Strict CSRF cookie readable by the UI.
 
 Cookies are marked Secure when `PUBLIC_BASE_URL` uses HTTPS. Authenticated `POST`, `PATCH`, and `DELETE` requests must copy the CSRF cookie into `X-CSRF-Token`. Only HMAC-SHA-256 hashes of both tokens are stored.
+
+For an MFA-enabled account, valid password login returns HTTP 202 with
+`mfaRequired`, an opaque five-minute `mfaChallenge`, and
+`challengeExpiresAt`. It sets no cookies and creates no session. TOTP or recovery
+verification consumes that persisted challenge atomically and then invokes the
+same canonical session creation path. Challenges are single-use, limited to five
+failed factor attempts, excluded from ordinary API authorization, and never
+placed in a URL. API-wide `Cache-Control: no-store` covers all one-time values.
 
 ## Errors
 
@@ -107,14 +121,31 @@ Cookies are marked Secure when `PUBLIC_BASE_URL` uses HTTPS. Authenticated `POST
 GET  /api/v1/setup/status
 POST /api/v1/setup
 POST /api/v1/auth/login
+POST /api/v1/auth/mfa/verify
+POST /api/v1/auth/mfa/recovery
+POST /api/v1/auth/mfa/cancel
 POST /api/v1/auth/logout
 GET  /api/v1/auth/me
 POST /api/v1/auth/password
+GET  /api/v1/account/mfa
+POST /api/v1/account/mfa/enroll/start
+POST /api/v1/account/mfa/enroll/verify
+POST /api/v1/account/mfa/recovery-codes/regenerate
+POST /api/v1/account/mfa/disable
 ```
 
 Setup status reports whether setup is required, the configured public URL, controller time, cookie security mode, and prerequisite checks. Initial setup is serialized in PostgreSQL and cannot be repeated after the first user exists.
 
 Login is rate-limited by source address and normalized account identifier. Login failures do not reveal whether an account exists.
+
+The three `/auth/mfa/*` challenge routes are pre-session routes. Verify accepts
+`{challenge, code}`, recovery accepts `{challenge, recoveryCode}`, and cancel
+accepts `{challenge}`. Cancel consumes the challenge and returns 204. Management
+routes are normal authenticated/CSRF-protected self-service APIs and never accept
+a user ID. Enrollment start returns the seed, standards-compatible `otpauth://`
+URI, and locally rendered data-URL QR only for that active one-time flow.
+Enrollment verify and regeneration each return ten plaintext recovery codes once;
+later status returns only the unused count.
 
 ## Cluster routes
 

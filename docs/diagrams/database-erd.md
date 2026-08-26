@@ -7,6 +7,9 @@ authoritative for columns, constraints, and retention detail.
 ```mermaid
 erDiagram
     USERS ||--o{ SESSIONS : has
+    USERS ||--o| USER_MFA : secures
+    USERS ||--o{ USER_MFA_RECOVERY_CODES : recovers_with
+    USERS ||--o{ MFA_CHALLENGES : verifies
     USERS ||--o{ CONFIGURATION_REVISIONS : creates
     USERS ||--o{ AUDIT_EVENTS : acts_in
     CLUSTERS ||--o{ NODES : contains

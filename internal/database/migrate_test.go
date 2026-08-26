@@ -2,13 +2,13 @@ package database
 
 import "testing"
 
-func TestEmbeddedMigrationChainIncludesV110Onboarding(t *testing.T) {
+func TestEmbeddedMigrationChainIncludesV110MFA(t *testing.T) {
 	items, err := loadMigrations()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 18 {
-		t.Fatalf("migration count = %d, want 18", len(items))
+	if len(items) != 19 {
+		t.Fatalf("migration count = %d, want 19", len(items))
 	}
 	for index, item := range items {
 		wantVersion := int64(index + 1)
@@ -19,7 +19,7 @@ func TestEmbeddedMigrationChainIncludesV110Onboarding(t *testing.T) {
 			t.Fatalf("migration %06d is incomplete: %#v", item.version, item)
 		}
 	}
-	if LatestSchemaVersion() != 18 {
-		t.Fatalf("latest schema version = %d, want 18", LatestSchemaVersion())
+	if LatestSchemaVersion() != 19 {
+		t.Fatalf("latest schema version = %d, want 19", LatestSchemaVersion())
 	}
 }

@@ -29,12 +29,17 @@ account, and resets credentials. Disabling or resetting revokes existing
 sessions. The controller prevents self-disable and prevents disabling the final
 enabled administrator. User hard deletion and additional roles are not
 available, preserving audit attribution and the current authorization boundary.
+Each row shows only `2FA: Enabled` or `2FA: Not enabled`. Administrators cannot
+view seeds/codes or reset another user's MFA through the browser in v1.1.
 
 The bottom-rail account menu is separate from Users. My Account changes only
 the authenticated user's own password after current-password verification; the
 server derives the user and current session rather than accepting a target user
 ID. A successful change revokes other sessions, retains the current session,
-and records `user.password_changed` without password material. Preferences is
+and records `user.password_changed` without password material. If MFA is
+enabled, password change also requires current TOTP. MFA enrollment,
+recovery-code regeneration, and disable are owned by My Account → Security;
+these flows never accept a target user ID. Preferences is
 browser-local and contains only System, Light, and Dark appearance; appearance
 changes are not security audit events.
 

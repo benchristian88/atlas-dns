@@ -22,6 +22,8 @@ var sensitiveMetadataKeys = map[string]struct{}{
 	"nodecredentials": {}, "password": {}, "passwordhash": {}, "privatekey": {}, "query": {},
 	"querycontents": {}, "queryname": {}, "rawerror": {}, "responsebody": {}, "rule": {}, "rules": {},
 	"secret": {}, "secrets": {}, "sessiontoken": {}, "token": {}, "username": {}, "webhooksecret": {},
+	"totp": {}, "totpcode": {}, "otpcode": {}, "recoverycode": {}, "recoverycodehash": {},
+	"provisioninguri": {}, "qrcode": {}, "qrcodepayload": {},
 }
 
 // SafeMetadata is the common persistence and representation boundary for audit
@@ -146,6 +148,7 @@ func sensitiveMetadataKey(key string) bool {
 		"privatekey", "certificatebody", "certificatepem", "customcapem", "rawerror",
 		"rawnodeerror", "responsebody", "querycontents", "queryname", "querytext",
 		"clientidentity", "clientidentifier", "destination", "webhookurl",
+		"totp", "otpcode", "recoverycode", "provisioninguri", "qrcode",
 	} {
 		if strings.Contains(normalized, fragment) {
 			return true

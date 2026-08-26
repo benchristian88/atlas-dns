@@ -1,9 +1,11 @@
 # Release 1.1.0 upgrade notes
 
 Back up Atlas before upgrading. Release 1.1.0 applies forward-only migrations
-`000016`, `000017`, and `000018`; no down migration is a supported production
-rollback. Migration `000018` adds the stable Audit Log
+`000016`, `000017`, `000018`, and `000019`; no down migration is a supported
+production rollback. Migration `000018` adds the stable Audit Log
 `(created_at DESC, id DESC)` paging index and does not rewrite audit evidence.
+Migration `000019` adds optional encrypted per-user TOTP, hashed recovery codes,
+and short-lived server-side MFA challenges without changing existing users.
 
 On first startup, operational values from a v1.0.x environment are copied into
 PostgreSQL if the corresponding database columns are not initialized. Preserve
@@ -29,7 +31,9 @@ do not add Dashboard Attention, HA certificate alerts, operational events,
 webhook deliveries, or false recovery transitions. Enabled TLS remains
 fail-closed for missing, invalid, malformed, or expired certificate evidence.
 
-Standard Backup includes System Settings and notification policy because both
+Standard Backup includes System Settings, notification policy, encrypted MFA
+seeds/enabled state, and recovery-code hashes because they are required
+control-plane state. Transient MFA challenges are excluded. It
 are required control-plane state. It continues to exclude Operational History
 events/deliveries, Statistics, Query Log events, DNS probes, and sessions. Full
 Backup includes retained operational data. Audit Log, revisions, deployments,
@@ -70,8 +74,16 @@ and retains valid sources under a scoped partial warning.
 
 The bottom of the desktop rail and mobile drawer now contains the signed-in
 account menu. My Account provides a current-password-verified self-service
-password change that revokes other sessions; Preferences provides only System,
-Light, and Dark browser-local appearance. Revisions, Deployments, Drift, Query
+password change that revokes other sessions and, when enabled, requires TOTP
+step-up. Its Security section adds optional authenticator-compatible TOTP
+enrollment, locally rendered QR/manual setup, ten one-time recovery codes,
+recovery-code regeneration, and secure disable. A valid password for an
+MFA-enabled account creates only a five-minute challenge; the normal session is
+created after TOTP or recovery verification. Users shows read-only 2FA status.
+Lost-device recovery is host-only through
+`atlas-dns-admin reset-mfa --email <local-login>` and revokes all target sessions.
+There is no web administrator bypass or mandatory policy in v1.1. Preferences
+provides only System, Light, and Dark browser-local appearance. Revisions, Deployments, Drift, Query
 Log, and Audit Log use consistent accessible `+`/`−` inline disclosures.
 
 Atlas retains cluster-scoped domain/API architecture, but v1.1 exposes only the

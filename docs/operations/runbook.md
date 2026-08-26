@@ -52,10 +52,41 @@ code instead.
 - A CSRF failure usually means a stale page/cookie pair or origin mismatch.
   Reload once, then inspect the configured origin and reverse-proxy headers.
 - Disabling an administrator or resetting its password revokes its sessions.
+- An MFA password success intentionally sets no session cookie until the TOTP or
+  recovery challenge succeeds. Repeated factor failures consume the challenge
+  after five attempts; start a new password login rather than refreshing an old
+  challenge.
 - The final enabled administrator cannot be disabled. Use another enabled
   administrator for account recovery.
 - Clear only `atlas-dns.theme` to reset browser theme preference. Do not clear
   controller cookies as a theme workaround.
+
+### Lost authenticator and recovery codes
+
+There is no browser administrator bypass. An owner with host/container shell
+access can deliberately reset MFA for one local login. The command deletes the
+encrypted seed and recovery hashes, consumes outstanding challenges, revokes all
+sessions for that user, and records `user.mfa.reset_from_host`; it prints only
+the normalized email and revoked-session count.
+
+Docker Compose:
+
+```bash
+docker compose exec atlas-dns \
+  atlas-dns-admin reset-mfa --email operator@example.test
+```
+
+Native systemd (the protected environment file supplies the existing database,
+session, and credential-key configuration without printing it):
+
+```bash
+sudo sh -c 'set -a; . /etc/atlas-dns/atlas-dns.env; set +a; \
+  exec /usr/local/bin/atlas-dns-admin reset-mfa --email operator@example.test'
+```
+
+Use exact local login email and trusted local shell history policy. On success,
+the user signs in with the normal password and may enroll MFA again. A missing
+user or database/configuration failure changes nothing and returns non-zero.
 
 ## Node connection and compatibility
 
@@ -190,7 +221,12 @@ database; never target the live database.
 Follow the [backup and restore guide](backup-and-restore.md). Keep the original
 database, archive, and runtime configuration until administrator login, node
 credential decryption, desired/active revisions, deployments, drift, workers,
-HA state, and expected history are verified. Pre-1.0 archives are unsupported.
+HA state, per-user MFA login, and expected history are verified. MFA seeds stay
+encrypted and recovery codes stay hashed in the dump; transient challenges and
+all browser sessions are excluded. The established format-v1 archive also
+contains the credential key only inside its passphrase-encrypted authenticated
+payload, so protect archive and passphrase separately. Pre-1.0 archives are
+unsupported.
 
 ## Controller updates
 

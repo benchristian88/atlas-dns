@@ -67,11 +67,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	authService, err := auth.NewService(store, tokens, configuration.SessionDuration)
+	authService, err := auth.NewService(store, tokens, configuration.SessionDuration, credentialCipher)
 	if err != nil {
 		return err
 	}
-	userAdministration := useradmin.NewService(store)
+	userAdministration := useradmin.NewService(store, authService)
 	backupService := backup.NewService(configuration.DatabaseURL, configuration.CredentialEncryptionKey, configuration.PGDumpPath, store)
 	controllerUpdates := updates.NewService(store, configuration.InstallationType)
 	fallbackRuntime := systemsettings.RuntimeSettings{

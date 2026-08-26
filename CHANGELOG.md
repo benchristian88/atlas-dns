@@ -46,6 +46,15 @@ interfaces.
   defensive metadata redaction, current actor labels plus immutable UUIDs,
   canonical resource links, exact deep links, and server-side keyset paging.
 - Added append-only migration `000018_release_1_1_audit_keyset`.
+- Added optional per-user TOTP MFA with five-minute pre-session challenges,
+  locally rendered QR/manual enrollment, ten one-time recovery codes, secure
+  regeneration/disable, and MFA step-up for self-service password changes.
+- Added append-only migration `000019_release_1_1_totp_mfa` with encrypted TOTP
+  envelopes, one-way recovery-code hashes, and transient concurrency-safe
+  challenge state.
+- Added read-only Users 2FA status and host/container recovery through
+  `atlas-dns-admin reset-mfa --email <local-login>`; no browser administrator
+  bypass or mandatory policy was added.
 
 ### Changed
 
@@ -72,6 +81,8 @@ interfaces.
   with durable-ID de-duplication, exact drill-down, and scoped partial warnings.
 - Standardized Revisions, Deployments, Drift, Query Log, and Audit Log inline
   disclosures on accessible `+`/`−` controls and improved About page hierarchy.
+- Standard and Full backups retain encrypted MFA state and recovery hashes while
+  excluding sessions and transient MFA challenges.
 
 ### Fixed
 

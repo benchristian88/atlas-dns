@@ -22,6 +22,7 @@ type userAdministrationFake struct {
 	passwordSessionID       string
 	passwordCurrentPassword string
 	passwordNewPassword     string
+	passwordTOTPCode        string
 }
 
 func (f *userAdministrationFake) List(context.Context) ([]domain.User, error) {
@@ -40,12 +41,13 @@ func (f *userAdministrationFake) ResetPassword(context.Context, domain.Actor, st
 	f.calls++
 	return nil
 }
-func (f *userAdministrationFake) ChangeOwnPassword(_ context.Context, actor domain.Actor, sessionID, currentPassword, newPassword string) error {
+func (f *userAdministrationFake) ChangeOwnPassword(_ context.Context, actor domain.Actor, sessionID, currentPassword, newPassword, totpCode string) error {
 	f.calls++
 	f.passwordActor = actor
 	f.passwordSessionID = sessionID
 	f.passwordCurrentPassword = currentPassword
 	f.passwordNewPassword = newPassword
+	f.passwordTOTPCode = totpCode
 	return nil
 }
 
@@ -56,6 +58,11 @@ func TestProductisationRoutesRejectUnauthenticatedRequests(t *testing.T) {
 		{http.MethodPatch, "/api/v1/users/11111111-1111-4111-8111-111111111111"},
 		{http.MethodPost, "/api/v1/users/11111111-1111-4111-8111-111111111111/password-reset"},
 		{http.MethodPost, "/api/v1/auth/password"},
+		{http.MethodGet, "/api/v1/account/mfa"},
+		{http.MethodPost, "/api/v1/account/mfa/enroll/start"},
+		{http.MethodPost, "/api/v1/account/mfa/enroll/verify"},
+		{http.MethodPost, "/api/v1/account/mfa/recovery-codes/regenerate"},
+		{http.MethodPost, "/api/v1/account/mfa/disable"},
 		{http.MethodPost, "/api/v1/system/backups"},
 		{http.MethodPost, "/api/v1/system/restore-preflight"},
 		{http.MethodGet, "/api/v1/system/update"},

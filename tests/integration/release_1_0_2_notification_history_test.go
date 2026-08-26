@@ -20,9 +20,9 @@ import (
 func TestRelease102MigratesV101NotificationDeliveriesInPlace(t *testing.T) {
 	store := integrationStore(t)
 	ctx := context.Background()
-	// Roll back the three v1.1 migrations and v1.0.2 so this fixture is
+	// Roll back the four v1.1 migrations and v1.0.2 so this fixture is
 	// inserted with the supported v1.0.1 schema, then apply the complete chain.
-	for range 4 {
+	for range 5 {
 		if err := database.RollbackLastMigration(ctx, store.Pool()); err != nil {
 			t.Fatal(err)
 		}
@@ -64,7 +64,7 @@ func TestRelease102MigratesV101NotificationDeliveriesInPlace(t *testing.T) {
 	if err := store.Pool().QueryRow(ctx, `SELECT error_summary,http_status FROM notification_deliveries WHERE id=$1`, deliveryID).Scan(&errorSummary, &httpStatus); err != nil {
 		t.Fatal(err)
 	}
-	if version != 18 || errorSummary != "" || httpStatus != nil {
+	if version != 19 || errorSummary != "" || httpStatus != nil {
 		t.Fatalf("version=%d summary=%q status=%v", version, errorSummary, httpStatus)
 	}
 	items, err := store.ListHAHistory(ctx, haoperations.HistoryQuery{ClusterID: clusterID, Limit: 10})

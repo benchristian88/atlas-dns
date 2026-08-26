@@ -1,4 +1,10 @@
-import { type FormEvent, type ReactNode, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { AtlasBrand } from "../../components/Brand";
 import { ErrorState } from "../../components/Feedback";
 import { api } from "../../lib/api";
@@ -8,7 +14,12 @@ interface AuthPageProps {
   onAuthenticated: (user: User) => void;
 }
 
-export function LoginPage({ onAuthenticated }: AuthPageProps) {
+export function LoginPage({
+  onAuthenticated,
+  onMFARequired,
+}: AuthPageProps & {
+  onMFARequired: (challenge: string, expiresAt: string) => void;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<unknown>();
@@ -20,7 +31,12 @@ export function LoginPage({ onAuthenticated }: AuthPageProps) {
     setError(undefined);
     try {
       const result = await api.login({ email, password });
-      onAuthenticated(result.user);
+      setPassword("");
+      if ("mfaRequired" in result) {
+        onMFARequired(result.mfaChallenge, result.challengeExpiresAt);
+      } else {
+        onAuthenticated(result.user);
+      }
     } catch (caught) {
       setError(caught);
     } finally {
@@ -59,6 +75,105 @@ export function LoginPage({ onAuthenticated }: AuthPageProps) {
           {submitting ? "Signing in…" : "Sign in"}
         </button>
       </form>
+    </AuthLayout>
+  );
+}
+
+export function MFAChallengePage({
+  challenge,
+  expiresAt,
+  onAuthenticated,
+  onCancel,
+}: AuthPageProps & {
+  challenge: string;
+  expiresAt: string;
+  onCancel: () => void;
+}) {
+  const [mode, setMode] = useState<"totp" | "recovery">("totp");
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<unknown>();
+  const [submitting, setSubmitting] = useState(false);
+  const codeInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => codeInput.current?.focus(), []);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(undefined);
+    try {
+      const result =
+        mode === "totp"
+          ? await api.verifyMFA(challenge, code)
+          : await api.verifyMFARecovery(challenge, code);
+      setCode("");
+      onAuthenticated(result.user);
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function cancel() {
+    try {
+      await api.cancelMFA(challenge);
+    } finally {
+      setCode("");
+      onCancel();
+    }
+  }
+
+  return (
+    <AuthLayout
+      title="Two-factor authentication"
+      subtitle={
+        mode === "totp"
+          ? "Enter the 6-digit code from your authenticator app."
+          : "Enter one of your one-time recovery codes."
+      }
+    >
+      <form onSubmit={(event) => void submit(event)} className="form-stack">
+        <label>
+          {mode === "totp" ? "Authenticator code" : "Recovery code"}
+          <input
+            ref={codeInput}
+            inputMode={mode === "totp" ? "numeric" : "text"}
+            autoComplete="one-time-code"
+            pattern={mode === "totp" ? "[0-9]{6}" : undefined}
+            maxLength={mode === "totp" ? 6 : 23}
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            required
+          />
+        </label>
+        {error !== undefined && <ErrorState error={error} />}
+        <button type="submit" className="button" disabled={submitting}>
+          {submitting ? "Verifying…" : "Verify"}
+        </button>
+        <button
+          type="button"
+          className="button button--secondary"
+          onClick={() => {
+            setMode(mode === "totp" ? "recovery" : "totp");
+            setCode("");
+            setError(undefined);
+            codeInput.current?.focus();
+          }}
+        >
+          {mode === "totp" ? "Use a recovery code" : "Use authenticator code"}
+        </button>
+        <button
+          type="button"
+          className="button button--quiet"
+          onClick={() => void cancel()}
+        >
+          Cancel
+        </button>
+      </form>
+      <small className="muted">
+        This challenge expires at {new Date(expiresAt).toLocaleTimeString()}.
+      </small>
     </AuthLayout>
   );
 }

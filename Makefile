@@ -47,6 +47,7 @@ build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/atlas-dns ./cmd/controller
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/atlas-dns-migrate ./cmd/migrate
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/atlas-dns-backup ./cmd/atlas-dns-backup
+	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/atlas-dns-admin ./cmd/atlas-dns-admin
 	cd web && $(NPM) run build
 
 release-artifacts:

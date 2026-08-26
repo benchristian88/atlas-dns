@@ -62,11 +62,23 @@ state. Treat all retained query data as sensitive.
 
 ## My Account and Preferences
 
-My Account shows the current display identity, email, and role. Changing your
-own password requires the current password, retains the current session, revokes
-other sessions, and is audited without password material. Administration →
-Users remains the separate surface for creating, enabling/disabling, or resetting
-another administrator.
+My Account shows the current display identity, email, role, and Security section.
+Optional two-factor authentication can be enrolled with any standards-compatible
+TOTP authenticator: confirm the current password, scan the locally generated QR
+code (or enter the manual seed), and verify a current six-digit code. MFA is not
+enabled until verification succeeds. Save the ten recovery codes shown once;
+each completes one login and is then invalid. Historical seeds and codes are
+never displayed.
+
+When enabled, Security shows only the remaining recovery-code count. Regeneration
+and disabling both require the current password plus current TOTP. Regeneration
+invalidates every earlier unused recovery code. Enabling, regenerating, and
+disabling retain the current strongly reauthenticated session and revoke other
+sessions. Changing your own password also requires current TOTP when MFA is
+enabled, retains the current session, revokes other sessions, and is audited
+without password or factor material. Administration → Users remains the separate
+surface for account management and shows only read-only 2FA status; it provides
+no MFA bypass.
 
 Preferences contains only System, Light, and Dark appearance. The preference is
 stored in this browser; System follows the browser/operating-system appearance.

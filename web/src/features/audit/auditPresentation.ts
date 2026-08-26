@@ -57,6 +57,11 @@ const actionLabels: Readonly<Record<string, string>> = {
   "user.password_changed": "Own password changed",
   "user.password_reset": "User password reset",
   "user.updated": "User updated",
+  "user.mfa.enabled": "Two-factor authentication enabled",
+  "user.mfa.disabled": "Two-factor authentication disabled",
+  "user.mfa.recovery_codes_regenerated": "Recovery codes regenerated",
+  "user.mfa.recovery_code_used": "Recovery code used",
+  "user.mfa.reset_from_host": "Two-factor authentication reset from host",
 };
 
 const sensitiveKeys = new Set([
@@ -90,6 +95,14 @@ const sensitiveKeys = new Set([
   "token",
   "username",
   "webhooksecret",
+  "totp",
+  "totpcode",
+  "otpcode",
+  "recoverycode",
+  "recoverycodehash",
+  "provisioninguri",
+  "qrcode",
+  "qrcodepayload",
 ]);
 
 export function auditActionLabel(action: string): string {
@@ -298,6 +311,9 @@ function knownFields(
       ["displayNameChanged", "Display name changed", yesNo],
       ["sessionsRevoked", "Sessions revoked", yesNo],
       ["otherSessionsRevoked", "Other sessions revoked", yesNo],
+      ["recoveryCodesRemaining", "Recovery codes remaining", displayValue],
+      ["recoveryCodesInvalidated", "Recovery codes invalidated", yesNo],
+      ["challengesInvalidated", "MFA challenges invalidated", yesNo],
     ]);
   }
   return undefined;
@@ -382,6 +398,11 @@ function sensitiveKey(key: string) {
       "clientidentifier",
       "destination",
       "webhookurl",
+      "totp",
+      "otpcode",
+      "recoverycode",
+      "provisioninguri",
+      "qrcode",
     ].some((fragment) => normalized.includes(fragment))
   )
     return true;

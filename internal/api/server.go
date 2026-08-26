@@ -127,7 +127,7 @@ type UserAdministrationService interface {
 	Create(context.Context, domain.Actor, useradmin.CreateInput) (domain.User, error)
 	Update(context.Context, domain.Actor, string, useradmin.UpdateInput) (domain.User, error)
 	ResetPassword(context.Context, domain.Actor, string, string) error
-	ChangeOwnPassword(context.Context, domain.Actor, string, string, string) error
+	ChangeOwnPassword(context.Context, domain.Actor, string, string, string, string) error
 }
 
 type BackupService interface {
@@ -235,9 +235,17 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/v1/setup/status", s.handleSetupStatus)
 	s.mux.HandleFunc("POST /api/v1/setup", s.handleSetup)
 	s.mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
+	s.mux.HandleFunc("POST /api/v1/auth/mfa/verify", s.handleMFAVerify)
+	s.mux.HandleFunc("POST /api/v1/auth/mfa/recovery", s.handleMFARecovery)
+	s.mux.HandleFunc("POST /api/v1/auth/mfa/cancel", s.handleMFACancel)
 	s.mux.Handle("POST /api/v1/auth/logout", s.authenticated(true, http.HandlerFunc(s.handleLogout)))
 	s.mux.Handle("GET /api/v1/auth/me", s.authenticated(false, http.HandlerFunc(s.handleMe)))
 	s.mux.Handle("POST /api/v1/auth/password", s.authenticated(true, http.HandlerFunc(s.handleChangeOwnPassword)))
+	s.mux.Handle("GET /api/v1/account/mfa", s.authenticated(false, http.HandlerFunc(s.handleMFAStatus)))
+	s.mux.Handle("POST /api/v1/account/mfa/enroll/start", s.authenticated(true, http.HandlerFunc(s.handleMFAEnrollmentStart)))
+	s.mux.Handle("POST /api/v1/account/mfa/enroll/verify", s.authenticated(true, http.HandlerFunc(s.handleMFAEnrollmentVerify)))
+	s.mux.Handle("POST /api/v1/account/mfa/recovery-codes/regenerate", s.authenticated(true, http.HandlerFunc(s.handleMFARecoveryRegenerate)))
+	s.mux.Handle("POST /api/v1/account/mfa/disable", s.authenticated(true, http.HandlerFunc(s.handleMFADisable)))
 	s.mux.Handle("GET /api/v1/users", s.administrator(false, http.HandlerFunc(s.handleListUsers)))
 	s.mux.Handle("POST /api/v1/users", s.administrator(true, http.HandlerFunc(s.handleCreateUser)))
 	s.mux.Handle("PATCH /api/v1/users/{userId}", s.administrator(true, http.HandlerFunc(s.handleUpdateUser)))

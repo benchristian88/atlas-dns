@@ -10,6 +10,7 @@ export interface AdminUser extends User {
   createdAt: string;
   updatedAt: string;
   lastLoginAt?: string;
+  mfaEnabled: boolean;
 }
 
 export interface VersionInfo {
@@ -134,6 +135,33 @@ export interface RestorePreflight {
 export interface AuthResponse {
   user: User;
   expiresAt: string;
+}
+
+export type LoginResponse =
+  | AuthResponse
+  | {
+      mfaRequired: true;
+      mfaChallenge: string;
+      challengeExpiresAt: string;
+    };
+
+export interface MFAStatus {
+  enabled: boolean;
+  recoveryCodesRemaining: number;
+}
+
+export interface MFAEnrollment {
+  secret: string;
+  provisioningUri: string;
+  qrCodeDataUrl: string;
+  issuer: string;
+  accountLabel: string;
+  expiresAt: string;
+}
+
+export interface MFARecoveryResult {
+  recoveryCodes: string[];
+  recoveryCodesRemaining: number;
 }
 
 export interface Cluster {

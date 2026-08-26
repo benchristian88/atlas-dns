@@ -16,6 +16,7 @@ type User struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	LastLoginAt  *time.Time
+	MFAEnabled   bool
 }
 
 type Session struct {
@@ -29,6 +30,35 @@ type Session struct {
 	RevokedAt  *time.Time
 	IPMetadata string
 	UserAgent  string
+}
+
+type UserMFA struct {
+	UserID            string
+	Secret            EncryptedPayload
+	EnrollmentStarted time.Time
+	EnrollmentExpires time.Time
+	EnabledAt         *time.Time
+	RecoveryRemaining int
+}
+
+type MFAChallenge struct {
+	ID             string
+	UserID         string
+	TokenHash      []byte
+	CreatedAt      time.Time
+	ExpiresAt      time.Time
+	ConsumedAt     *time.Time
+	FailedAttempts int
+	IPMetadata     string
+	UserAgent      string
+}
+
+type MFARecoveryCode struct {
+	ID        string
+	UserID    string
+	CodeHash  []byte
+	CreatedAt time.Time
+	UsedAt    *time.Time
 }
 
 type Cluster struct {

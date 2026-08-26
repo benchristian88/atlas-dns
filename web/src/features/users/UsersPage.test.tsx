@@ -25,6 +25,7 @@ const primary: AdminUser = {
   enabled: true,
   createdAt: "2026-08-09T00:00:00Z",
   updatedAt: "2026-08-09T00:00:00Z",
+  mfaEnabled: true,
 };
 const secondary: AdminUser = {
   id: "22222222-2222-4222-8222-222222222222",
@@ -34,6 +35,7 @@ const secondary: AdminUser = {
   enabled: true,
   createdAt: "2026-08-09T00:00:00Z",
   updatedAt: "2026-08-09T00:00:00Z",
+  mfaEnabled: false,
 };
 const users: AdminUser[] = [primary, secondary];
 
@@ -46,7 +48,9 @@ describe("UsersPage", () => {
     render(<UsersPage currentUser={currentUser} />);
 
     expect(
-      await screen.findByText("secondary@example.test · Administrator"),
+      await screen.findByText(
+        "secondary@example.test · Administrator · 2FA: Not enabled",
+      ),
     ).toBeTruthy();
     const disableButtons = screen.getAllByRole("button", { name: "Disable" });
     expect((disableButtons[0] as HTMLButtonElement).disabled).toBe(true);
@@ -61,7 +65,9 @@ describe("UsersPage", () => {
   it("has no automated structural WCAG A/AA violations", async () => {
     vi.spyOn(api, "users").mockResolvedValue({ items: users });
     const { container } = render(<UsersPage currentUser={currentUser} />);
-    await screen.findByText("secondary@example.test · Administrator");
+    await screen.findByText(
+      "secondary@example.test · Administrator · 2FA: Not enabled",
+    );
     const result = await axe.run(container, {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] },
       rules: { "color-contrast": { enabled: false } },
