@@ -191,13 +191,7 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
 
       <section className="section-block">
         <div className="section-heading">
-          <div>
-            <h2>Node lifecycle</h2>
-            <small>
-              Open a node for maintenance, DNS probe, TLS, and guided upgrade
-              workflows.
-            </small>
-          </div>
+          <h2>Node lifecycle</h2>
         </div>
         <SourceWarning
           label="Node inventory"
@@ -216,6 +210,10 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
         ) : loadedSources.nodes === true ? (
           <div className="table-wrap">
             <table>
+              <caption>
+                Open a node for maintenance, DNS probe, TLS, and guided upgrade
+                workflows.
+              </caption>
               <thead>
                 <tr>
                   <th>Node</th>

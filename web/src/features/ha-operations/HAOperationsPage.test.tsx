@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +18,8 @@ import { NodeLifecyclePage } from "./NodeLifecyclePage";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  document.documentElement.removeAttribute("data-theme");
+  document.documentElement.removeAttribute("data-theme-preference");
 });
 const cluster = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -225,6 +233,28 @@ describe("HA operations", () => {
     expect(
       await screen.findByRole("heading", { name: "HA Operations" }),
     ).toBeTruthy();
+    const lifecycleHeading = screen.getByRole("heading", {
+      name: "Node lifecycle",
+    });
+    const lifecycleSection = lifecycleHeading.closest("section");
+    if (!(lifecycleSection instanceof HTMLElement))
+      throw new Error("Missing Node lifecycle section");
+    const lifecycleDescriptor = within(lifecycleSection).getByText(
+      "Open a node for maintenance, DNS probe, TLS, and guided upgrade workflows.",
+    );
+    expect(lifecycleDescriptor.tagName).toBe("CAPTION");
+    const lifecycleTable = lifecycleDescriptor.closest("table");
+    if (!(lifecycleTable instanceof HTMLTableElement))
+      throw new Error("Node lifecycle descriptor is not inside its table");
+    expect(lifecycleTable.closest(".table-wrap")).toBeTruthy();
+    expect(
+      within(lifecycleTable).getByRole("columnheader", { name: "Node" }),
+    ).toBeTruthy();
+    expect(
+      within(lifecycleTable)
+        .getByRole("link", { name: "Primary" })
+        .getAttribute("href"),
+    ).toBe(`/ha/nodes/${node.id}`);
     expect(
       screen.getAllByText("1 / 1", { selector: "strong" }).length,
     ).toBeGreaterThan(0);
@@ -262,6 +292,59 @@ describe("HA operations", () => {
     });
     expect(accessibility.violations).toEqual([]);
   });
+
+  it.each([
+    ["light", "light", 1440],
+    ["system", "light", 1280],
+    ["dark", "dark", 768],
+    ["system", "dark", 390],
+  ] as const)(
+    "keeps the Node lifecycle descriptor panel cohesive with %s preference resolved to %s at %dpx",
+    async (preference, resolved, width) => {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: width,
+      });
+      document.documentElement.dataset.theme = resolved;
+      document.documentElement.dataset.themePreference = preference;
+      commonMocks();
+      vi.spyOn(api, "haStatus").mockResolvedValue({
+        state: "healthy",
+        totalNodes: 1,
+        servingDnsNodes: 1,
+        apiReachableNodes: 1,
+        convergedNodes: 1,
+        maintenanceNodes: 0,
+        certificateWarnings: 0,
+        updateAvailableNodes: 0,
+        message: "Healthy.",
+        nodes: [
+          {
+            nodeId: node.id,
+            dnsStatus: "healthy",
+            udpStatus: "healthy",
+            tcpStatus: "healthy",
+          },
+        ],
+      });
+      vi.spyOn(api, "certificates").mockResolvedValue({ items: [] });
+      vi.spyOn(api, "versions").mockResolvedValue({ items: [] });
+      vi.spyOn(api, "haHistory").mockResolvedValue({
+        items: [],
+        hasMore: false,
+      });
+      const { container } = render(<HAOperationsPage cluster={cluster} />);
+
+      const descriptor = await screen.findByText(
+        "Open a node for maintenance, DNS probe, TLS, and guided upgrade workflows.",
+      );
+      expect(descriptor.tagName).toBe("CAPTION");
+      expect(descriptor.closest(".table-wrap")).toBeTruthy();
+      expect(container.querySelector(".table-wrap table")).toBeTruthy();
+      expect(document.documentElement.dataset.theme).toBe(resolved);
+      expect(document.documentElement.dataset.themePreference).toBe(preference);
+    },
+  );
 
   it("delegates notification management while retaining the history destination", async () => {
     commonMocks();

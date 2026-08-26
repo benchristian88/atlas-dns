@@ -285,7 +285,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
         <article className="card dashboard-activity-card">
           <DashboardPanelHeader
             title="DNS activity"
-            eyebrow="Last 24 hours · Entire Cluster"
+            metadata="Last 24 hours · Entire cluster"
             action={{ label: "View statistics", href: "/statistics" }}
           />
           {supplementaryLoading && statistics === undefined ? (
@@ -426,7 +426,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
       <section className="dashboard-ranking-grid" aria-label="Top domains">
         <RankingPanel
           title="Top queried domains"
-          eyebrow="Entire Cluster"
+          metadata="Entire cluster"
           values={
             statistics?.state === "unavailable"
               ? []
@@ -436,7 +436,7 @@ export function DashboardPage({ cluster }: { cluster: Cluster }) {
         />
         <RankingPanel
           title="Top blocked domains"
-          eyebrow="Entire Cluster"
+          metadata="Entire cluster"
           values={
             statistics?.state === "unavailable"
               ? []
@@ -492,18 +492,18 @@ function HealthCard({
 
 function DashboardPanelHeader({
   title,
-  eyebrow,
+  metadata,
   action,
 }: {
   title: string;
-  eyebrow?: string;
+  metadata?: string;
   action?: { label: string; href: string };
 }) {
   return (
     <header className="dashboard-panel-header">
       <div>
-        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h2>{title}</h2>
+        {metadata && <p className="dashboard-panel-metadata">{metadata}</p>}
       </div>
       {action && (
         <a href={action.href}>
@@ -675,12 +675,12 @@ function NodeSummaryTable({
 
 function RankingPanel({
   title,
-  eyebrow,
+  metadata,
   values,
   loading,
 }: {
   title: string;
-  eyebrow: string;
+  metadata: string;
   values: StatisticsRanking[];
   loading: boolean;
 }) {
@@ -689,7 +689,7 @@ function RankingPanel({
     <article className="card dashboard-ranking">
       <DashboardPanelHeader
         title={title}
-        eyebrow={eyebrow}
+        metadata={metadata}
         action={{ label: "View statistics", href: "/statistics" }}
       />
       {loading ? (
