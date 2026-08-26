@@ -56,6 +56,11 @@ Operations, and Security cards while retaining every runtime setting and the
 release-check control. About Atlas Project now precedes a readable Installation /
 Build Information definition list and Licensing / Attribution.
 
+Dashboard analytical cards now place their cluster/time metadata beneath the
+title, and HA Operations keeps the Node Lifecycle descriptor inside the same
+bordered panel as its table. These hierarchy and spacing changes do not alter
+Dashboard statistics or node lifecycle behavior.
+
 Audit Log now uses server-side opaque keyset pagination and exact
 `auditEventId` deep links. Rows expand inline to show current actor labels,
 immutable actor UUIDs, request/resource IDs, canonical links, and typed safe

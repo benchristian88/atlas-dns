@@ -16,6 +16,8 @@ import { DashboardPage } from "./DashboardPage";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  document.documentElement.removeAttribute("data-theme");
+  document.documentElement.removeAttribute("data-theme-preference");
 });
 
 const cluster = {
@@ -217,7 +219,7 @@ describe("DashboardPage", () => {
     expect(screen.getByText("example.com")).toBeTruthy();
     expect(screen.getByText("ads.example")).toBeTruthy();
     expect(screen.getByText(/Cluster: Home/)).toBeTruthy();
-    expect(screen.getAllByText("Entire Cluster").length).toBeGreaterThanOrEqual(
+    expect(screen.getAllByText("Entire cluster").length).toBeGreaterThanOrEqual(
       2,
     );
     expect(api.auditEvents).toHaveBeenCalledWith({
@@ -234,6 +236,62 @@ describe("DashboardPage", () => {
     });
     expect(accessibility.violations).toEqual([]);
   });
+
+  it("renders analytical card titles before secondary metadata and preserves Statistics links", async () => {
+    mockSources();
+    renderDashboard();
+    await screen.findByRole("heading", { name: "DNS activity" });
+
+    for (const [title, metadata] of [
+      ["DNS activity", "Last 24 hours · Entire cluster"],
+      ["Top queried domains", "Entire cluster"],
+      ["Top blocked domains", "Entire cluster"],
+    ] as const) {
+      const heading = screen.getByRole("heading", { name: title });
+      const header = heading.closest(".dashboard-panel-header");
+      if (!(header instanceof HTMLElement))
+        throw new Error(`Missing Dashboard panel header for ${title}`);
+      const context = within(header).getByText(metadata);
+
+      expect(context.classList.contains("dashboard-panel-metadata")).toBe(true);
+      expect(heading.nextElementSibling).toBe(context);
+    }
+
+    const statisticsLinks = screen.getAllByRole("link", {
+      name: "View statistics",
+    });
+    expect(statisticsLinks).toHaveLength(3);
+    for (const link of statisticsLinks)
+      expect(link.getAttribute("href")).toBe("/statistics");
+  });
+
+  it.each([
+    ["light", "light", 1440],
+    ["system", "light", 1280],
+    ["dark", "dark", 768],
+    ["system", "dark", 390],
+  ] as const)(
+    "renders analytical cards with %s preference resolved to %s at %dpx",
+    async (preference, resolved, width) => {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: width,
+      });
+      document.documentElement.dataset.theme = resolved;
+      document.documentElement.dataset.themePreference = preference;
+      mockSources();
+      const { container } = renderDashboard();
+
+      expect(
+        await screen.findByText("Last 24 hours · Entire cluster"),
+      ).toBeTruthy();
+      expect(
+        container.querySelectorAll(".dashboard-panel-metadata"),
+      ).toHaveLength(3);
+      expect(document.documentElement.dataset.theme).toBe(resolved);
+      expect(document.documentElement.dataset.themePreference).toBe(preference);
+    },
+  );
 
   it("does not create certificate attention when canonical warning count is zero", async () => {
     mockSources();

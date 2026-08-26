@@ -22,6 +22,18 @@ describe("responsive shell contract", () => {
     expect(css).toContain("@media (max-width: 900px)");
     expect(css).toContain(".dashboard-node-table { min-width: 760px; }");
     expect(css).toMatch(/\.table-wrap \{[^}]*overflow-x: auto/);
+    expect(css).toMatch(
+      /\.dashboard-panel-header \{[^}]*flex-wrap: wrap[^}]*gap: var\(--atlas-space-2\) var\(--atlas-space-3\)/,
+    );
+    expect(css).toMatch(
+      /\.dashboard-panel-header > div \{[^}]*min-width: 0[^}]*flex: 1 1 10rem/,
+    );
+    expect(css).toMatch(
+      /\.dashboard-panel-metadata \{[^}]*var\(--atlas-space-1\)[^}]*color: var\(--atlas-text-muted\)/,
+    );
+    expect(css).toMatch(
+      /caption \{[^}]*padding: var\(--atlas-space-3\)[^}]*color: var\(--atlas-text-muted\)/,
+    );
   });
 
   it("keeps guided onboarding usable at phone widths", () => {
