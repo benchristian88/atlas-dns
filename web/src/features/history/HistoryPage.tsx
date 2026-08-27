@@ -740,6 +740,3 @@ function shortID(value: string): string {
 function formatTime(value?: string): string {
   return value ? new Date(value).toLocaleString() : "—";
 }
-
-// Compatibility for low-risk downstream imports while the route and UI use Revisions.
-export const HistoryPage = RevisionsPage;

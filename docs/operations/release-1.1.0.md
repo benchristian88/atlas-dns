@@ -34,7 +34,7 @@ fail-closed for missing, invalid, malformed, or expired certificate evidence.
 Standard Backup includes System Settings, notification policy, encrypted MFA
 seeds/enabled state, and recovery-code hashes because they are required
 control-plane state. Transient MFA challenges are excluded. It
-are required control-plane state. It continues to exclude Operational History
+continues to exclude Operational History
 events/deliveries, Statistics, Query Log events, DNS probes, and sessions. Full
 Backup includes retained operational data. Audit Log, revisions, deployments,
 drift, and upgrade records are unaffected by Operational History retention or

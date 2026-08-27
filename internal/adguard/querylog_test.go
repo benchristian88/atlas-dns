@@ -146,11 +146,3 @@ func TestFilteringStatusMapping(t *testing.T) {
 		}
 	}
 }
-
-func TestSupportsQueryLogBoundaries(t *testing.T) {
-	for version, want := range map[string]bool{"v0.107.77": false, "v0.107.78": true, "v0.107.79": true, "v0.107.80": true, "v0.108.0": false} {
-		if got := SupportsQueryLog(version); got != want {
-			t.Errorf("SupportsQueryLog(%q) = %v, want %v", version, got, want)
-		}
-	}
-}

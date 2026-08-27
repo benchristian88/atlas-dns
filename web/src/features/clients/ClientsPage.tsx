@@ -68,7 +68,7 @@ const emptySafeSearch = (): SafeSearchConfiguration => ({
   youTube: true,
 });
 
-export function emptyPersistentClient(): PersistentClient {
+function emptyPersistentClient(): PersistentClient {
   return {
     name: "",
     ids: [],

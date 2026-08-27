@@ -511,6 +511,6 @@ export function PreferencesPage() {
   );
 }
 
-export function roleLabel(role: User["role"]) {
+function roleLabel(role: User["role"]) {
   return role === "administrator" ? "Administrator" : role;
 }

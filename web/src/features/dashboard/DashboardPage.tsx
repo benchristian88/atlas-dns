@@ -820,7 +820,7 @@ function attentionItems(
   return items;
 }
 
-export function recentChanges(
+function recentChanges(
   clusterID: string,
   revisions: ConfigurationRevision[],
   deployments: Deployment[],

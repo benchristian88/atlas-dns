@@ -29,7 +29,6 @@ type Config struct {
 	AutoMigrate             bool
 	MetricsToken            string
 	PGDumpPath              string
-	PGRestorePath           string
 	InstallationType        string
 }
 
@@ -96,7 +95,6 @@ func Load() (Config, error) {
 		AutoMigrate:             autoMigrate,
 		MetricsToken:            metricsToken,
 		PGDumpPath:              env("PG_DUMP_PATH", "pg_dump"),
-		PGRestorePath:           env("PG_RESTORE_PATH", "pg_restore"),
 		InstallationType:        installationType,
 	}, nil
 }

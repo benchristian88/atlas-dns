@@ -404,8 +404,8 @@ Common values:
 
 ### Layout dimensions
 
-- Main header: approximately 64px.
-- Context row: approximately 44–52px.
+- Expanded desktop rail: 240px; collapsed rail: 72px.
+- Mobile drawer: up to 360px and no more than 88vw.
 - Desktop page padding: 24px.
 - Mobile page padding: 16px.
 - Control radius: 6px.
@@ -758,20 +758,26 @@ consumers.
 
 ### Application shell
 
-- AppShell
-- ApplicationSidebar
-- UtilityTopBar
+- ApplicationShell
+- SidebarNavigation
+- SidebarLink
 - PrimaryNavigation
 - NavigationGroup
-- MobileNavigationDrawer
-- ContextBar
-- ClusterSelector
-- ScopeSelector
-- ActiveRevisionIndicator
-- ActiveDeploymentIndicator
+- MobileGroup
+- AccountMenu
+- ThemeProvider
+- ThemeControl
+- AtlasBrand
+- Icon
 - PageContainer
 - PageHeader
 - NotFoundPage
+
+The shell is the left rail/mobile drawer and has no global utility top bar.
+Branding is in the rail, the account menu is its final item, and controls or
+context belong to the relevant page. The UI exposes only the current cluster in
+v1.1, but cluster-scoped backend/domain capability remains part of the
+architecture.
 
 ### Settings and forms
 

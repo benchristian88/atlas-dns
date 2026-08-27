@@ -22,7 +22,7 @@ a compatibility commitment. **Unsupported** must not be advertised as working.
 | Upgrade | 1.0.x → later documented 1.x | Supported policy | Backup first; ordered forward migrations and release notes. |
 | Upgrade | 1.0.0 → 1.0.1 | Supported, schema-neutral | Preserve environment/volumes; the v1.0.0 migration ledger is accepted unchanged. |
 | Upgrade | 1.0.1 → 1.0.2 | Supported, forward migration | Back up first; startup applies `000015` for notification delivery diagnostics/history indexing. |
-| Upgrade | 1.0.2 → 1.1.0 | Supported, forward migration | Back up first; startup applies `000016` and `000017`, imports legacy runtime values once, retains immutable schema-1 records through a non-deployable read conversion, and preserves webhook channels. |
+| Upgrade | 1.0.2 → 1.1.0 | Supported, forward migration | Back up first; startup applies `000016` through `000019`, imports legacy runtime values once, retains immutable schema-1 records through a non-deployable read conversion, preserves webhook channels, adds stable Audit Log keyset paging, and adds optional per-user MFA state. |
 | Upgrade | Any pre-1.0 installation → 1.0 | Unsupported in place | Destroy/rebuild and fresh Atlas installation. |
 | Backup | Atlas backup format v1 within compatible 1.x schema | Supported | Newer application/schema inputs fail closed. |
 | Backup | Pre-1.0 `.aghhabackup`/`AGHHABACKUP` | Unsupported | Not interpreted as Atlas backup v1. |

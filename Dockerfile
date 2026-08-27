@@ -8,7 +8,7 @@ COPY web/ ./
 RUN npm run build
 
 FROM golang:1.27-bookworm AS controller
-ARG VERSION=1.0.2-dev
+ARG VERSION=1.1.0-dev
 ARG COMMIT=unknown
 ARG BUILT_AT=unknown
 WORKDIR /src
@@ -27,7 +27,7 @@ RUN CGO_ENABLED=0 GOCACHE=/tmp/go-build GOTMPDIR=/tmp/go-build go build -p 1 -tr
     -o /out/atlas-dns-admin ./cmd/atlas-dns-admin
 
 FROM postgres:17-bookworm
-ARG VERSION=1.0.2-dev
+ARG VERSION=1.1.0-dev
 ARG COMMIT=unknown
 ARG BUILT_AT=unknown
 LABEL org.opencontainers.image.title="Atlas DNS Controller" \

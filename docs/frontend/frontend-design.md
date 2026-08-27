@@ -35,16 +35,16 @@ Current detailed references are:
 ## Application shell
 
 Desktop uses a persistent, collapsible left rail. Mobile uses a modal drawer
-with the same labels, grouping, and route ownership. A thin utility top bar
-shows the selected cluster, cluster or node scope, active revision, health,
-refresh state, and active deployment when present.
+with the same labels, grouping, and route ownership. Branding sits in the rail,
+and the signed-in account menu is its final item. There is no global top utility
+bar.
 
-The shell owns navigation, theme selection, user actions, and shared context.
-Feature pages do not reproduce primary navigation or maintain a competing scope
-model. Unknown routes render Not Found and never fall through to Dashboard.
-Settings/Filters pages also do not repeat a generic Scope/state card: the shell
-owns cluster, scope, active revision, health, and deployment context, while page
-notices own unsaved state and page-specific capability impact.
+The shell owns navigation and user actions. Feature pages own relevant cluster,
+scope, revision, health, freshness, deployment, and theme controls or context;
+they do not reproduce primary navigation or maintain a competing scope model.
+Unknown routes render Not Found and never fall through to Dashboard. The v1.1
+UI exposes only the current cluster, while cluster-scoped domain models,
+persistence, and backend APIs remain architectural capabilities.
 
 ## Navigation model
 
