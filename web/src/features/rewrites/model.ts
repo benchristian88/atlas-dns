@@ -45,7 +45,7 @@ export function hasRewriteValidationErrors(validation: RewriteValidation) {
   return Object.values(validation).some((value) => value !== undefined);
 }
 
-export function validateRewriteDomain(value: string): string | undefined {
+function validateRewriteDomain(value: string): string | undefined {
   const candidate = value.trim();
   if (candidate === "") return "Enter a domain or leading *. wildcard.";
   if (candidate.endsWith("."))
@@ -55,7 +55,7 @@ export function validateRewriteDomain(value: string): string | undefined {
   return undefined;
 }
 
-export function validateRewriteAnswer(value: string): string | undefined {
+function validateRewriteAnswer(value: string): string | undefined {
   const candidate = value.trim();
   if (candidate === "") return "Enter an IP address, hostname, A, or AAAA.";
   if (candidate === "A" || candidate === "AAAA") return undefined;

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -334,8 +333,4 @@ func decodeCursor(value string) (time.Time, string, error) {
 		return time.Time{}, "", fmt.Errorf("decode cursor")
 	}
 	return at.UTC(), payload.ID, nil
-}
-
-func SortTypes(values []string) {
-	sort.Slice(values, func(i, j int) bool { return values[i] < values[j] })
 }

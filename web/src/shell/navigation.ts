@@ -13,12 +13,6 @@ export interface NavigationGroup {
   children: readonly NavigationLink[];
 }
 
-export interface NavigationSection {
-  id: string;
-  label?: string;
-  items: readonly (NavigationLink | NavigationGroup)[];
-}
-
 export const MONITORING_NAVIGATION: readonly NavigationLink[] = [
   { label: "Statistics", href: "/statistics", icon: "statistics" },
   { label: "Query Log", href: "/query-log", icon: "activity" },
@@ -29,7 +23,7 @@ export const MONITORING_NAVIGATION: readonly NavigationLink[] = [
   },
 ];
 
-export const SETTINGS_NAVIGATION: readonly NavigationLink[] = [
+const SETTINGS_NAVIGATION: readonly NavigationLink[] = [
   { label: "General", href: "/settings/general", icon: "general" },
   { label: "DNS", href: "/settings/dns", icon: "dns" },
   { label: "Encryption", href: "/settings/encryption", icon: "encryption" },
@@ -37,7 +31,7 @@ export const SETTINGS_NAVIGATION: readonly NavigationLink[] = [
   { label: "DHCP", href: "/settings/dhcp", icon: "dhcp" },
 ];
 
-export const FILTERS_NAVIGATION: readonly NavigationLink[] = [
+const FILTERS_NAVIGATION: readonly NavigationLink[] = [
   { label: "DNS Blocklists", href: "/filters/blocklists", icon: "block" },
   { label: "DNS Allowlists", href: "/filters/allowlists", icon: "dns" },
   { label: "DNS Rewrites", href: "/filters/rewrites", icon: "rewrites" },
@@ -113,11 +107,6 @@ export const PRIMARY_NAVIGATION: readonly (NavigationLink | NavigationGroup)[] =
 
 export const UTILITY_NAVIGATION: readonly NavigationLink[] = [
   { label: "Setup Guide", href: "/setup-guide", icon: "help" },
-];
-
-export const SIDEBAR_SECTIONS: readonly NavigationSection[] = [
-  { id: "main", items: [PRIMARY_NAVIGATION[0] as NavigationLink] },
-  { id: "product", items: PRIMARY_NAVIGATION.slice(1) },
 ];
 
 export function isNavigationGroup(

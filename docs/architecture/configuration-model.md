@@ -42,7 +42,7 @@ Examples:
 ## Model shape
 
 ```yaml
-schemaVersion: 1
+schemaVersion: 2
 shared:
   dns:
     upstreamDns:
@@ -60,7 +60,7 @@ nodeOverrides:
       - 192.168.3.11
 ```
 
-Release 0.2 froze the per-node observed `Document` shape. Release 0.3 added a distinct authoritative `DesiredDocument`: shared DNS/filtering values, `nodeOverrides`, and explicit unsupported areas. Observed-only product version never enters desired state. Schema v1 manages DNS upstream, bootstrap, fallback, and private reverse resolvers plus filtering enablement, interval, blocklist subscription URLs, and custom rules. Bind hosts and DNS port are required node overrides but are verification-only because AdGuard Home exposes no supported writer for them.
+Release 0.2 froze the per-node observed `Document` shape. Release 0.3 added a distinct authoritative `DesiredDocument`: shared DNS/filtering values, `nodeOverrides`, and explicit unsupported areas. Observed-only product version never enters desired state. Historical schema v1 managed DNS upstream, bootstrap, fallback, and private reverse resolvers plus filtering enablement, interval, blocklist subscription URLs, and custom rules. It is retained only as a narrow read/conversion boundary for supported v1.0.2 historical data: it is not authorable, deployable, reconcilable, or a live desired-state format. Bind hosts and DNS port are required node overrides but are verification-only because AdGuard Home exposes no supported writer for them.
 
 Release 0.4 introduced schema v2. Shared v2 state adds protection, rate limiting, blocking response behavior, EDNS Client Subnet, DNSSEC, cache and resolver modes; blocklist and allowlist URLs; persistent-client identity/policy/schedules/upstream cache; rewrites; blocked-service schedules; Safe Browsing, parental control, Safe Search; and node-local query-log/statistics policy. Node overrides add DHCP configuration and static leases. Redacted TLS status and dynamic DHCP leases are observed-only. TLS mutation is listed as unsupported.
 
@@ -72,7 +72,8 @@ generations remain unknown. All managed capabilities required by the v2 adapter
 are present at the minimum floor. The database retains historical schema-1
 documents and hashes unchanged, while read APIs convert them into a marked,
 non-deployable schema-2 representation. A fresh import/publication is required
-before deployment.
+before deployment. Atlas never authors schema-1 content or treats the converted
+read model as live desired state.
 
 AdGuard protection pause is normalized explicitly: `/control/status` supplies
 the remaining `protection_disabled_duration`, while `/control/dns_info`
@@ -106,7 +107,7 @@ Canonicalisation must:
 - Preserve comments and operator labels separately from deployable state.
 - Produce deterministic serialisation.
 
-Schema v1 preserves order for upstream resolvers, fallback resolvers, and custom filtering rules. It treats bootstrap resolvers, private reverse resolvers, bind hosts, and enabled filter URLs as unordered sets. Runtime cache counters, filter IDs, filter display names, rule counts, and last-update timestamps are discarded at the adapter boundary.
+For historical schema-v1 reads, the conversion boundary preserves order for upstream resolvers, fallback resolvers, and custom filtering rules. It treats bootstrap resolvers, private reverse resolvers, bind hosts, and enabled filter URLs as unordered sets. Runtime cache counters, filter IDs, filter display names, rule counts, and last-update timestamps are discarded at the adapter boundary. These rules describe legacy interpretation only; they do not make schema v1 authorable or deployable.
 
 Schema v2 additionally treats allowlists, clients, rewrites, blocked-service IDs, ignore lists, TLS DNS names, and DHCP static leases as sets with deterministic ordering. Upstream/fallback/client-upstream lists and custom rules retain order. Certificate/key material, filesystem paths, dynamic lease expiry state, and filter refresh results never enter desired state.
 

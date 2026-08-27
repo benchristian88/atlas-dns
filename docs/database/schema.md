@@ -143,12 +143,13 @@ bootstrap, and recorded by version/name/SHA-256 in `schema_migrations`.
 | `000016_release_1_1_onboarding` | Canonical onboarding acknowledgements/completion, persisted runtime monitoring values, and notification category subscriptions. | Append-only v1.1 upgrade; established node+revision clusters are marked complete. |
 | `000017_release_1_1_runtime_policy_history` | Completes typed runtime settings, exact-event notification policy, and Operational History retention. | Append-only v1.1 upgrade; legacy environment values seed nullable settings once. |
 | `000018_release_1_1_audit_keyset` | Stable Audit Log `(created_at, id)` keyset index. | Append-only v1.1 upgrade; no audit rows are rewritten. |
+| `000019_release_1_1_totp_mfa` | Encrypted per-user TOTP state, hashed recovery codes, and short-lived MFA challenges. | Append-only v1.1 upgrade; existing users remain unchanged until they enable MFA. |
 
 The complete chain is the physical v1.0.0 baseline. Pre-1.0 databases are not
 supported for in-place upgrade, but removing or squashing the chain would break
 empty-database creation and v1.0.0 checksum recognition. Release 1.0.1 uses the
 same schema and adds no migration. Release 1.0.2 appends `000015`; release 1.1
-appends `000016`, `000017`, and `000018`. Future
+appends `000016`, `000017`, `000018`, and `000019`. Future
 schema-changing 1.x releases append new immutable, never-renumbered forward
 migrations after the current highest version; schema-neutral patches do not add
 placeholders.

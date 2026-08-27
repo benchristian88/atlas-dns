@@ -39,7 +39,6 @@ import type {
   NotificationTestResult,
   OperationalStatus,
   OperationalTarget,
-  QueryEvent,
   QueryEventPage,
   RestorePreflight,
   StatisticsReport,
@@ -538,10 +537,6 @@ export const api = {
       `/api/v1/clusters/${clusterId}/query-events?${query.toString()}`,
     );
   },
-  queryEvent: (clusterId: string, eventId: string) =>
-    request<QueryEvent>(
-      `/api/v1/clusters/${clusterId}/query-events/${eventId}`,
-    ),
   createNode: (clusterId: string, input: NodePayload) =>
     request<Node>(`/api/v1/clusters/${clusterId}/nodes`, {
       method: "POST",

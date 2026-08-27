@@ -5,7 +5,7 @@ import type {
   BlockedServicesCatalogue,
 } from "../../lib/types";
 
-export function groupLabel(id: string) {
+function groupLabel(id: string) {
   if (id === "") return "Other services";
   return id
     .replace(/[-_]+/g, " ")
@@ -219,7 +219,7 @@ function nodeNames(catalogue: BlockedServicesCatalogue, ids: string[]) {
   return ids.map((id) => names.get(id) ?? id);
 }
 
-export function ServiceToggle({
+function ServiceToggle({
   service,
   checked,
   onChange,

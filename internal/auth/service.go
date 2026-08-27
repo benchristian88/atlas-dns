@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -255,9 +254,4 @@ func truncate(value string, limit int) string {
 		return value
 	}
 	return value[:limit]
-}
-
-func IsAuthenticationError(err error) bool {
-	var domainError *domain.Error
-	return errors.As(err, &domainError) && domainError.Kind == domain.ErrorAuthentication
 }

@@ -52,12 +52,6 @@ type queryLogItem struct {
 	Time        string `json:"time"`
 }
 
-// SupportsQueryLog reports whether the version belongs to the supported
-// AdGuard Home API generation.  Endpoint and response validation remain the
-// decisive capability checks, including for newer, provisionally compatible
-// patches in that generation.
-func SupportsQueryLog(version string) bool { return querylog.SupportsVersion(version) }
-
 func (r *ConfigurationReader) ReadQueryLogConfig(ctx context.Context, request domain.NodeProbeRequest, version string) (querylog.SourceConfig, error) {
 	var response struct {
 		Enabled           bool `json:"enabled"`
