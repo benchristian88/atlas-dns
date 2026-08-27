@@ -34,10 +34,10 @@ Current detailed references are:
 
 ## Application shell
 
-Desktop uses a persistent, collapsible left rail. Mobile uses a modal drawer
-with the same labels, grouping, and route ownership. Branding sits in the rail,
-and the signed-in account menu is its final item. There is no global top utility
-bar.
+Desktop uses a persistent, collapsible left rail. Mobile uses a minimal sticky
+shell header with Atlas branding and a menu trigger plus a modal drawer with the
+same labels, grouping, and route ownership. The signed-in account menu is the
+final rail or drawer item. There is no global top utility bar.
 
 The shell owns navigation and user actions. Feature pages own relevant cluster,
 scope, revision, health, freshness, deployment, and theme controls or context;

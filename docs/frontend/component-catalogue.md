@@ -76,10 +76,11 @@ without changing the corresponding desired policy.
 The shell uses `ThemeProvider`, `ThemeControl`, the shared `AtlasBrand`
 renderer, and one project-owned `Icon` renderer. Desktop navigation is a
 collapsible left rail with controlled group disclosures, active/open ancestry,
-labelled collapsed icons, and arrow-key entry into child links. Mobile uses the
-same hierarchy in a controlled modal drawer. Theme and asset behavior is
-documented in `theme-brand-and-pwa.md`. Branding is part of the rail; the
-account menu is the final desktop-rail/mobile-drawer item. Page-specific
+labelled collapsed icons, and arrow-key entry into child links. Mobile adds a
+minimal sticky shell header for shared branding and the drawer trigger, then
+uses the same hierarchy in a controlled modal drawer. Theme and asset behavior
+is documented in `theme-brand-and-pwa.md`. The account menu is the final
+desktop-rail/mobile-drawer item. Page-specific
 controls and context stay with their owning page, and there is no global top
 utility bar or cluster picker. Cluster-scoped backend/domain capability remains
 even though v1.1 exposes only the current cluster.

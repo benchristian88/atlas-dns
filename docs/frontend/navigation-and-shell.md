@@ -151,19 +151,24 @@ Keyboard behavior:
 ## Mobile and responsive contract
 
 At tablet and phone widths the left rail becomes a left-hand modal drawer opened
-by a compact floating navigation trigger rather than a replacement utility bar. The
-drawer uses the same labels, order, grouping, active state, and utility item as
-desktop. Its bottom account menu keeps My Account, Preferences, and Sign out
+from a minimal sticky shell header. The header contains only Atlas branding and
+the navigation trigger; page titles and context remain in page content below it.
+The drawer uses the same labels, order, grouping, active state, and utility item
+as desktop. Its bottom account menu keeps My Account, Preferences, and Sign out
 reachable. Escape and the close control dismiss it and restore focus to the menu
-trigger. Group disclosures never depend on hover.
+trigger. Keyboard focus remains inside the open modal drawer, and group
+disclosures never depend on hover.
 
 The shell uses `minmax(0, 1fr)`, explicit inline-size containment, and local
-table scrolling. Dashboard health cards reflow from five to three, two, and one
-columns; the activity, attention, and recent-change grid becomes a single
-column; KPI cells wrap two-by-two; and node tables keep their established
-contained horizontal treatment. The shell does not use document-level
-horizontal clipping as a substitute for component responsiveness. iOS safe
-areas remain supported and browser zoom is not disabled.
+table scrolling. Table wrappers establish the containing block for visually
+hidden table labels so accessible off-screen content cannot enlarge the page.
+Dashboard health cards reflow from five to three, two, and one columns; their
+supporting copy wraps on phones; the activity, attention, and recent-change grid
+becomes a single column; KPI cells wrap two-by-two; and node tables keep their
+established contained horizontal treatment. The shell does not use
+document-level horizontal clipping as a substitute for component
+responsiveness. The sticky header and full-height drawer apply iOS safe areas,
+and browser zoom is not disabled.
 
 The onboarding progress rail scrolls locally on narrow screens, source cards
 become one column, and actions wrap. Exit, Back, validation errors, retry, and

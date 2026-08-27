@@ -13,7 +13,21 @@ describe("responsive shell contract", () => {
     expect(css).toContain("@media (max-width: 1080px)");
     expect(css).toContain("@media (max-width: 560px)");
     expect(css).toContain(".app-shell > .content { min-width: 0");
-    expect(css).toContain("overflow: hidden");
+    expect(css).not.toMatch(
+      /\.app-shell > \.content \{[^}]*overflow-x?: hidden/,
+    );
+    expect(css).toMatch(
+      /\.mobile-shell-header \{[^}]*position: sticky[^}]*top: 0[^}]*display: flex/,
+    );
+    expect(css).toMatch(
+      /\.shell-drawer-toggle \{[^}]*width: 44px[^}]*height: 44px/,
+    );
+    expect(css).toContain(
+      ".mobile-shell-brand .atlas-brand__lockup, .drawer-brand .atlas-brand__lockup { display: block; }",
+    );
+    expect(css).not.toContain(
+      ".app-shell > .content .page-header:first-child .page-header__content",
+    );
   });
 
   it("reflows dashboard cards while keeping wide node data locally scrollable", () => {
@@ -21,7 +35,9 @@ describe("responsive shell contract", () => {
     expect(css).toContain("@media (max-width: 1400px)");
     expect(css).toContain("@media (max-width: 900px)");
     expect(css).toContain(".dashboard-node-table { min-width: 760px; }");
-    expect(css).toMatch(/\.table-wrap \{[^}]*overflow-x: auto/);
+    expect(css).toMatch(
+      /\.table-wrap \{[^}]*position: relative[^}]*overflow-x: auto/,
+    );
     expect(css).toMatch(
       /\.dashboard-panel-header \{[^}]*flex-wrap: wrap[^}]*gap: var\(--atlas-space-2\) var\(--atlas-space-3\)/,
     );
@@ -33,6 +49,21 @@ describe("responsive shell contract", () => {
     );
     expect(css).toMatch(
       /caption \{[^}]*padding: var\(--atlas-space-3\)[^}]*color: var\(--atlas-text-muted\)/,
+    );
+    expect(css).toMatch(
+      /\.dashboard-health-card__body em \{[^}]*overflow: visible[^}]*white-space: normal/,
+    );
+  });
+
+  it("keeps mobile drawer groups compact without reducing primary touch targets", () => {
+    expect(css).toMatch(
+      /\.mobile-drawer nav \{[^}]*align-content: start[^}]*gap: 2px/,
+    );
+    expect(css).toContain(
+      ".mobile-drawer .sidebar-link, .mobile-drawer .sidebar-group__trigger { min-height: 44px; }",
+    );
+    expect(css).toMatch(
+      /\.mobile-drawer \{[^}]*env\(safe-area-inset-top\)[^}]*env\(safe-area-inset-bottom\)[^}]*env\(safe-area-inset-left\)/,
     );
   });
 

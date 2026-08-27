@@ -10,6 +10,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PageHeader } from "../components/Page";
 import { ThemeProvider } from "../theme/ThemeProvider";
 import { installMatchMedia } from "../theme/testMatchMedia";
 import { ApplicationShell } from "./ApplicationShell";
@@ -59,6 +60,11 @@ describe("v1.1 application shell", () => {
         ".app-sidebar .atlas-brand__lockup",
       )?.src,
     ).toContain("atlas-dns-lockup-light.svg");
+    expect(
+      light.container.querySelector<HTMLImageElement>(
+        ".mobile-shell-header .atlas-brand__lockup",
+      )?.src,
+    ).toContain("atlas-dns-lockup-light.svg");
     light.unmount();
 
     window.localStorage.setItem("atlas-dns.theme", "dark");
@@ -66,6 +72,11 @@ describe("v1.1 application shell", () => {
     expect(
       dark.container.querySelector<HTMLImageElement>(
         ".app-sidebar .atlas-brand__lockup",
+      )?.src,
+    ).toContain("atlas-dns-lockup-dark.svg");
+    expect(
+      dark.container.querySelector<HTMLImageElement>(
+        ".mobile-shell-header .atlas-brand__lockup",
       )?.src,
     ).toContain("atlas-dns-lockup-dark.svg");
   });
@@ -169,6 +180,64 @@ describe("v1.1 application shell", () => {
       screen.queryByRole("dialog", { name: "Navigation drawer" }),
     ).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
+  it("owns mobile branding and drawer controls independently of the page header", async () => {
+    const interaction = userEvent.setup();
+    const { container } = render(
+      <ShellTest>
+        <PageHeader eyebrow="Cluster overview" title="Homelab" />
+      </ShellTest>,
+    );
+    const mobileHeader = container.querySelector(".mobile-shell-header");
+    if (!(mobileHeader instanceof HTMLElement))
+      throw new Error("Missing mobile shell header");
+
+    expect(
+      within(mobileHeader).getByRole("link", {
+        name: "Atlas DNS Controller dashboard",
+      }),
+    ).toBeTruthy();
+    expect(mobileHeader.querySelector(".atlas-brand__lockup")).toBeTruthy();
+    expect(container.querySelector(".page-header .drawer-toggle")).toBeNull();
+
+    const trigger = within(mobileHeader).getByRole("button", {
+      name: "Open navigation",
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    await interaction.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+    const drawer = screen.getByRole("dialog", { name: "Navigation drawer" });
+    expect(
+      within(drawer).getByRole("button", { name: "Close navigation" }),
+    ).toBe(document.activeElement);
+    await interaction.click(
+      within(drawer).getByRole("button", { name: "Close navigation" }),
+    );
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
+  it("keeps keyboard focus within the open mobile drawer", async () => {
+    const interaction = userEvent.setup();
+    render(<ShellTest />);
+    await interaction.click(
+      screen.getByRole("button", { name: "Open navigation" }),
+    );
+    const drawer = screen.getByRole("dialog", { name: "Navigation drawer" });
+    const account = within(drawer).getByRole("button", {
+      name: /Operator Administrator/,
+    });
+    const brand = within(drawer).getByRole("link", {
+      name: "Atlas DNS Controller dashboard",
+    });
+
+    account.focus();
+    await interaction.keyboard("{Tab}");
+    expect(document.activeElement).toBe(brand);
+    await interaction.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(document.activeElement).toBe(account);
   });
 
   it("removes the top bar and exposes account destinations at the rail bottom", async () => {
