@@ -157,6 +157,8 @@ future multi-cluster workflows despite hiding cluster selection in v1.1.
 Below the desktop breakpoint:
 
 - Replace the left rail with a hamburger-triggered full-height navigation drawer.
+- Place Atlas branding and the hamburger in a minimal sticky application-shell
+  header above page-owned headings and content.
 - Preserve the same navigation hierarchy.
 - Show Monitoring, Settings, Filters, HA Controller, and Administration as
   expandable groups.

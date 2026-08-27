@@ -44,6 +44,7 @@ export function ApplicationShell({
   const [mobileGroup, setMobileGroup] = useState(activeGroup?.id);
   const drawerTrigger = useRef<HTMLButtonElement>(null);
   const drawerClose = useRef<HTMLButtonElement>(null);
+  const drawer = useRef<HTMLElement>(null);
 
   const closeDrawer = useCallback(() => {
     setDrawerOpen(false);
@@ -68,11 +69,30 @@ export function ApplicationShell({
   useEffect(() => {
     if (!drawerOpen) return;
     drawerClose.current?.focus();
-    const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeDrawer();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeDrawer();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(
+        drawer.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (first === undefined || last === undefined) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [closeDrawer, drawerOpen]);
 
   const toggleGroup = (group: NavigationGroup) => {
@@ -93,13 +113,7 @@ export function ApplicationShell({
   return (
     <div className="app-shell" data-sidebar-collapsed={collapsed || undefined}>
       <aside className="app-sidebar" aria-label="Application sidebar">
-        <a
-          className="sidebar-brand"
-          href="/"
-          aria-label="Atlas DNS Controller dashboard"
-        >
-          <AtlasBrand placement="header" />
-        </a>
+        <ShellBrandLink className="sidebar-brand" />
         <SidebarNavigation
           pathname={pathname}
           collapsed={collapsed}
@@ -134,17 +148,20 @@ export function ApplicationShell({
         </div>
       </aside>
 
-      <button
-        ref={drawerTrigger}
-        className="drawer-toggle shell-drawer-toggle"
-        type="button"
-        aria-expanded={drawerOpen}
-        aria-controls="mobile-navigation"
-        aria-label="Open navigation"
-        onClick={() => setDrawerOpen(true)}
-      >
-        <Icon name="menu" />
-      </button>
+      <header className="mobile-shell-header">
+        <ShellBrandLink className="mobile-shell-brand" />
+        <button
+          ref={drawerTrigger}
+          className="drawer-toggle shell-drawer-toggle"
+          type="button"
+          aria-expanded={drawerOpen}
+          aria-controls="mobile-navigation"
+          aria-label="Open navigation"
+          onClick={() => setDrawerOpen(true)}
+        >
+          <Icon name="menu" />
+        </button>
+      </header>
 
       {drawerOpen && (
         <>
@@ -155,6 +172,7 @@ export function ApplicationShell({
             onClick={closeDrawer}
           />
           <aside
+            ref={drawer}
             className="mobile-drawer"
             id="mobile-navigation"
             role="dialog"
@@ -162,7 +180,7 @@ export function ApplicationShell({
             aria-label="Navigation drawer"
           >
             <div className="drawer-heading">
-              <AtlasBrand placement="header" />
+              <ShellBrandLink className="drawer-brand" />
               <button
                 ref={drawerClose}
                 className="drawer-close"
@@ -214,6 +232,18 @@ export function ApplicationShell({
 
       <main className="content">{children}</main>
     </div>
+  );
+}
+
+function ShellBrandLink({ className }: { className: string }) {
+  return (
+    <a
+      className={className}
+      href="/"
+      aria-label="Atlas DNS Controller dashboard"
+    >
+      <AtlasBrand placement="header" />
+    </a>
   );
 }
 
