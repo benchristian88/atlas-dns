@@ -18,9 +18,28 @@ upgrade or backup-restore guarantee from the pre-1.0 product.
   development aid unless release notes explicitly authorize it for rollback.
 - Schema-neutral patch releases do not add empty migrations. Release 1.0.1 uses
   the v1.0.0 schema unchanged; Release 1.0.2 appends `000015` for notification
-  delivery diagnostics and history indexing. Release 1.1 appends `000016` and
-  `000017` for onboarding, runtime settings, notification policy, and history
-  retention.
+  delivery diagnostics and history indexing. Release 1.1 appends the complete
+  `000016` through `000019` set:
+  - `000016_release_1_1_onboarding` adds canonical onboarding acknowledgement
+    and completion state, persisted runtime monitoring fields for the one-time
+    legacy environment seed, and explicit notification category subscriptions.
+  - `000017_release_1_1_runtime_policy_history` completes the typed runtime
+    settings, exact-event notification policy, and Operational History
+    retention model.
+  - `000018_release_1_1_audit_keyset` adds the
+    `(created_at DESC, id DESC)` index used for stable Audit Log keyset/cursor
+    pagination without rewriting audit rows.
+  - `000019_release_1_1_totp_mfa` adds encrypted per-user TOTP state, hashed
+    one-time recovery codes, and short-lived server-side MFA challenges;
+    existing users remain unchanged until they enable MFA.
+
+The supported direct release handoff is `v1.0.2 → v1.1.0`. This does not
+redefine the historical physical database baseline: a fresh v1.1.0 installation
+replays the full embedded `000001` through `000019` chain, while a supported
+v1.0.2 database retains its verified `000001` through `000015` ledger and
+applies only pending migrations `000016` through `000019`. Existing migration
+names and checksums remain authoritative; migrations must not be edited,
+squashed, deleted, or renumbered.
 
 ## Supported 1.x upgrade flow
 
