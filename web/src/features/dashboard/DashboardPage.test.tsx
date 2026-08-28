@@ -464,6 +464,27 @@ describe("DashboardPage", () => {
     expect(screen.queryByText("1,200")).toBeNull();
   });
 
+  it("identifies stale release metadata as an update check", async () => {
+    mockSources();
+    vi.mocked(api.versions).mockResolvedValue({
+      items: [
+        {
+          nodeId: primaryNodeID,
+          updateAvailable: false,
+          releaseCheckStale: true,
+        },
+        {
+          nodeId: secondaryNodeID,
+          updateAvailable: false,
+          releaseCheckStale: false,
+        },
+      ] as never[],
+    });
+    renderDashboard();
+    expect(await screen.findByText("Update check stale")).toBeTruthy();
+    expect(screen.queryByText("Check stale")).toBeNull();
+  });
+
   it("labels supplementary regions while their sources are loading", async () => {
     vi.spyOn(api, "nodes").mockResolvedValue({
       items: nodes,

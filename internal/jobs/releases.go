@@ -10,10 +10,27 @@ import (
 
 type ReleaseRefresher interface{ Refresh(context.Context) error }
 
+const releaseCheckInterval = 5 * time.Minute
+
+type releaseCheckTicker interface {
+	Ticks() <-chan time.Time
+	Stop()
+}
+
+type systemReleaseCheckTicker struct{ ticker *time.Ticker }
+
+func (t systemReleaseCheckTicker) Ticks() <-chan time.Time { return t.ticker.C }
+func (t systemReleaseCheckTicker) Stop()                   { t.ticker.Stop() }
+
 func RunReleaseChecks(ctx context.Context, checker ReleaseRefresher, logger *slog.Logger, tracker *operationalhealth.Tracker) {
-	const interval = 6 * time.Hour
+	runReleaseChecks(ctx, checker, logger, tracker, time.Now, func(interval time.Duration) releaseCheckTicker {
+		return systemReleaseCheckTicker{ticker: time.NewTicker(interval)}
+	})
+}
+
+func runReleaseChecks(ctx context.Context, checker ReleaseRefresher, logger *slog.Logger, tracker *operationalhealth.Tracker, now func() time.Time, newTicker func(time.Duration) releaseCheckTicker) {
 	run := func() {
-		next := time.Now().UTC().Add(interval)
+		next := now().UTC().Add(releaseCheckInterval)
 		if tracker != nil {
 			tracker.Start("adguard_release_check", next)
 		}
@@ -28,14 +45,14 @@ func RunReleaseChecks(ctx context.Context, checker ReleaseRefresher, logger *slo
 			tracker.Success("adguard_release_check", next)
 		}
 	}
-	run()
-	ticker := time.NewTicker(interval)
+	ticker := newTicker(releaseCheckInterval)
 	defer ticker.Stop()
+	run()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-ticker.Ticks():
 			run()
 		}
 	}
