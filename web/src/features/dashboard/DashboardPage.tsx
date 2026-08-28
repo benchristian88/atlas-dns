@@ -651,7 +651,7 @@ function NodeSummaryTable({
                   ) : version.updateAvailable ? (
                     <StatusBadge status="warning" label="Available" />
                   ) : version.releaseCheckStale ? (
-                    <StatusBadge status="stale" label="Check stale" />
+                    <StatusBadge status="stale" label="Update check stale" />
                   ) : (
                     <StatusBadge status="success" label="Current" />
                   )}

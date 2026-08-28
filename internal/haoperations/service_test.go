@@ -427,6 +427,39 @@ func TestVersionsSupportsRollingV010778ToV010779(t *testing.T) {
 	}
 }
 
+func TestVersionTransitionsWaitForFreshReleaseEvidenceAndDoNotRepeat(t *testing.T) {
+	now := time.Date(2026, 8, 19, 0, 0, 0, 0, time.UTC)
+	repository := &serviceRepositoryFake{
+		nodes:    []domain.Node{healthyNode(serviceNodeA)},
+		release:  ReleaseCache{Version: "v0.107.79", CheckedAt: now.Add(-2 * time.Hour), ExpiresAt: now.Add(-time.Minute)},
+		settings: map[string]NodeSettings{serviceNodeA: {NodeID: serviceNodeA, InstallationType: InstallationDocker}},
+	}
+	service := NewService(repository, nil, nil, nil, nil, nil)
+	service.now = func() time.Time { return now }
+
+	if err := service.recordVersionTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 0 {
+		t.Fatalf("stale evidence created transitions: %#v", repository.events)
+	}
+
+	repository.release.CheckedAt = now
+	repository.release.ExpiresAt = now.Add(releaseCacheTTL)
+	if err := service.recordVersionTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 1 || repository.events[0].EventType != "version.update_available" {
+		t.Fatalf("fresh transition events=%#v", repository.events)
+	}
+	if err := service.recordVersionTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("unchanged fresh evidence repeated transitions: %#v", repository.events)
+	}
+}
+
 func TestMaintenancePreflightBlocksDeploymentAndActiveDHCP(t *testing.T) {
 	now := time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC)
 	document := configuration.Document{NodeSpecific: configuration.NodeSpecific{DHCP: &configuration.DHCPConfig{Enabled: true}}}

@@ -10,7 +10,11 @@ import (
 	"time"
 )
 
-const adGuardLatestReleaseURL = "https://api.github.com/repos/AdguardTeam/AdGuardHome/releases/latest"
+const (
+	adGuardLatestReleaseURL = "https://api.github.com/repos/AdguardTeam/AdGuardHome/releases/latest"
+	releaseCacheTTL         = 6 * time.Hour
+	releaseFailureCacheTTL  = 15 * time.Minute
+)
 
 type ReleaseRepository interface {
 	ReleaseCache(context.Context) (ReleaseCache, error)
@@ -25,7 +29,7 @@ type ReleaseChecker struct {
 }
 
 func NewReleaseChecker(repository ReleaseRepository) *ReleaseChecker {
-	return &ReleaseChecker{repository: repository, client: &http.Client{Timeout: 10 * time.Second}, now: time.Now, cacheTTL: 6 * time.Hour}
+	return &ReleaseChecker{repository: repository, client: &http.Client{Timeout: 10 * time.Second}, now: time.Now, cacheTTL: releaseCacheTTL}
 }
 
 func (c *ReleaseChecker) Refresh(ctx context.Context) error {
@@ -63,7 +67,7 @@ func (c *ReleaseChecker) Refresh(ctx context.Context) error {
 
 func (c *ReleaseChecker) recordFailure(ctx context.Context, code string) error {
 	now := c.now().UTC()
-	value := ReleaseCache{Compatibility: "unknown", CheckedAt: now, ExpiresAt: now.Add(15 * time.Minute), ErrorCode: code}
+	value := ReleaseCache{Compatibility: "unknown", CheckedAt: now, ExpiresAt: now.Add(releaseFailureCacheTTL), ErrorCode: code}
 	if current, err := c.repository.ReleaseCache(ctx); err == nil {
 		value.Version, value.ReleaseURL = current.Version, current.ReleaseURL
 	}

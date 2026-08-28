@@ -63,6 +63,14 @@ deployment and operational-command claim failures use cancellable exponential
 backoff from one to 30 seconds. Success resets worker degradation. Retention
 failure does not stop its collector.
 
+The AdGuard Home release worker wakes every five minutes, while successful
+release evidence remains fresh for six hours and failed evidence remains valid
+for 15 minutes. A worker wake first checks the PostgreSQL cache and does not
+imply a GitHub request. Operational Status therefore reports the next worker
+run, not a promise that the external release source will be queried at that
+time. Fresh cached evidence short-circuits the external request; the first wake
+at or after its expiry performs the next upstream check.
+
 The worker tracker is intentionally process-local. Durable collector attempts,
 checkpoints, deployments, drift, and observations remain the restart source of
 truth. Immediately after restart a process worker is `unknown` until it runs.
