@@ -1,8 +1,10 @@
 package haoperations
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -63,9 +65,9 @@ func (r *serviceRepositoryFake) LatestDNSProbes(context.Context, string) ([]DNSP
 	return r.probes, nil
 }
 func (r *serviceRepositoryFake) LatestDNSProbe(_ context.Context, nodeID string) (DNSProbeResult, error) {
-	for _, probe := range r.probes {
-		if probe.NodeID == nodeID {
-			return probe, nil
+	for index := len(r.probes) - 1; index >= 0; index-- {
+		if r.probes[index].NodeID == nodeID {
+			return r.probes[index], nil
 		}
 	}
 	return DNSProbeResult{}, domain.NewError(domain.ErrorNotFound, "probe was not found")
@@ -385,6 +387,158 @@ func TestDNSFreshnessWindowIncludesScheduleGrace(t *testing.T) {
 	if got := DNSFreshnessWindow(6 * time.Minute); got != 18*time.Minute {
 		t.Fatalf("long freshness window=%s", got)
 	}
+}
+
+func TestProbeNodeTransientConfirmationStaysOperationallyQuiet(t *testing.T) {
+	now := time.Date(2026, 8, 29, 1, 0, 0, 0, time.UTC)
+	failure := failedDNSProbe("DNS_PROBE_TIMEOUT")
+	failure.result.ProbedAt = now
+	success := healthyDNSProbe()
+	success.result.ProbedAt = now.Add(time.Millisecond)
+	base := &sequenceDNSProber{outcomes: []dnsProbeOutcome{failure, success}}
+	repository := &serviceRepositoryFake{
+		nodes: []domain.Node{healthyNode(serviceNodeA), healthyNode(serviceNodeB)},
+		probes: []DNSProbeResult{
+			{NodeID: serviceNodeA, ClusterID: serviceClusterID, Status: "healthy", UDPStatus: "healthy", TCPStatus: "healthy", ProbedAt: now.Add(-time.Second)},
+			{NodeID: serviceNodeB, ClusterID: serviceClusterID, Status: "healthy", UDPStatus: "healthy", TCPStatus: "healthy", ProbedAt: now.Add(-time.Second)},
+		},
+		settings: map[string]NodeSettings{
+			serviceNodeA: {NodeID: serviceNodeA, DNSProbeHost: "192.0.2.10", DNSProbePort: 53, DNSProbeName: ".", DNSProbeType: "NS", ProbeUDP: true, ProbeTCP: true},
+		},
+		events: []Event{{ClusterID: serviceClusterID, EventType: "redundancy.restored", OccurredAt: now.Add(-time.Second)}},
+	}
+	prober := newConfirmingDNSProber(base, []time.Duration{0, 0}, waitForDNSProbeConfirmation, time.Now)
+	service := NewService(repository, nil, nil, nil, nil, prober)
+	service.now = func() time.Time { return now.Add(time.Second) }
+	var logs bytes.Buffer
+	service.SetLogger(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+
+	result, err := service.ProbeNode(context.Background(), serviceNodeA)
+	if err != nil || result.Status != "healthy" || result.dnsProbeAttempts != 2 || len(repository.probes) != 3 {
+		t.Fatalf("result=%#v probes=%#v err=%v", result, repository.probes, err)
+	}
+	if err := service.recordRedundancyTransition(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("transient confirmation created transition noise: %#v", repository.events)
+	}
+	summary, err := service.Summary(context.Background(), serviceClusterID)
+	if err != nil || summary.State != "healthy" || summary.ServingDNSNodes != 2 || summary.Nodes[0].DNSStatus != "healthy" {
+		t.Fatalf("summary=%#v err=%v", summary, err)
+	}
+	if output := logs.String(); !strings.Contains(output, "DNS probe recovered during confirmation") || !strings.Contains(output, "dns_probe_attempts=2") || !strings.Contains(output, "prior_error_code=DNS_PROBE_TIMEOUT") {
+		t.Fatalf("confirmation diagnostics=%q", output)
+	}
+}
+
+func TestProbeNodeConfirmedFailureAndRecoveryTransitionOnce(t *testing.T) {
+	now := time.Date(2026, 8, 29, 2, 0, 0, 0, time.UTC)
+	outcomes := make([]dnsProbeOutcome, 0, 7)
+	for index := 0; index < 6; index++ {
+		outcome := failedDNSProbe("DNS_PROBE_UNREACHABLE")
+		outcome.result.ProbedAt = now.Add(time.Duration(index) * time.Millisecond)
+		outcomes = append(outcomes, outcome)
+	}
+	recovery := healthyDNSProbe()
+	recovery.result.ProbedAt = now.Add(10 * time.Millisecond)
+	outcomes = append(outcomes, recovery)
+	base := &sequenceDNSProber{outcomes: outcomes}
+	repository := &serviceRepositoryFake{
+		nodes: []domain.Node{healthyNode(serviceNodeA), healthyNode(serviceNodeB)},
+		probes: []DNSProbeResult{
+			{NodeID: serviceNodeA, ClusterID: serviceClusterID, Status: "healthy", UDPStatus: "healthy", TCPStatus: "healthy", ProbedAt: now.Add(-time.Second)},
+			{NodeID: serviceNodeB, ClusterID: serviceClusterID, Status: "healthy", UDPStatus: "healthy", TCPStatus: "healthy", ProbedAt: now.Add(-time.Second)},
+		},
+		settings: map[string]NodeSettings{
+			serviceNodeA: {NodeID: serviceNodeA, DNSProbeHost: "192.0.2.10", DNSProbePort: 53, DNSProbeName: ".", DNSProbeType: "NS", ProbeUDP: true, ProbeTCP: true},
+		},
+		events: []Event{{ClusterID: serviceClusterID, EventType: "redundancy.restored", OccurredAt: now.Add(-time.Second)}},
+	}
+	service := NewService(repository, nil, nil, nil, nil, newConfirmingDNSProber(base, []time.Duration{0, 0}, waitForDNSProbeConfirmation, time.Now))
+	service.now = func() time.Time { return now.Add(time.Second) }
+
+	failed, err := service.ProbeNode(context.Background(), serviceNodeA)
+	if err == nil || failed.Status != "failed" || failed.dnsProbeAttempts != 3 {
+		t.Fatalf("confirmed failure=%#v err=%v", failed, err)
+	}
+	if err := service.recordRedundancyTransition(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if got := eventTypes(repository.events); !reflectStringSlicesEqual(got, []string{"redundancy.restored", "dns.failed", "redundancy.at_risk"}) {
+		t.Fatalf("failure transitions=%v", got)
+	}
+	failureDetails := repository.events[1].Details
+	if failureDetails["dnsProbeAttempts"] != 3 || failureDetails["errorCode"] != "DNS_PROBE_UNREACHABLE" || !reflectStringSlicesEqual(failureDetails["failedProtocols"].([]string), []string{"udp", "tcp"}) {
+		t.Fatalf("failure details=%#v", failureDetails)
+	}
+
+	if _, err := service.ProbeNode(context.Background(), serviceNodeA); err == nil {
+		t.Fatal("stable confirmed failure unexpectedly succeeded")
+	}
+	if err := service.recordRedundancyTransition(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 3 {
+		t.Fatalf("stable failure repeated transitions: %#v", repository.events)
+	}
+
+	if recovered, err := service.ProbeNode(context.Background(), serviceNodeA); err != nil || recovered.Status != "healthy" {
+		t.Fatalf("recovery=%#v err=%v", recovered, err)
+	}
+	if err := service.recordRedundancyTransition(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if got := eventTypes(repository.events); !reflectStringSlicesEqual(got, []string{"redundancy.restored", "dns.failed", "redundancy.at_risk", "dns.recovered", "redundancy.restored"}) {
+		t.Fatalf("recovery transitions=%v", got)
+	}
+}
+
+func TestProbeNodeCancellationDoesNotPersistArtificialFailure(t *testing.T) {
+	now := time.Date(2026, 8, 29, 3, 0, 0, 0, time.UTC)
+	failure := failedDNSProbe("DNS_PROBE_TIMEOUT")
+	failure.result.ProbedAt = now
+	base := &sequenceDNSProber{outcomes: []dnsProbeOutcome{failure}}
+	ctx, cancel := context.WithCancel(context.Background())
+	prober := newConfirmingDNSProber(base, defaultDNSProbeConfirmationBackoffs, func(ctx context.Context, delay time.Duration) error {
+		cancel()
+		return waitForDNSProbeConfirmation(ctx, delay)
+	}, time.Now)
+	repository := &serviceRepositoryFake{
+		nodes:  []domain.Node{healthyNode(serviceNodeA)},
+		probes: []DNSProbeResult{{NodeID: serviceNodeA, ClusterID: serviceClusterID, Status: "healthy", ProbedAt: now.Add(-time.Second)}},
+		settings: map[string]NodeSettings{
+			serviceNodeA: {NodeID: serviceNodeA, DNSProbeHost: "192.0.2.10", DNSProbePort: 53, DNSProbeName: ".", DNSProbeType: "NS", ProbeUDP: true, ProbeTCP: true},
+		},
+	}
+	service := NewService(repository, nil, nil, nil, nil, prober)
+
+	if _, err := service.ProbeNode(ctx, serviceNodeA); !errors.Is(err, context.Canceled) {
+		t.Fatalf("ProbeNode() error=%v", err)
+	}
+	if base.calls != 1 || len(repository.probes) != 1 || len(repository.events) != 0 {
+		t.Fatalf("calls=%d probes=%#v events=%#v", base.calls, repository.probes, repository.events)
+	}
+}
+
+func eventTypes(events []Event) []string {
+	result := make([]string, 0, len(events))
+	for _, event := range events {
+		result = append(result, event.EventType)
+	}
+	return result
+}
+
+func reflectStringSlicesEqual(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestSummaryReturnsEmptyNodeCollectionForNewCluster(t *testing.T) {
