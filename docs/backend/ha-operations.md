@@ -7,13 +7,31 @@ controller in the DNS path or owning node package execution.
 ## Active DNS and capacity
 
 Node API health and active DNS health are separate. A worker sends a bounded DNS
-query to each enabled non-maintenance node every 30 seconds using the node URL
-host and observed DNS port by default. Operators can configure host, port, query
-name/type, expected RCODE, and UDP/TCP. Each network operation has a two-second
-bound.
+query to each enabled non-maintenance node on the persisted node-health cadence
+(30 seconds by default) using the node URL host and observed DNS port by default.
+Operators can configure host, port, query name/type, expected RCODE, and UDP/TCP.
+Each network operation has a two-second bound.
+
+A healthy logical probe returns immediately. A failed logical probe is confirmed
+twice in the same health pass, after 250 ms and then after a further 500 ms. Each
+attempt runs the complete configured protocol set; cancellation interrupts the
+confirmation waits. Timeout, unreachable, unexpected-RCODE, and generic probe
+failures are confirmable. A canceled context or an unclassified local query
+construction/configuration failure is not retried. Only the final confirmed
+result is persisted or allowed to create DNS, redundancy, and notification
+transitions.
+
+With both UDP and TCP enabled, the healthy path remains two wire exchanges. The
+two required transports run concurrently within each logical attempt. A
+confirmed failure is bounded at six wire exchanges and approximately 6.75
+seconds in the worst case (three two-second attempt windows and 750 ms cumulative
+backoff). Connection refusal and other immediate network errors complete sooner.
+The freshness window remains separate: it tolerates missing successful samples
+but never overrides an explicit confirmed failure.
 
 Latest results and 30 days of probe evidence are durable; only transitions
-create HA events, retained for one year. A result is healthy only when every
+create HA events. Operational History defaults to 90 days and is configurable
+in System Settings. A result is healthy only when every
 enabled protocol succeeds. Cluster state supports N nodes: healthy requires at
 least two fresh serving nodes and no other degradation; degraded retains serving
 redundancy with management/convergence/maintenance concerns; at-risk has fewer
@@ -59,18 +77,37 @@ certificate SAN list. HTTPS management transport and its expected hostname are
 covered by the separate API check. Private keys, certificate chains, paths, and
 raw node responses remain outside validation messages and logs.
 
-The Nodes and Node Detail surfaces both use this canonical lifecycle rather
-than clearing a browser-local flag. Successful transitions are persisted and
-audited before the UI reloads canonical node state. Failed return validation is
-audited, remains visible to the operator, and leaves the node in maintenance.
-Repeating an already-completed enter or return request is an idempotent success
-and does not create another transition event.
+Node Detail is the sole existing-node UI surface for this canonical lifecycle;
+Nodes and Drift retain read-only maintenance summaries and exact Node Detail
+links. Successful transitions are persisted and audited before the UI reloads
+canonical node state. Failed return validation is audited, remains visible to
+the operator, and leaves the node in maintenance. Repeating an already-completed
+enter or return request is an idempotent success and does not create another
+transition event.
 
 ## Certificate and version awareness
 
-Certificate state uses redacted observation metadata. Warning begins at 30 days,
-critical at seven days, and expired is distinct. Private material and filesystem
-paths never enter this model.
+Certificate state uses redacted observation metadata and determines
+applicability before interpreting certificate timestamps:
+
+| State | Meaning |
+| --- | --- |
+| `not_applicable` | The successful AdGuard observation reports `tls.enabled=false`; expiry monitoring is intentionally inactive even if AdGuard retains zero or old certificate metadata. |
+| `unknown` | TLS is enabled or expected, but a valid certificate expiry cannot be determined from the observation. This includes missing, invalid, or malformed expected certificate data. |
+| `healthy` | TLS is enabled, AdGuard reports a valid certificate, and expiry is more than 30 days away. |
+| `warning` | The valid applicable certificate expires in 30 days or fewer. |
+| `critical` | The valid applicable certificate expires in seven days or fewer. |
+| `expired` | A valid applicable certificate has an expiry at or before the current time. |
+
+`invalid` is not overloaded as `expired`: enabled TLS with a missing or invalid
+certificate remains `unknown` for expiry presentation and fails the applicable
+return-to-service TLS check with a specific safe invalid-certificate, chain,
+key, or pair code. Private material and filesystem paths never enter this model.
+
+Only warning, critical, and expired applicability transitions create certificate
+alert events. A recovery requires an uninterrupted applicable monitoring chain;
+`not_applicable` itself, repeated disabled-TLS polls, and transitions to or from
+disabled TLS create no certificate event or webhook delivery.
 
 The AdGuard Home release checker reads the official GitHub latest-release API at
 most every six hours and retains safe stale-cache state after failure.
@@ -105,7 +142,17 @@ and are not webhook triggers in v1.0.2. Channels subscribe to future
 transitions; creating or enabling a channel does not replay an already-active
 degraded state.
 
-Administration supports add, edit, enable/disable, delete, and test:
+Release 1.1 adds a controller-wide exact-event policy grouped as DNS, HA,
+Certificates, Node lifecycle, and Lifecycle/Updates. DNS failure/recovery,
+redundancy degraded/at-risk/restored, maintenance return-validation failure,
+and upgrade validation failure are enabled by default. Informational lifecycle,
+version, certificate, and successful-upgrade events are opt-in. Global policy,
+channel enablement, channel category subscription, and encrypted destination
+configuration are independent gates. Policy-disabled delivery rows are retained
+as `suppressed`, not failures.
+
+HA Controller → Notifications supports add, edit, enable/disable, delete, and
+test and is the sole permanent policy/channel management surface:
 
 - List/read returns name, safe scheme/host summary, explicit enabled state, the
   currently fixed HA-transition subscription, timestamps, and safe delivery
@@ -123,6 +170,11 @@ Administration supports add, edit, enable/disable, delete, and test:
 All mutations require an administrator session, CSRF, validation, and audit.
 Names must not contain secrets. Destination userinfo/fragments are rejected;
 path and query are hidden from summaries and diagnostics.
+
+Operational History clear requires the exact phrase `CLEAR OPERATIONAL HISTORY`.
+It transactionally deletes only HA events and delivery rows and writes its audit
+record in the same transaction. Audit Log, revisions, deployments, drift,
+upgrades, and DNS probe samples are outside this history domain and survive.
 
 ## Node Detail presentation
 
@@ -153,3 +205,10 @@ bodies and destination path/query never enter history. The authenticated list
 uses 50-row (maximum 100) opaque keyset pages ordered by
 `(occurred_at DESC, id DESC)`. Delivery creation time is the stable ordering
 timestamp; completion remains supplemental evidence.
+
+The HA Operations UI reads HA summary, node inventory, certificates, versions,
+guided upgrades, and Operational History as independent sources. One failure
+does not blank successful panels. Each failed source receives scoped retryable
+feedback; retained last-good values are labelled stale and missing values are
+not converted to zero or healthy state. HA Operations links to Notifications
+and does not load or mutate notification channel configuration.

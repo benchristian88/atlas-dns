@@ -10,6 +10,7 @@ export interface AdminUser extends User {
   createdAt: string;
   updatedAt: string;
   lastLoginAt?: string;
+  mfaEnabled: boolean;
 }
 
 export interface VersionInfo {
@@ -40,9 +41,69 @@ export interface ControllerUpdateStatus {
 export interface SystemSettings {
   updateChecksEnabled: boolean;
   recordVersion: number;
+  sessionDurationSeconds: number;
+  nodeHealthIntervalSeconds: number;
+  nodeRequestTimeoutSeconds: number;
+  statisticsPollIntervalSeconds: number;
+  queryLogCollectionEnabled: boolean;
+  queryLogPollIntervalSeconds: number;
+  queryLogRetentionSeconds: number;
   queryLogRetention: string;
+  logLevel: "debug" | "info" | "warn" | "error";
+  operationalHistoryRetentionDays: 7 | 14 | 30 | 90 | 180 | 365;
   statisticsRetention: string;
   installationType: string;
+}
+
+export type OnboardingStep =
+  | "welcome"
+  | "controller_identity"
+  | "primary_node"
+  | "secondary_node"
+  | "topology_validation"
+  | "baseline_selection"
+  | "monitoring"
+  | "notifications"
+  | "review"
+  | "completed";
+
+export interface OnboardingState {
+  clusterId: string;
+  redundancySkippedAt?: string;
+  monitoringReviewedAt?: string;
+  notificationsSkippedAt?: string;
+  completedAt?: string;
+  completedBy?: string;
+  recordVersion: number;
+  updatedAt?: string;
+}
+
+export interface OnboardingNodeStatus {
+  node: Node;
+  onboardingCompatible: boolean;
+  configurationAvailable: boolean;
+  capability?: CapabilityProfile;
+  snapshot?: ConfigurationSnapshot;
+}
+
+export interface OnboardingStatus {
+  setupRequired: boolean;
+  completed: boolean;
+  resumeStep: OnboardingStep;
+  publicBaseUrl: string;
+  cluster?: Cluster;
+  state: OnboardingState;
+  nodes: OnboardingNodeStatus[];
+  nodeCount: number;
+  eligibleNodeCount: number;
+  redundant: boolean;
+  topologyReady: boolean;
+  authoritativeReady: boolean;
+  revision?: ConfigurationRevision;
+  monitoring: SystemSettings;
+  notificationCount: number;
+  notificationsReady: boolean;
+  canFinish: boolean;
 }
 
 export interface BackupManifest {
@@ -74,6 +135,33 @@ export interface RestorePreflight {
 export interface AuthResponse {
   user: User;
   expiresAt: string;
+}
+
+export type LoginResponse =
+  | AuthResponse
+  | {
+      mfaRequired: true;
+      mfaChallenge: string;
+      challengeExpiresAt: string;
+    };
+
+export interface MFAStatus {
+  enabled: boolean;
+  recoveryCodesRemaining: number;
+}
+
+export interface MFAEnrollment {
+  secret: string;
+  provisioningUri: string;
+  qrCodeDataUrl: string;
+  issuer: string;
+  accountLabel: string;
+  expiresAt: string;
+}
+
+export interface MFARecoveryResult {
+  recoveryCodes: string[];
+  recoveryCodesRemaining: number;
 }
 
 export interface Cluster {
@@ -139,12 +227,21 @@ export interface AuditEvent {
   id: string;
   actorType: "user" | "system" | "anonymous";
   actorUserId?: string;
+  actorDisplayName?: string;
   action: string;
   resourceType: string;
   resourceId?: string;
   requestId: string;
   metadata: Record<string, unknown>;
   createdAt: string;
+  scope?: "cluster" | "controller";
+  clusterId?: string;
+}
+
+export interface AuditEventPage {
+  items: AuditEvent[];
+  nextCursor?: string;
+  hasMore?: boolean;
 }
 
 export interface ConfigurationDocument {
@@ -868,7 +965,13 @@ export interface CertificateHealth {
   issuer?: string;
   notAfter?: string;
   daysRemaining?: number;
-  state: "healthy" | "warning" | "critical" | "expired" | "unknown";
+  state:
+    | "healthy"
+    | "warning"
+    | "critical"
+    | "expired"
+    | "not_applicable"
+    | "unknown";
   observedAt?: string;
 }
 
@@ -979,10 +1082,28 @@ export interface NotificationChannel {
   enabled: boolean;
   destinationSet: boolean;
   destinationSummary: string;
-  subscribedEvents: string[];
+  subscribedCategories: string[];
   recordVersion: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface NotificationPolicyEvent {
+  eventType: string;
+  label: string;
+  defaultEnabled: boolean;
+}
+
+export interface NotificationPolicyGroup {
+  id: string;
+  label: string;
+  events: NotificationPolicyEvent[];
+}
+
+export interface NotificationPolicy {
+  enabledEventTypes: string[];
+  recordVersion: number;
+  groups: NotificationPolicyGroup[];
 }
 
 export interface NotificationTestResult {

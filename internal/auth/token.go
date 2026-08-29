@@ -29,12 +29,33 @@ func (m *TokenManager) NewCSRFToken() (string, []byte, error) {
 	return m.newToken("csrf")
 }
 
+func (m *TokenManager) NewMFAChallengeToken() (string, []byte, error) {
+	return m.newToken("mfa-challenge")
+}
+
 func (m *TokenManager) HashSessionToken(token string) []byte {
 	return m.hash("session", token)
 }
 
 func (m *TokenManager) HashCSRFToken(token string) []byte {
 	return m.hash("csrf", token)
+}
+
+func (m *TokenManager) HashMFAChallengeToken(token string) []byte {
+	return m.hash("mfa-challenge", token)
+}
+
+func (m *TokenManager) HashRecoveryCode(code string) []byte {
+	// Recovery codes contain 80 bits of CSPRNG entropy, so a purpose-separated
+	// SHA-256 digest is offline-guess resistant without binding durable hashes to
+	// the installation's independently managed session secret. This preserves
+	// recovery codes across a database/credential-key restore while session and
+	// challenge tokens remain keyed HMACs.
+	digest := sha256.New()
+	digest.Write([]byte("mfa-recovery-code"))
+	digest.Write([]byte{0})
+	digest.Write([]byte(code))
+	return digest.Sum(nil)
 }
 
 func (m *TokenManager) Equal(left, right []byte) bool {

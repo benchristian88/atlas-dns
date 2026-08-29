@@ -6,11 +6,11 @@ import { StatusBadge, type StatusKind } from "../../components/StatusBadge";
 import { api } from "../../lib/api";
 import type {
   Cluster,
+  Node,
   StatisticsRange,
   StatisticsRanking,
   StatisticsReport,
 } from "../../lib/types";
-import { useScope } from "../../shell/ScopeContext";
 
 const ranges: { value: StatisticsRange; label: string }[] = [
   { value: "24h", label: "24 hours" },
@@ -19,12 +19,28 @@ const ranges: { value: StatisticsRange; label: string }[] = [
 ];
 
 export function StatisticsPage({ cluster }: { cluster: Cluster }) {
-  const { nodeId, nodes } = useScope();
+  const [nodeId, setNodeId] = useState("");
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [nodeError, setNodeError] = useState<unknown>();
   const [range, setRange] = useState<StatisticsRange>("24h");
   const [report, setReport] = useState<StatisticsReport>();
   const [reportKey, setReportKey] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>();
+
+  const loadNodes = useCallback(async () => {
+    try {
+      setNodes((await api.nodes(cluster.id)).items);
+      setNodeError(undefined);
+    } catch (caught) {
+      setNodeError(caught);
+    }
+  }, [cluster.id]);
+
+  useEffect(() => {
+    setNodeId("");
+    void loadNodes();
+  }, [loadNodes]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,7 +60,7 @@ export function StatisticsPage({ cluster }: { cluster: Cluster }) {
   }, [load]);
 
   const scopeName =
-    nodes.find((node) => node.id === nodeId)?.name ?? "Entire cluster";
+    nodes.find((node) => node.id === nodeId)?.name ?? "Entire Cluster";
   const requestedKey = `${cluster.id}:${range}:${nodeId}`;
   if (reportKey !== requestedKey && loading)
     return <Loading label="Loading aggregated statistics…" />;
@@ -61,27 +77,70 @@ export function StatisticsPage({ cluster }: { cluster: Cluster }) {
       <PageHeader
         eyebrow={`Observability · ${scopeName}`}
         title="Statistics"
-        description="Controller-collected DNS activity across the selected scope. No query-log records are used."
-        primaryAction={
-          <fieldset className="statistics-range">
-            <legend className="visually-hidden">Statistics range</legend>
-            {ranges.map((item) => (
-              <button
-                className={
-                  item.value === range ? "button" : "button button--secondary"
-                }
-                type="button"
-                key={item.value}
-                aria-pressed={item.value === range}
-                onClick={() => setRange(item.value)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </fieldset>
-        }
+        description={`Cluster: ${cluster.name} · Last refreshed ${formatDate(report.generatedAt)}. Controller-collected DNS activity; no Query Log records are used.`}
       />
 
+      <section
+        className="card statistics-toolbar"
+        aria-labelledby="statistics-scope-heading"
+      >
+        <div>
+          <h2 id="statistics-scope-heading">Traffic scope</h2>
+          <p>
+            Choose the entire cluster or one node, then select the reporting
+            range.
+          </p>
+        </div>
+        <div className="statistics-controls">
+          <label className="statistics-scope">
+            <span>Node</span>
+            <select
+              value={nodeId}
+              onChange={(event) => setNodeId(event.target.value)}
+            >
+              <option value="">Entire Cluster</option>
+              {nodes.map((node) => (
+                <option key={node.id} value={node.id}>
+                  {node.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="statistics-range-control">
+            <span>Time range</span>
+            <fieldset className="statistics-range">
+              <legend className="visually-hidden">Statistics range</legend>
+              {ranges.map((item) => (
+                <button
+                  className={
+                    item.value === range ? "button" : "button button--secondary"
+                  }
+                  type="button"
+                  key={item.value}
+                  aria-pressed={item.value === range}
+                  onClick={() => setRange(item.value)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </fieldset>
+          </div>
+        </div>
+      </section>
+
+      {nodeError !== undefined && (
+        <div className="notice notice--warning">
+          Node choices are unavailable. Statistics remain scoped to the entire
+          cluster.{" "}
+          <button
+            className="link-button"
+            type="button"
+            onClick={() => void loadNodes()}
+          >
+            Retry
+          </button>
+        </div>
+      )}
       {error !== undefined && (
         <div className="notice notice--warning">
           Refresh failed. Showing the last available statistics.{" "}

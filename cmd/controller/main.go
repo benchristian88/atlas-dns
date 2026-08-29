@@ -21,6 +21,7 @@ import (
 	"github.com/benchristian88/atlas-dns/internal/haoperations"
 	"github.com/benchristian88/atlas-dns/internal/inventory"
 	"github.com/benchristian88/atlas-dns/internal/jobs"
+	"github.com/benchristian88/atlas-dns/internal/onboarding"
 	"github.com/benchristian88/atlas-dns/internal/operationalhealth"
 	"github.com/benchristian88/atlas-dns/internal/operations"
 	"github.com/benchristian88/atlas-dns/internal/querylog"
@@ -43,7 +44,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	logger := configureLogger(configuration)
+	logger, loggingLevel := configureLogger(configuration)
 	slog.SetDefault(logger)
 	rootContext, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
@@ -66,20 +67,37 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	authService, err := auth.NewService(store, tokens, configuration.SessionDuration)
+	authService, err := auth.NewService(store, tokens, configuration.SessionDuration, credentialCipher)
 	if err != nil {
 		return err
 	}
-	userAdministration := useradmin.NewService(store)
+	userAdministration := useradmin.NewService(store, authService)
 	backupService := backup.NewService(configuration.DatabaseURL, configuration.CredentialEncryptionKey, configuration.PGDumpPath, store)
 	controllerUpdates := updates.NewService(store, configuration.InstallationType)
-	systemSettings := systemsettings.NewService(store, configuration.QueryLogRetention.String(), configuration.InstallationType)
+	fallbackRuntime := systemsettings.RuntimeSettings{
+		SessionDuration: configuration.SessionDuration, NodeHealthInterval: configuration.NodeHealthInterval,
+		NodeRequestTimeout: configuration.NodeRequestTimeout, StatisticsPollInterval: configuration.StatisticsPollInterval,
+		QueryLogCollection: configuration.QueryLogCollection, QueryLogPollInterval: configuration.QueryLogPollInterval, QueryLogRetention: configuration.QueryLogRetention,
+		LogLevel: configuration.LogLevel, OperationalHistoryRetention: 90 * 24 * time.Hour,
+	}
+	runtimeSettings := systemsettings.NewRuntimeStore(fallbackRuntime)
+	systemSettings := systemsettings.NewService(store, fallbackRuntime, configuration.InstallationType, runtimeSettings)
+	if err := systemSettings.Initialize(rootContext); err != nil {
+		return err
+	}
+	effectiveRuntime := runtimeSettings.RuntimeSettings()
+	loggingLevel.Set(parseLogLevel(effectiveRuntime.LogLevel))
+	authService.SetRuntimeSettings(runtimeSettings)
 	probe := adguard.NewProbe(configuration.NodeRequestTimeout)
+	probe.SetRuntimeSettings(runtimeSettings)
 	management := domain.NewManagementService(store, credentialCipher, probe)
 	configurationAdapter := adguard.NewConfigurationReader(probe)
 	inventoryService := inventory.NewService(store, credentialCipher, configurationAdapter)
-	haOperationsService := haoperations.NewService(store, management, inventoryService, probe, credentialCipher, haoperations.NewWireDNSProber(2*time.Second))
+	dnsProber := haoperations.NewConfirmingDNSProber(haoperations.NewWireDNSProber(2 * time.Second))
+	haOperationsService := haoperations.NewService(store, management, inventoryService, probe, credentialCipher, dnsProber)
+	haOperationsService.SetLogger(logger)
 	haOperationsService.SetVersionCompatibility(adguard.ConfigurationCompatibility)
+	haOperationsService.SetRuntimeSettings(runtimeSettings)
 	notificationService := haoperations.NewNotificationService(store, credentialCipher)
 	releaseChecker := haoperations.NewReleaseChecker(store)
 	operationService := operations.NewService(store, credentialCipher)
@@ -94,36 +112,42 @@ func run() error {
 	}
 	reconciler := controlplane.NewReconciler(store, controlplaneService, inventoryService, logger)
 	workerHealth := operationalhealth.NewTracker()
-	for _, worker := range []string{"node_connectivity", "dns_service_health", "adguard_release_check", "notification_delivery", "statistics_collection", "statistics_retention", "query_log_collection", "query_log_retention", "deployment", "operational_commands", "drift_reconciliation", "session_cleanup"} {
-		workerHealth.Register(worker, (worker == "query_log_collection" || worker == "query_log_retention") && !configuration.QueryLogCollection)
+	for _, worker := range []string{"node_connectivity", "dns_service_health", "adguard_release_check", "notification_delivery", "statistics_collection", "statistics_retention", "query_log_collection", "query_log_retention", "operational_history_retention", "deployment", "operational_commands", "drift_reconciliation", "session_cleanup"} {
+		workerHealth.Register(worker, worker == "query_log_collection" && !effectiveRuntime.QueryLogCollection)
 	}
-	healthPoller := jobs.NewHealthPoller(store, credentialCipher, probe, configuration.NodeHealthInterval, logger, workerHealth)
-	statisticsService := telemetry.NewService(store, configuration.StatisticsPollInterval, configuration.NodeRequestTimeout)
-	statisticsPoller := jobs.NewStatisticsPoller(store, credentialCipher, configurationAdapter, configuration.StatisticsPollInterval, configuration.NodeRequestTimeout, logger, workerHealth)
-	queryLogService := querylog.NewService(store, configuration.QueryLogPollInterval, querylog.Options{
-		CollectionEnabled: configuration.QueryLogCollection,
-		Retention:         configuration.QueryLogRetention,
+	healthPoller := jobs.NewHealthPoller(store, credentialCipher, probe, effectiveRuntime.NodeHealthInterval, logger, workerHealth)
+	healthPoller.SetRuntimeSettings(runtimeSettings)
+	statisticsService := telemetry.NewService(store, effectiveRuntime.StatisticsPollInterval, configuration.NodeRequestTimeout)
+	statisticsService.SetRuntimeSettings(runtimeSettings)
+	statisticsPoller := jobs.NewStatisticsPoller(store, credentialCipher, configurationAdapter, effectiveRuntime.StatisticsPollInterval, configuration.NodeRequestTimeout, logger, workerHealth)
+	statisticsPoller.SetRuntimeSettings(runtimeSettings)
+	queryLogService := querylog.NewService(store, effectiveRuntime.QueryLogPollInterval, querylog.Options{
+		CollectionEnabled: effectiveRuntime.QueryLogCollection,
+		Retention:         effectiveRuntime.QueryLogRetention,
 	})
+	queryLogService.SetRuntimeSettings(runtimeSettings)
 	operationalService := operationalhealth.NewService(store, workerHealth, operationalhealth.Options{
-		NodeInterval: configuration.NodeHealthInterval, RequestTimeout: configuration.NodeRequestTimeout,
-		StatisticsInterval: configuration.StatisticsPollInterval, QueryLogInterval: configuration.QueryLogPollInterval,
-		StatisticsRetention: 400 * 24 * time.Hour, QueryLogRetention: configuration.QueryLogRetention,
-		QueryLogEnabled: configuration.QueryLogCollection,
+		NodeInterval: effectiveRuntime.NodeHealthInterval, RequestTimeout: configuration.NodeRequestTimeout,
+		StatisticsInterval: effectiveRuntime.StatisticsPollInterval, QueryLogInterval: effectiveRuntime.QueryLogPollInterval,
+		StatisticsRetention: 400 * 24 * time.Hour, QueryLogRetention: effectiveRuntime.QueryLogRetention,
+		QueryLogEnabled: effectiveRuntime.QueryLogCollection,
 	})
 	operationalService.SetHAOperations(haOperationsService)
+	operationalService.SetRuntimeSettings(runtimeSettings)
 	go healthPoller.Run(rootContext)
-	go jobs.RunHAOperations(rootContext, haOperationsService, configuration.NodeHealthInterval, logger, workerHealth)
+	go jobs.RunHAOperations(rootContext, haOperationsService, effectiveRuntime.NodeHealthInterval, logger, workerHealth, runtimeSettings)
 	go jobs.RunReleaseChecks(rootContext, releaseChecker, logger, workerHealth)
 	go jobs.RunNotificationDelivery(rootContext, notificationService, logger, workerHealth)
 	go statisticsPoller.Run(rootContext)
-	if configuration.QueryLogCollection {
-		queryLogPoller := jobs.NewQueryLogPoller(store, credentialCipher, configurationAdapter, configuration.QueryLogPollInterval, configuration.NodeRequestTimeout, configuration.QueryLogRetention, logger, workerHealth)
-		go queryLogPoller.Run(rootContext)
-	}
+	queryLogPoller := jobs.NewQueryLogPoller(store, credentialCipher, configurationAdapter, effectiveRuntime.QueryLogPollInterval, configuration.NodeRequestTimeout, effectiveRuntime.QueryLogRetention, logger, workerHealth)
+	queryLogPoller.SetRuntimeSettings(runtimeSettings)
+	go queryLogPoller.Run(rootContext)
 	go jobs.RunDeploymentExecutor(rootContext, deploymentExecutor, logger, workerHealth)
 	go jobs.RunOperationalCommandExecutor(rootContext, operationExecutor, logger, workerHealth)
-	go jobs.RunReconciler(rootContext, reconciler, configuration.NodeHealthInterval, logger, workerHealth)
+	go jobs.RunReconciler(rootContext, reconciler, effectiveRuntime.NodeHealthInterval, logger, workerHealth, runtimeSettings)
 	go jobs.RunSessionCleanup(rootContext, store, logger, workerHealth)
+	go jobs.RunOperationalHistoryRetention(rootContext, store, runtimeSettings, logger, workerHealth)
+	go watchLogLevel(rootContext, runtimeSettings, loggingLevel)
 
 	apiServer := controllerapi.NewServer(
 		authService, management, inventoryService, store, store, logger,
@@ -141,6 +165,10 @@ func run() error {
 	apiServer.SetBackups(backupService)
 	apiServer.SetControllerUpdates(controllerUpdates)
 	apiServer.SetSystemSettings(systemSettings)
+	onboardingService := onboarding.NewService(store, systemSettings, configuration.PublicBaseURL.String())
+	onboardingService.SetInitialCollector(jobs.NewOnboardingCollector(healthPoller, statisticsPoller, queryLogPoller, haOperationsService), logger)
+	apiServer.SetOnboarding(onboardingService)
+	apiServer.SetRuntimeSettings(runtimeSettings)
 	apiServer.SetMetrics(workerHealth, configuration.MetricsToken)
 	httpServer := &http.Server{
 		Addr:              configuration.HTTPAddress,
@@ -172,19 +200,37 @@ func run() error {
 	}
 }
 
-func configureLogger(configuration config.Config) *slog.Logger {
-	level := slog.LevelInfo
-	switch configuration.LogLevel {
-	case "debug":
-		level = slog.LevelDebug
-	case "warn":
-		level = slog.LevelWarn
-	case "error":
-		level = slog.LevelError
-	}
+func configureLogger(configuration config.Config) (*slog.Logger, *slog.LevelVar) {
+	level := &slog.LevelVar{}
+	level.Set(parseLogLevel(configuration.LogLevel))
 	options := &slog.HandlerOptions{Level: level}
 	if configuration.Environment == "development" {
-		return slog.New(slog.NewTextHandler(os.Stdout, options))
+		return slog.New(slog.NewTextHandler(os.Stdout, options)), level
 	}
-	return slog.New(slog.NewJSONHandler(os.Stdout, options))
+	return slog.New(slog.NewJSONHandler(os.Stdout, options)), level
+}
+
+func parseLogLevel(value string) slog.Level {
+	switch value {
+	case "debug":
+		return slog.LevelDebug
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
+func watchLogLevel(ctx context.Context, settings *systemsettings.RuntimeStore, level *slog.LevelVar) {
+	for {
+		changed := settings.RuntimeSettingsChanged()
+		select {
+		case <-ctx.Done():
+			return
+		case <-changed:
+			level.Set(parseLogLevel(settings.RuntimeSettings().LogLevel))
+		}
+	}
 }

@@ -26,10 +26,10 @@ maintenance subsystems remain explicit and do not alone declare the whole
 controller failed. Three consecutive process worker failures mark that worker
 failed; a successful run clears its streak and safe error code.
 
-Statistics staleness reuses `max(2 * STATISTICS_POLL_INTERVAL +
-NODE_REQUEST_TIMEOUT, 3h)`. Query Log staleness reuses
-`max(3 * QUERY_LOG_POLL_INTERVAL, 2m)`. Observation freshness uses
-`max(3 * NODE_HEALTH_INTERVAL + NODE_REQUEST_TIMEOUT, 2m)` and remains distinct
+Statistics staleness reuses `max(2 × configured Statistics interval +
+configured node timeout, 3h)`. Query Log staleness reuses
+`max(3 × configured Query Log interval, 2m)`. Observation freshness uses
+`max(3 × configured health interval + configured node timeout, 2m)` and remains distinct
 from the node connectivity timestamp.
 
 Statistics health is based on ranges eligible under each node's current
@@ -62,6 +62,14 @@ timeout. Collectors retry failed nodes on the next bounded scheduled pass;
 deployment and operational-command claim failures use cancellable exponential
 backoff from one to 30 seconds. Success resets worker degradation. Retention
 failure does not stop its collector.
+
+The AdGuard Home release worker wakes every five minutes, while successful
+release evidence remains fresh for six hours and failed evidence remains valid
+for 15 minutes. A worker wake first checks the PostgreSQL cache and does not
+imply a GitHub request. Operational Status therefore reports the next worker
+run, not a promise that the external release source will be queried at that
+time. Fresh cached evidence short-circuits the external request; the first wake
+at or after its expiry performs the next upstream check.
 
 The worker tracker is intentionally process-local. Durable collector attempts,
 checkpoints, deployments, drift, and observations remain the restart source of

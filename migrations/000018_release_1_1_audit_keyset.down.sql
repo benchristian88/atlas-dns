@@ -1,0 +1,1 @@
+DROP INDEX audit_events_created_at_id_idx;

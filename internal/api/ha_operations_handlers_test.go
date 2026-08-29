@@ -22,6 +22,15 @@ type haHistoryServiceFake struct {
 	page    haoperations.HistoryPage
 }
 
+type certificateServiceFake struct{ HAOperationsService }
+
+func (certificateServiceFake) Certificates(context.Context, string) ([]haoperations.Certificate, error) {
+	return []haoperations.Certificate{{
+		NodeID: "22222222-2222-4222-8222-222222222222", NodeName: "Plain DNS",
+		State: haoperations.CertificateNotApplicable,
+	}}, nil
+}
+
 func (s *haHistoryServiceFake) History(_ context.Context, request haoperations.HistoryRequest) (haoperations.HistoryPage, error) {
 	s.request = request
 	return s.page, nil
@@ -84,6 +93,20 @@ func TestHAHistoryHandlerReturnsCursorPageAndValidatesLimit(t *testing.T) {
 	server.handleHAHistory(invalidResponse, invalid)
 	if invalidResponse.Code != http.StatusBadRequest || !strings.Contains(invalidResponse.Body.String(), `"field":"limit"`) {
 		t.Fatalf("invalid status=%d body=%s", invalidResponse.Code, invalidResponse.Body.String())
+	}
+}
+
+func TestCertificatesHandlerReturnsNotApplicableContractWithoutExpiry(t *testing.T) {
+	server := &Server{haOperations: certificateServiceFake{}}
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.SetPathValue("clusterId", "11111111-1111-4111-8111-111111111111")
+	response := httptest.NewRecorder()
+	server.handleCertificates(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"not_applicable"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), "notAfter") || strings.Contains(response.Body.String(), "daysRemaining") {
+		t.Fatalf("not-applicable contract exposed expiry: %s", response.Body.String())
 	}
 }
 

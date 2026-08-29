@@ -13,6 +13,23 @@ type repositoryStub struct {
 	users        []domain.User
 	event        domain.AuditEvent
 	passwordHash string
+	sessionID    string
+}
+
+type mfaVerifierStub struct {
+	required bool
+	code     string
+}
+
+func (v *mfaVerifierStub) RequiresMFA(context.Context, string) (bool, error) {
+	return v.required, nil
+}
+
+func (v *mfaVerifierStub) VerifyTOTPForUser(_ context.Context, _ string, code, _ string) error {
+	if code != v.code {
+		return domain.NewError(domain.ErrorInvalidCredentials, "authentication code is invalid")
+	}
+	return nil
 }
 
 func (r *repositoryStub) ListUsers(context.Context) ([]domain.User, error) { return r.users, nil }
@@ -36,6 +53,12 @@ func (r *repositoryStub) UpdateUser(_ context.Context, id, email, displayName st
 }
 func (r *repositoryStub) ResetUserPassword(_ context.Context, _ string, hash string, _ time.Time, event domain.AuditEvent) error {
 	r.passwordHash = hash
+	r.event = event
+	return nil
+}
+func (r *repositoryStub) ChangeOwnPassword(_ context.Context, _ string, sessionID string, hash string, _ time.Time, event domain.AuditEvent) error {
+	r.passwordHash = hash
+	r.sessionID = sessionID
 	r.event = event
 	return nil
 }
@@ -88,6 +111,35 @@ func TestPasswordResetHashesAndRequestsSessionRevocation(t *testing.T) {
 	}
 }
 
+func TestChangeOwnPasswordVerifiesCurrentCredentialAndKeepsCurrentSession(t *testing.T) {
+	userID := "11111111-1111-4111-8111-111111111111"
+	sessionID := "22222222-2222-4222-8222-222222222222"
+	currentHash, err := auth.HashPassword("current secure password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &repositoryStub{users: []domain.User{{ID: userID, PasswordHash: currentHash, Enabled: true}}}
+	service := NewService(repository)
+	actor := domain.Actor{UserID: userID, RequestID: "request"}
+
+	if err := service.ChangeOwnPassword(context.Background(), actor, sessionID, "wrong password", "replacement secure password", ""); err == nil {
+		t.Fatal("expected incorrect current password to be rejected")
+	}
+	if repository.passwordHash != "" {
+		t.Fatal("password changed after failed current-password verification")
+	}
+	if err := service.ChangeOwnPassword(context.Background(), actor, sessionID, "current secure password", "replacement secure password", ""); err != nil {
+		t.Fatal(err)
+	}
+	valid, err := auth.VerifyPassword(repository.passwordHash, "replacement secure password")
+	if err != nil || !valid {
+		t.Fatal("replacement password was not hashed correctly")
+	}
+	if repository.sessionID != sessionID || repository.event.Action != "user.password_changed" || repository.event.Metadata["otherSessionsRevoked"] != true {
+		t.Fatalf("unsafe own-password change evidence: session=%q event=%#v", repository.sessionID, repository.event)
+	}
+}
+
 func TestEnableDisableAndLoginIdentifierChangesHaveSpecificSafeAudits(t *testing.T) {
 	id := "11111111-1111-4111-8111-111111111111"
 	repository := &repositoryStub{users: []domain.User{{ID: id, Email: "user@example.test", DisplayName: "User", Role: domain.RoleAdministrator, Enabled: true}}}
@@ -105,5 +157,26 @@ func TestEnableDisableAndLoginIdentifierChangesHaveSpecificSafeAudits(t *testing
 	}
 	if repository.event.Action != "user.login_identifier_changed" || repository.event.Metadata["loginIdentifierChanged"] != true {
 		t.Fatalf("unexpected identifier audit: %#v", repository.event)
+	}
+}
+
+func TestChangeOwnPasswordRequiresTOTPWhenMFAEnabled(t *testing.T) {
+	userID := "11111111-1111-4111-8111-111111111111"
+	hash, err := auth.HashPassword("current secure password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &repositoryStub{users: []domain.User{{ID: userID, PasswordHash: hash, Enabled: true}}}
+	verifier := &mfaVerifierStub{required: true, code: "123456"}
+	service := NewService(repository, verifier)
+	actor := domain.Actor{UserID: userID}
+	if err := service.ChangeOwnPassword(context.Background(), actor, "22222222-2222-4222-8222-222222222222", "current secure password", "replacement secure password", "000000"); err == nil {
+		t.Fatal("password changed without valid TOTP step-up")
+	}
+	if repository.passwordHash != "" {
+		t.Fatal("password persisted before TOTP step-up")
+	}
+	if err := service.ChangeOwnPassword(context.Background(), actor, "22222222-2222-4222-8222-222222222222", "current secure password", "replacement secure password", "123456"); err != nil {
+		t.Fatal(err)
 	}
 }

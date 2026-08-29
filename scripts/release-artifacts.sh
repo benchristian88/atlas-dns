@@ -32,6 +32,7 @@ for architecture in amd64 arm64; do
 
   CGO_ENABLED=0 GOOS=linux GOARCH="${architecture}" "${go_command}" build -trimpath -ldflags "${ldflags}" -o "${archive_root}/bin/atlas-dns" ./cmd/controller
   CGO_ENABLED=0 GOOS=linux GOARCH="${architecture}" "${go_command}" build -trimpath -ldflags "${ldflags}" -o "${archive_root}/bin/atlas-dns-backup" ./cmd/atlas-dns-backup
+  CGO_ENABLED=0 GOOS=linux GOARCH="${architecture}" "${go_command}" build -trimpath -ldflags "${ldflags}" -o "${archive_root}/bin/atlas-dns-admin" ./cmd/atlas-dns-admin
   CGO_ENABLED=0 GOOS=linux GOARCH="${architecture}" "${go_command}" build -trimpath -ldflags "${ldflags}" -o "${archive_root}/bin/atlas-dns-migrate" ./cmd/migrate
 
   cp -a "${repo_dir}/web/dist/." "${archive_root}/web/"

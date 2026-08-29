@@ -45,13 +45,22 @@ explicitly say so.
 ## Standard and Full
 
 Standard Backup includes database schema and required control-plane rows. It
-excludes table data for sessions, controller/upstream release caches,
+includes database-backed System Settings, notification policy, encrypted TOTP
+seeds, MFA enabled timestamps, and one-way recovery-code hashes. It excludes
+table data for sessions, transient MFA challenges, controller/upstream release caches,
 Statistics, Query Log ingestion/events, DNS probes, HA operational events, and
 notification deliveries. The table schema is retained so a restored database
 is immediately valid.
 
 Full Backup retains the same recovery state plus all retained operational
 history. Neither type restores browser sessions.
+
+The database dump cannot reveal a plaintext TOTP seed or recovery code. Format
+v1 deliberately packages the common credential key as `credential.key` only
+inside the passphrase-encrypted authenticated payload so encrypted node,
+webhook, and MFA state remains portable. This is an established Atlas backup
+contract; the key is absent from the outer manifest and must never be extracted
+or logged except to the explicit protected restore output path.
 
 ## Security and temporary data
 

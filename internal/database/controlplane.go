@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/benchristian88/atlas-dns/internal/configuration"
 	"github.com/benchristian88/atlas-dns/internal/controlplane"
 	"github.com/benchristian88/atlas-dns/internal/domain"
 	"github.com/benchristian88/atlas-dns/internal/inventory"
@@ -109,6 +110,13 @@ func scanRevision(row rowScanner) (controlplane.Revision, error) {
 	}
 	if err := json.Unmarshal(document, &item.Document); err != nil {
 		return item, fmt.Errorf("decode configuration revision: %w", err)
+	}
+	if item.SchemaVersion == configuration.LegacySchemaVersion || item.Document.SchemaVersion == configuration.LegacySchemaVersion {
+		item.Document = configuration.ConvertLegacyDesired(item.Document)
+		item.SchemaVersion = configuration.SchemaVersion
+		if _, hash, err := configuration.MarshalDesired(item.Document); err == nil {
+			item.CanonicalHash = hash
+		}
 	}
 	item.Lifecycle.CanArchive = !item.Active && item.ArchivedAt == nil
 	item.Lifecycle.CanRestore = item.ArchivedAt != nil

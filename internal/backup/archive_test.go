@@ -159,9 +159,19 @@ func TestProtectedDatabaseCommandRemovesPasswordFromArgumentsAndOverridesEnviron
 }
 
 func TestStandardBackupExcludesAllTransientAndOptionalHistoryTables(t *testing.T) {
-	for _, required := range []string{"sessions", "controller_release_cache", "statistics_snapshots", "query_events", "dns_probe_results", "ha_operational_events"} {
-		if !contains(optionalTables, required) {
+	for _, required := range []string{"sessions", "mfa_challenges", "controller_release_cache"} {
+		if !contains(alwaysExcludedTables, required) {
+			t.Fatalf("every backup does not exclude %q", required)
+		}
+	}
+	for _, required := range []string{"statistics_snapshots", "query_events", "dns_probe_results", "ha_operational_events"} {
+		if !contains(standardExcludedTables, required) {
 			t.Fatalf("standard backup does not exclude %q", required)
+		}
+	}
+	for _, requiredState := range []string{"system_settings", "notification_policy", "user_mfa", "user_mfa_recovery_codes"} {
+		if contains(alwaysExcludedTables, requiredState) || contains(standardExcludedTables, requiredState) {
+			t.Fatalf("standard backup incorrectly excludes required state %q", requiredState)
 		}
 	}
 }

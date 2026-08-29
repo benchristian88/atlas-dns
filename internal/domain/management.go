@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -151,6 +152,43 @@ type CreateNodeInput struct {
 	Enabled           bool
 }
 
+func (s *ManagementService) ValidateNodeCandidate(ctx context.Context, input CreateNodeInput) (NodeProbeResult, error) {
+	if !ValidID(input.ClusterID) {
+		return NodeProbeResult{}, Validation("clusterId", "must be a valid UUID")
+	}
+	if _, err := s.repository.ClusterByID(ctx, input.ClusterID); err != nil {
+		return NodeProbeResult{}, err
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	if err := ValidateResourceName("name", input.Name); err != nil {
+		return NodeProbeResult{}, err
+	}
+	if err := validateNodeCredentials(input.Username, input.Password); err != nil {
+		return NodeProbeResult{}, err
+	}
+	if err := ValidateCertificatePolicy(input.CertificatePolicy, input.CustomCAPEM); err != nil {
+		return NodeProbeResult{}, err
+	}
+	baseURL, err := NormaliseNodeURL(input.BaseURL, input.CertificatePolicy)
+	if err != nil {
+		return NodeProbeResult{}, err
+	}
+	result, err := s.probe.Status(ctx, NodeProbeRequest{
+		BaseURL: baseURL, CertificatePolicy: input.CertificatePolicy, CustomCAPEM: input.CustomCAPEM,
+		Credentials: NodeCredentials{Username: input.Username, Password: input.Password},
+	})
+	if err != nil {
+		return NodeProbeResult{}, err
+	}
+	if result.Compatibility == CompatibilityUnsupported {
+		return NodeProbeResult{}, NewError(ErrorCapability, fmt.Sprintf("Unsupported AdGuard Home version. Minimum supported version: 0.107.78. Detected version: %s", result.Version))
+	}
+	if result.Compatibility != CompatibilitySupported {
+		return NodeProbeResult{}, NewError(ErrorCapability, fmt.Sprintf("AdGuard Home version compatibility could not be established. Minimum supported version: 0.107.78. Detected version: %s", result.Version))
+	}
+	return result, nil
+}
+
 func (s *ManagementService) CreateNode(ctx context.Context, actor Actor, input CreateNodeInput) (Node, error) {
 	if !ValidID(input.ClusterID) {
 		return Node{}, Validation("clusterId", "must be a valid UUID")
@@ -172,10 +210,7 @@ func (s *ManagementService) CreateNode(ctx context.Context, actor Actor, input C
 	if err != nil {
 		return Node{}, err
 	}
-	probeResult, err := s.probe.Status(ctx, NodeProbeRequest{
-		BaseURL: baseURL, CertificatePolicy: input.CertificatePolicy, CustomCAPEM: input.CustomCAPEM,
-		Credentials: NodeCredentials{Username: input.Username, Password: input.Password},
-	})
+	probeResult, err := s.ValidateNodeCandidate(ctx, input)
 	if err != nil {
 		return Node{}, err
 	}

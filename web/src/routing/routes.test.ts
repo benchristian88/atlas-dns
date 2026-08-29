@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CANONICAL_PATHS,
   LEGACY_REDIRECTS,
+  nodeDetailPath,
   preserveRouteState,
   resolveRoute,
   routePageWidth,
@@ -31,11 +32,13 @@ describe("canonical route safety", () => {
       "/query-log": "query-log",
       "/ha/nodes": "nodes",
       "/ha/operations": "ha-operations",
+      "/ha/notifications": "notifications",
       "/ha/configuration": "configuration",
       "/ha/revisions": "revisions",
       "/ha/deployments": "deployments",
       "/ha/drift": "drift",
       "/setup-guide": "setup-guide",
+      "/onboarding": "onboarding",
       "/system/users": "users",
       "/system/audit": "audit",
       "/system/operational-status": "operational-status",
@@ -43,6 +46,8 @@ describe("canonical route safety", () => {
       "/system/backups": "backups",
       "/system/updates": "updates",
       "/system/about": "about",
+      "/account": "account",
+      "/account/preferences": "preferences",
     } as const;
 
     expect(Object.keys(expectedKinds)).toEqual([...CANONICAL_PATHS]);
@@ -63,41 +68,18 @@ describe("canonical route safety", () => {
     expect(resolveRoute("/settings/not-real")).toEqual({ kind: "not-found" });
   });
 
-  it("assigns every route family its documented page width", () => {
-    const expectedWidths = {
-      "/": "wide",
-      "/statistics": "wide",
-      "/settings/general": "wide",
-      "/settings/dns": "wide",
-      "/settings/encryption": "wide",
-      "/settings/clients": "wide",
-      "/settings/dhcp": "wide",
-      "/filters/blocklists": "wide",
-      "/filters/allowlists": "wide",
-      "/filters/rewrites": "wide",
-      "/filters/blocked-services": "wide",
-      "/filters/custom-rules": "wide",
-      "/query-log": "wide",
-      "/ha/nodes": "wide",
-      "/ha/operations": "wide",
-      "/ha/configuration": "wide",
-      "/ha/revisions": "wide",
-      "/ha/deployments": "wide",
-      "/ha/drift": "wide",
-      "/setup-guide": "standard",
-      "/system/users": "standard",
-      "/system/audit": "standard",
-      "/system/operational-status": "standard",
-      "/system/settings": "standard",
-      "/system/backups": "standard",
-      "/system/updates": "standard",
-      "/system/about": "standard",
-    } as const;
+  it("builds an encoded exact Node Detail path", () => {
+    expect(nodeDetailPath("node/id with spaces")).toBe(
+      "/ha/nodes/node%2Fid%20with%20spaces",
+    );
+  });
 
-    expect(Object.keys(expectedWidths)).toEqual([...CANONICAL_PATHS]);
-    for (const [path, width] of Object.entries(expectedWidths)) {
-      expect(routePageWidth(resolveRoute(path))).toBe(width);
-    }
+  it("gives every canonical application route the dashboard width", () => {
+    for (const path of CANONICAL_PATHS)
+      expect(routePageWidth(resolveRoute(path))).toBe("wide");
+
+    expect(routePageWidth(resolveRoute("/mistyped-dashboard"))).toBe("narrow");
+    expect(routePageWidth(resolveRoute("/ha/history"))).toBe("narrow");
   });
 });
 

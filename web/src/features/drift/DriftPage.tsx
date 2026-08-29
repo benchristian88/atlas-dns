@@ -16,6 +16,7 @@ import type {
   Node,
 } from "../../lib/types";
 import { useQuerySelection } from "../../lib/useQuerySelection";
+import { nodeDetailPath } from "../../routing/routes";
 
 export function DriftPage({ cluster }: { cluster: Cluster }) {
   const [drift, setDrift] = useState<DriftEvent[]>();
@@ -137,55 +138,6 @@ export function DriftPage({ cluster }: { cluster: Cluster }) {
     }
   }
 
-  async function maintenance(item: DriftEvent) {
-    const node = nodeByID.get(item.nodeId);
-    if (!node) return;
-    setBusy(item.id);
-    try {
-      if (node.maintenanceMode) {
-        if (
-          !window.confirm(
-            "Run all return-to-service checks? Existing drift remains visible and reconciliation resumes after maintenance.",
-          )
-        )
-          return;
-        await api.returnToService(node);
-      } else {
-        const preflight = await api.maintenancePreflight(node.id);
-        if (!preflight.allowed) {
-          const blockingCheck = preflight.checks.find(
-            (check) => check.required && check.status === "fail",
-          );
-          throw new Error(
-            blockingCheck?.message ??
-              "Maintenance preflight contains a blocking check.",
-          );
-        }
-        let breakGlass = false;
-        let confirmation = "";
-        if (preflight.breakGlassRequired) {
-          breakGlass = window.confirm(
-            "This leaves no verified healthy DNS node. Use break glass?",
-          );
-          if (!breakGlass) return;
-          confirmation =
-            window.prompt("Type CONTINUE_WITHOUT_DNS_REDUNDANCY") ?? "";
-        } else if (
-          !window.confirm(
-            `Put ${node.name} into maintenance? Deployments and reconciliation will exclude it, but the configuration difference remains.`,
-          )
-        )
-          return;
-        await api.enterMaintenance(node, breakGlass, confirmation);
-      }
-      await load();
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setBusy("");
-    }
-  }
-
   if (drift === undefined && error === undefined)
     return <Loading label="Loading convergence state…" />;
   if (drift === undefined)
@@ -252,7 +204,7 @@ export function DriftPage({ cluster }: { cluster: Cluster }) {
             aria-label={`${expanded ? "Hide" : "View"} drift incident details for ${nodeByID.get(item.nodeId)?.name ?? item.nodeId}`}
             onClick={() => toggle(item.id)}
           >
-            <span aria-hidden="true">{expanded ? "⌃" : "⌄"}</span>
+            <span aria-hidden="true">{expanded ? "−" : "+"}</span>
           </button>
         );
       },
@@ -262,9 +214,9 @@ export function DriftPage({ cluster }: { cluster: Cluster }) {
   return (
     <>
       <PageHeader
-        eyebrow="Current convergence"
+        eyebrow="HA Controller"
         title="Drift"
-        description="Investigate desired-versus-observed differences and choose a deliberate restore, adoption, or maintenance response."
+        description="Investigate desired-versus-observed differences and choose a deliberate restore or adoption response; node operations remain on Node Detail."
       />
       {error !== undefined && (
         <ErrorState error={error} retry={() => void load()} />
@@ -331,7 +283,6 @@ export function DriftPage({ cluster }: { cluster: Cluster }) {
               draftVersion={draftVersion}
               onRestore={restore}
               onAdopt={adopt}
-              onMaintenance={maintenance}
             />
           )}
           emptyTitle="No drift detected"
@@ -382,7 +333,6 @@ function DriftIncidentDetail({
   draftVersion,
   onRestore,
   onAdopt,
-  onMaintenance,
 }: {
   item: DriftEvent;
   node?: Node;
@@ -390,7 +340,6 @@ function DriftIncidentDetail({
   draftVersion: number;
   onRestore: (item: DriftEvent) => Promise<void>;
   onAdopt: (item: DriftEvent) => Promise<void>;
-  onMaintenance: (item: DriftEvent) => Promise<void>;
 }) {
   return (
     <article
@@ -484,15 +433,10 @@ function DriftIncidentDetail({
               </button>
             </>
           )}
-          <button
+          <a
             className="button button--secondary"
-            type="button"
-            disabled={busy !== "" || node === undefined}
-            onClick={() => void onMaintenance(item)}
+            href={nodeDetailPath(item.nodeId)}
           >
-            {node?.maintenanceMode ? "Exit maintenance" : "Enter maintenance"}
-          </button>
-          <a className="button button--quiet" href="/ha/nodes">
             View node
           </a>
           <a

@@ -5,7 +5,9 @@ import {
   useMemo,
   useState,
 } from "react";
+import { HealthSummaryCard } from "../../components/DataDisplay";
 import { EmptyState, ErrorState, Loading } from "../../components/Feedback";
+import { PageHeader } from "../../components/Page";
 import { StatusBadge } from "../../components/StatusBadge";
 import { api, type NodePayload } from "../../lib/api";
 import type {
@@ -17,6 +19,7 @@ import type {
   DriftEvent,
   Node,
 } from "../../lib/types";
+import { nodeDetailPath } from "../../routing/routes";
 
 export function NodesPage({ cluster }: { cluster: Cluster }) {
   const [nodes, setNodes] = useState<Node[]>();
@@ -25,8 +28,6 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
   const [revisions, setRevisions] = useState<ConfigurationRevision[]>([]);
   const [drift, setDrift] = useState<DriftEvent[]>([]);
   const [error, setError] = useState<unknown>();
-  const [maintenanceError, setMaintenanceError] = useState<unknown>();
-  const [maintenanceNodeId, setMaintenanceNodeId] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Node>();
 
@@ -70,28 +71,44 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
       ),
     [drift],
   );
+  const currentNodes = nodes ?? [];
+  const healthyNodes = currentNodes.filter(
+    (node) => node.healthStatus === "healthy",
+  ).length;
+  const degradedNodes = currentNodes.filter(
+    (node) => node.enabled && node.healthStatus === "unknown",
+  ).length;
+  const unreachableNodes = currentNodes.filter(
+    (node) => node.healthStatus === "unreachable",
+  ).length;
+  const incompatibleNodes = currentNodes.filter(
+    (node) =>
+      node.healthStatus === "incompatible" ||
+      node.compatibilityStatus === "unsupported",
+  ).length;
+  const latestObservation = latestTime(
+    snapshots.map((snapshot) => snapshot.observedAt),
+  );
 
   return (
     <>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">HA management</p>
-          <h1>Nodes</h1>
-          <p className="muted">
-            Health, version, and controller connectivity for {cluster.name}.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="button"
-          onClick={() => {
-            setShowAdd((value) => !value);
-            setEditing(undefined);
-          }}
-        >
-          {showAdd ? "Cancel" : "Add node"}
-        </button>
-      </header>
+      <PageHeader
+        eyebrow="HA Controller"
+        title="Nodes"
+        description={`Inventory, identity, and controller connectivity for ${cluster.name}. Open a node for operational tests and maintenance.`}
+        primaryAction={
+          <button
+            type="button"
+            className="button"
+            onClick={() => {
+              setShowAdd((value) => !value);
+              setEditing(undefined);
+            }}
+          >
+            {showAdd ? "Cancel" : "Add node"}
+          </button>
+        }
+      />
       {showAdd && (
         <NodeForm
           cluster={cluster}
@@ -117,12 +134,6 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
       {nodes === undefined && error !== undefined && (
         <ErrorState error={error} retry={() => void load()} />
       )}
-      {maintenanceError !== undefined && (
-        <ErrorState
-          error={maintenanceError}
-          title="Unable to update maintenance mode"
-        />
-      )}
       {nodes?.length === 0 && !showAdd && (
         <EmptyState title="No managed nodes">
           <p>Add an AdGuard Home node to begin automatic status polling.</p>
@@ -131,74 +142,53 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
       {nodes !== undefined && nodes.length > 0 && (
         <>
           <section
-            className="convergence-summary convergence-summary--five"
+            className="health-summary-grid health-summary-grid--five"
             aria-label="Cluster node summary"
           >
-            <div>
-              <StatusBadge
-                status={
-                  nodes.every(
-                    (node) =>
-                      node.healthStatus === "healthy" ||
-                      node.healthStatus === "disabled",
-                  )
-                    ? "healthy"
-                    : "degraded"
-                }
-              />
-              <strong>
-                {nodes.filter((node) => node.healthStatus === "healthy").length}{" "}
-                of {nodes.length} nodes healthy
-              </strong>
-            </div>
-            <dl>
-              <div>
-                <dt>Healthy</dt>
-                <dd>
-                  {
-                    nodes.filter((node) => node.healthStatus === "healthy")
-                      .length
-                  }
-                </dd>
-              </div>
-              <div>
-                <dt>Degraded</dt>
-                <dd>
-                  {
-                    nodes.filter(
-                      (node) => node.enabled && node.healthStatus === "unknown",
-                    ).length
-                  }
-                </dd>
-              </div>
-              <div>
-                <dt>Unreachable</dt>
-                <dd>
-                  {
-                    nodes.filter((node) => node.healthStatus === "unreachable")
-                      .length
-                  }
-                </dd>
-              </div>
-              <div>
-                <dt>Incompatible</dt>
-                <dd>
-                  {
-                    nodes.filter(
-                      (node) =>
-                        node.healthStatus === "incompatible" ||
-                        node.compatibilityStatus === "unsupported",
-                    ).length
-                  }
-                </dd>
-              </div>
-              <div>
-                <dt>Last observation</dt>
-                <dd>
-                  {latestTime(snapshots.map((snapshot) => snapshot.observedAt))}
-                </dd>
-              </div>
-            </dl>
+            <HealthSummaryCard
+              icon="ha"
+              label="Fleet health"
+              value={`${healthyNodes} / ${nodes.length}`}
+              status={
+                nodes.every(
+                  (node) =>
+                    node.healthStatus === "healthy" ||
+                    node.healthStatus === "disabled",
+                )
+                  ? "healthy"
+                  : "degraded"
+              }
+              detail="nodes healthy"
+            />
+            <HealthSummaryCard
+              icon="attention"
+              label="Degraded"
+              value={degradedNodes}
+              status={degradedNodes === 0 ? "healthy" : "degraded"}
+              detail="enabled nodes unknown"
+            />
+            <HealthSummaryCard
+              icon="nodes"
+              label="Unreachable"
+              value={unreachableNodes}
+              status={unreachableNodes === 0 ? "healthy" : "unreachable"}
+              detail="nodes unreachable"
+            />
+            <HealthSummaryCard
+              icon="updates"
+              label="Incompatible"
+              value={incompatibleNodes}
+              status={incompatibleNodes === 0 ? "healthy" : "incompatible"}
+              detail="unsupported nodes"
+            />
+            <HealthSummaryCard
+              icon="activity"
+              label="Last observation"
+              value={latestObservation}
+              status={snapshots.length === 0 ? "unknown" : "success"}
+              statusLabel={snapshots.length === 0 ? undefined : "Recorded"}
+              detail="latest inventory snapshot"
+            />
           </section>
           <div className="table-wrap">
             <table>
@@ -221,7 +211,7 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
                 {nodes.map((node) => (
                   <tr key={node.id}>
                     <td>
-                      <a href={`/ha/nodes/${encodeURIComponent(node.id)}`}>
+                      <a href={nodeDetailPath(node.id)}>
                         <strong>{node.name}</strong>
                       </a>
                       <span className="table-subtitle">{node.baseUrl}</span>
@@ -288,18 +278,12 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
                     </td>
                     <td>
                       <div className="row-actions">
-                        <button
-                          type="button"
+                        <a
                           className="button button--quiet"
-                          disabled={maintenanceNodeId === node.id}
-                          onClick={() => void maintenance(node)}
+                          href={nodeDetailPath(node.id)}
                         >
-                          {maintenanceNodeId === node.id
-                            ? "Updating…"
-                            : node.maintenanceMode
-                              ? "Leave maintenance"
-                              : "Maintenance"}
-                        </button>
+                          Manage
+                        </a>
                         <button
                           type="button"
                           className="button button--quiet"
@@ -309,13 +293,6 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
                           }}
                         >
                           Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="button button--quiet"
-                          onClick={() => void test(node)}
-                        >
-                          Test
                         </button>
                         <button
                           type="button"
@@ -336,16 +313,6 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
     </>
   );
 
-  async function test(node: Node) {
-    try {
-      await api.testNode(node.id);
-      await load();
-    } catch (caught) {
-      setError(caught);
-      await load();
-    }
-  }
-
   async function remove(node: Node) {
     const confirmName = window.prompt(
       `Type ${node.name} to remove this node. Its stored credentials will be destroyed.`,
@@ -358,65 +325,25 @@ export function NodesPage({ cluster }: { cluster: Cluster }) {
       setError(caught);
     }
   }
-
-  async function maintenance(node: Node) {
-    setMaintenanceError(undefined);
-    setMaintenanceNodeId(node.id);
-    try {
-      if (node.maintenanceMode) {
-        if (
-          !window.confirm(
-            "Run all return-to-service checks? The node stays in maintenance if any required check fails.",
-          )
-        )
-          return;
-        await api.returnToService(node);
-      } else {
-        const preflight = await api.maintenancePreflight(node.id);
-        if (!preflight.allowed) {
-          const blockingCheck = preflight.checks.find(
-            (check) => check.required && check.status === "fail",
-          );
-          throw new Error(
-            blockingCheck?.message ??
-              "Maintenance preflight contains a blocking check.",
-          );
-        }
-        let breakGlass = false;
-        let confirmation = "";
-        if (preflight.breakGlassRequired) {
-          breakGlass = window.confirm(
-            "This leaves no verified healthy DNS node. Use break glass?",
-          );
-          if (!breakGlass) return;
-          confirmation =
-            window.prompt("Type CONTINUE_WITHOUT_DNS_REDUNDANCY") ?? "";
-        } else if (
-          !window.confirm(
-            `Put ${node.name} into maintenance? Automatic deployment and reconciliation will skip it until maintenance is removed.`,
-          )
-        )
-          return;
-        await api.enterMaintenance(node, breakGlass, confirmation);
-      }
-      await load();
-    } catch (caught) {
-      setMaintenanceError(caught);
-      await load();
-    } finally {
-      setMaintenanceNodeId("");
-    }
-  }
 }
 
-function NodeForm({
+export function NodeForm({
   cluster,
   node,
   onSaved,
+  requireOnboardingCompatibility = false,
+  onValidated,
 }: {
   cluster: Cluster;
   node?: Node;
   onSaved: () => void;
+  requireOnboardingCompatibility?: boolean;
+  onValidated?: (result: {
+    version: string;
+    compatibility: string;
+    running: boolean;
+    latencyMs: number;
+  }) => void;
 }) {
   const [name, setName] = useState(node?.name ?? "");
   const [baseUrl, setBaseUrl] = useState(node?.baseUrl ?? "https://");
@@ -448,6 +375,15 @@ function NodeForm({
       if (node === undefined) {
         if (payload.credentials === undefined)
           throw new Error("Username and password are required for a new node.");
+        const result = await api.validateNodeCandidate(cluster.id, payload);
+        onValidated?.(result);
+        if (
+          requireOnboardingCompatibility &&
+          result.onboardingCompatibility !== "supported"
+        )
+          throw new Error(
+            `AdGuard Home ${result.version || "version unknown"} is below the v1.1 onboarding minimum of 0.107.78 or outside the compatible 0.107 API generation.`,
+          );
         await api.createNode(cluster.id, payload);
       } else {
         await api.updateNode(node.id, payload);

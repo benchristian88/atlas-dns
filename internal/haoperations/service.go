@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"sort"
@@ -15,6 +16,7 @@ import (
 	"github.com/benchristian88/atlas-dns/internal/configuration"
 	"github.com/benchristian88/atlas-dns/internal/domain"
 	"github.com/benchristian88/atlas-dns/internal/inventory"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 )
 
 const BreakGlassConfirmation = "CONTINUE_WITHOUT_DNS_REDUNDANCY"
@@ -32,6 +34,7 @@ type Repository interface {
 	RecordHAEvent(context.Context, Event) error
 	RecordHAEventAndAudit(context.Context, Event, domain.AuditEvent) error
 	LatestSuccessfulSnapshots(context.Context, string) ([]inventory.Snapshot, error)
+	CertificateMonitoringDisabledSince(context.Context, string, time.Time) (bool, error)
 	LatestSnapshots(context.Context, string) ([]inventory.Snapshot, error)
 	ActiveDeploymentExists(context.Context, string) (bool, error)
 	OpenDriftExists(context.Context, string) (bool, error)
@@ -63,20 +66,51 @@ type Service struct {
 	apiProbe      domain.NodeStatusProbe
 	credentials   CredentialDecrypter
 	dnsProbe      DNSProber
+	logger        *slog.Logger
 	now           func() time.Time
 	warningDays   int
 	criticalDays  int
 	compatibility func(string) domain.Compatibility
+	runtime       interface {
+		RuntimeSettings() systemsettings.RuntimeSettings
+	}
 }
 
 func NewService(repository Repository, maintenance MaintenanceManager, observer Observer, apiProbe domain.NodeStatusProbe, credentials CredentialDecrypter, dnsProbe DNSProber) *Service {
-	return &Service{repository: repository, maintenance: maintenance, observer: observer, apiProbe: apiProbe, credentials: credentials, dnsProbe: dnsProbe, now: time.Now, warningDays: 30, criticalDays: 7, compatibility: func(string) domain.Compatibility { return domain.CompatibilityUnknown }}
+	return &Service{repository: repository, maintenance: maintenance, observer: observer, apiProbe: apiProbe, credentials: credentials, dnsProbe: dnsProbe, logger: slog.Default(), now: time.Now, warningDays: 30, criticalDays: 7, compatibility: func(string) domain.Compatibility { return domain.CompatibilityUnknown }}
+}
+
+func (s *Service) SetLogger(logger *slog.Logger) {
+	if logger != nil {
+		s.logger = logger
+	}
 }
 
 func (s *Service) SetVersionCompatibility(check func(string) domain.Compatibility) {
 	if check != nil {
 		s.compatibility = check
 	}
+}
+
+func (s *Service) SetRuntimeSettings(provider interface {
+	RuntimeSettings() systemsettings.RuntimeSettings
+}) {
+	s.runtime = provider
+}
+
+// DNSFreshnessWindow is the shared deadline for scheduled DNS probe evidence.
+// It tolerates two missed schedules while retaining a two-minute minimum for
+// the historical 30-second default. Explicit failed probes remain failures
+// immediately; this window only controls when prior evidence becomes stale.
+func DNSFreshnessWindow(interval time.Duration) time.Duration {
+	return max(3*interval, 2*time.Minute)
+}
+
+func (s *Service) dnsFreshnessWindow() time.Duration {
+	if s.runtime != nil {
+		return DNSFreshnessWindow(s.runtime.RuntimeSettings().NodeHealthInterval)
+	}
+	return DNSFreshnessWindow(0)
 }
 
 func (s *Service) Settings(ctx context.Context, nodeID string) (NodeSettings, error) {
@@ -177,6 +211,13 @@ func (s *Service) ProbeNode(ctx context.Context, nodeID string) (DNSProbeResult,
 		return DNSProbeResult{}, domain.NewError(domain.ErrorValidation, "DNS probe target must be remotely reachable from the controller")
 	}
 	result, probeErr := s.dnsProbe.Probe(ctx, DNSProbeRequest{Host: host, Port: settings.DNSProbePort, Name: settings.DNSProbeName, Type: settings.DNSProbeType, ExpectedRCode: settings.ExpectedRCode, UDP: settings.ProbeUDP, TCP: settings.ProbeTCP})
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return result, ctxErr
+	}
+	if errors.Is(probeErr, context.Canceled) || errors.Is(probeErr, context.DeadlineExceeded) {
+		return result, probeErr
+	}
+	s.logDNSProbeDiagnostics(nodeID, result)
 	id, idErr := domain.NewID()
 	if idErr != nil {
 		return DNSProbeResult{}, idErr
@@ -189,7 +230,15 @@ func (s *Service) ProbeNode(ctx context.Context, nodeID string) (DNSProbeResult,
 		if result.Status != "healthy" {
 			eventType, severity, summary = "dns.failed", "critical", "DNS service probe failed"
 		}
-		transitionValue, eventErr := s.newEvent(record.Node.ClusterID, &nodeID, eventType, severity, summary, map[string]any{"errorCode": result.ErrorCode}, result.ProbedAt)
+		details := map[string]any{
+			"errorCode":         result.ErrorCode,
+			"dnsProbeAttempts":  dnsProbeAttempts(result),
+			"dnsProbeElapsedMs": result.dnsProbeElapsed.Milliseconds(),
+		}
+		if protocols := failedDNSProbeProtocols(result); len(protocols) > 0 {
+			details["failedProtocols"] = protocols
+		}
+		transitionValue, eventErr := s.newEvent(record.Node.ClusterID, &nodeID, eventType, severity, summary, details, result.ProbedAt)
 		if eventErr != nil {
 			return DNSProbeResult{}, eventErr
 		}
@@ -201,10 +250,70 @@ func (s *Service) ProbeNode(ctx context.Context, nodeID string) (DNSProbeResult,
 	return result, probeErr
 }
 
+func (s *Service) logDNSProbeDiagnostics(nodeID string, result DNSProbeResult) {
+	if result.dnsProbeRecoveredAfterRetry {
+		s.logger.Debug("DNS probe recovered during confirmation",
+			"node_id", nodeID,
+			"dns_probe_attempts", dnsProbeAttempts(result),
+			"elapsed_ms", result.dnsProbeElapsed.Milliseconds(),
+			"recovered_after_confirmation", true,
+			"prior_error_code", result.dnsProbePriorErrorCode,
+			"prior_failed_protocols", result.dnsProbePriorProtocols,
+		)
+		return
+	}
+	if result.Status != "healthy" {
+		s.logger.Debug("DNS probe failure confirmed",
+			"node_id", nodeID,
+			"dns_probe_attempts", dnsProbeAttempts(result),
+			"elapsed_ms", result.dnsProbeElapsed.Milliseconds(),
+			"error_code", result.ErrorCode,
+			"failed_protocols", failedDNSProbeProtocols(result),
+		)
+	}
+}
+
+func dnsProbeAttempts(result DNSProbeResult) int {
+	if result.dnsProbeAttempts > 0 {
+		return result.dnsProbeAttempts
+	}
+	return 1
+}
+
+func failedDNSProbeProtocols(result DNSProbeResult) []string {
+	protocols := []string{}
+	if result.UDPStatus == "failed" {
+		protocols = append(protocols, "udp")
+	}
+	if result.TCPStatus == "failed" {
+		protocols = append(protocols, "tcp")
+	}
+	return protocols
+}
+
 func (s *Service) PollAll(ctx context.Context) error {
+	return s.poll(ctx, "")
+}
+
+// PollCluster refreshes DNS service evidence and derived HA transitions for a
+// single cluster without waiting for the controller-wide scheduled pass.
+func (s *Service) PollCluster(ctx context.Context, clusterID string) error {
+	return s.poll(ctx, clusterID)
+}
+
+func (s *Service) poll(ctx context.Context, clusterID string) error {
 	records, err := s.repository.PollableNodes(ctx)
 	if err != nil {
 		return err
+	}
+	if clusterID != "" {
+		filtered := make([]domain.NodeRecord, 0, len(records))
+		for _, record := range records {
+			if record.Node.ClusterID == clusterID {
+				filtered = append(filtered, record)
+			}
+		}
+		records = filtered
 	}
 	clusters := map[string]bool{}
 	semaphore := make(chan struct{}, 4)
@@ -301,25 +410,46 @@ func (s *Service) recordCertificateTransitions(ctx context.Context, clusterID st
 		return err
 	}
 	for _, certificate := range certificates {
-		previous := ""
+		var previous *Event
 		for _, event := range events {
 			if event.NodeID == nil || *event.NodeID != certificate.NodeID || !strings.HasPrefix(event.EventType, "certificate.") {
 				continue
 			}
-			previous = strings.TrimPrefix(event.EventType, "certificate.")
-			if previous == "recovered" {
-				previous = "healthy"
-			}
+			previous = &event
 			break
 		}
 		current := string(certificate.State)
-		if current == "unknown" || current == previous {
+		if certificate.State == CertificateUnknown || certificate.State == CertificateNotApplicable {
+			continue
+		}
+		previousState := ""
+		disabledSince := false
+		if previous != nil {
+			previousState = strings.TrimPrefix(previous.EventType, "certificate.")
+			if previousState == "recovered" {
+				previousState = "healthy"
+			}
+			var disabledErr error
+			disabledSince, disabledErr = s.repository.CertificateMonitoringDisabledSince(ctx, certificate.NodeID, previous.OccurredAt)
+			if disabledErr != nil {
+				return disabledErr
+			}
+			if disabledSince {
+				previousState = ""
+			}
+		}
+		if current == previousState {
 			continue
 		}
 		eventType, severity, summary := "certificate."+current, "warning", "Certificate expiry warning"
 		if current == "healthy" {
+			// A healthy first observation is a baseline, not a recovery.  A
+			// disabled-TLS observation at or after the previous alert also breaks
+			// the recovery chain: not-applicable -> healthy is not a recovery.
+			if previous == nil || disabledSince {
+				continue
+			}
 			eventType, severity, summary = "certificate.recovered", "info", "Certificate status recovered"
-			current = "recovered"
 		}
 		if certificate.State == CertificateCritical || certificate.State == CertificateExpired {
 			severity = "critical"
@@ -392,12 +522,14 @@ func (s *Service) Summary(ctx context.Context, clusterID string) (HASummary, err
 	// nodes.  A nil slice serializes as null and forces browser clients to treat
 	// an ordinary first-run state as a malformed response.
 	summary := HASummary{Nodes: []HANodeStatus{}}
+	now := s.now().UTC()
+	freshnessWindow := s.dnsFreshnessWindow()
 	for _, node := range nodes {
 		dnsState := HANodeStatus{NodeID: node.ID, DNSStatus: "unknown", UDPStatus: "unknown", TCPStatus: "unknown"}
 		if probe, ok := probeByNode[node.ID]; ok {
 			dnsState.DNSStatus, dnsState.UDPStatus, dnsState.TCPStatus = probe.Status, probe.UDPStatus, probe.TCPStatus
 			dnsState.DNSProbedAt, dnsState.ErrorCode = &probe.ProbedAt, probe.ErrorCode
-			if s.now().UTC().Sub(probe.ProbedAt) > 2*time.Minute {
+			if probe.Status == "healthy" && now.Sub(probe.ProbedAt) > freshnessWindow {
 				dnsState.DNSStatus = "stale"
 			}
 		}
@@ -420,7 +552,7 @@ func (s *Service) Summary(ctx context.Context, clusterID string) (HASummary, err
 		if node.Enabled && !node.MaintenanceMode && node.ConvergenceStatus == "converged" {
 			summary.ConvergedNodes++
 		}
-		if probe, ok := probeByNode[node.ID]; ok && node.Enabled && !node.MaintenanceMode && probe.Status == "healthy" && s.now().UTC().Sub(probe.ProbedAt) <= 2*time.Minute {
+		if probe, ok := probeByNode[node.ID]; ok && node.Enabled && !node.MaintenanceMode && probe.Status == "healthy" && now.Sub(probe.ProbedAt) <= freshnessWindow {
 			summary.ServingDNSNodes++
 		}
 	}
@@ -452,7 +584,7 @@ func (s *Service) Certificates(ctx context.Context, clusterID string) ([]Certifi
 	if err != nil {
 		return nil, err
 	}
-	snapshots, err := s.repository.LatestSuccessfulSnapshots(ctx, clusterID)
+	snapshots, err := s.repository.LatestSnapshots(ctx, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -463,24 +595,39 @@ func (s *Service) Certificates(ctx context.Context, clusterID string) ([]Certifi
 	result := make([]Certificate, 0, len(nodes))
 	for _, node := range nodes {
 		certificate := Certificate{NodeID: node.ID, NodeName: node.Name, State: CertificateUnknown}
-		if snapshot, ok := byNode[node.ID]; ok && snapshot.Document != nil {
-			certificate.Subject, certificate.Issuer, certificate.ObservedAt = snapshot.Document.ObservedOnly.TLS.Subject, snapshot.Document.ObservedOnly.TLS.Issuer, &snapshot.ObservedAt
-			if expiry, ok := parseCertificateTime(snapshot.Document.ObservedOnly.TLS.NotAfter); ok {
-				certificate.NotAfter = &expiry
-				days := int(expiry.Sub(s.now().UTC()).Hours() / 24)
-				certificate.DaysRemaining = &days
-				switch {
-				case days < 0:
-					certificate.State = CertificateExpired
-				case days <= s.criticalDays:
-					certificate.State = CertificateCritical
-				case days <= s.warningDays:
-					certificate.State = CertificateWarning
-				default:
-					certificate.State = CertificateHealthy
+		if snapshot, ok := byNode[node.ID]; ok {
+			certificate.ObservedAt = &snapshot.ObservedAt
+			if (snapshot.CollectionStatus != "" && snapshot.CollectionStatus != "succeeded") || snapshot.Document == nil {
+				result = append(result, certificate)
+				continue
+			}
+			tls := snapshot.Document.ObservedOnly.TLS
+			if !tls.Enabled {
+				certificate.State = CertificateNotApplicable
+				result = append(result, certificate)
+				continue
+			}
+			certificate.Subject, certificate.Issuer = tls.Subject, tls.Issuer
+			// AdGuard can serialize the zero time for an absent certificate.
+			// Applicability and certificate validity must be established before
+			// interpreting not_after as an actual expiry.
+			if tls.ValidCertificate {
+				if expiry, ok := parseCertificateTime(tls.NotAfter); ok {
+					certificate.NotAfter = &expiry
+					now := s.now().UTC()
+					days := int(expiry.Sub(now).Hours() / 24)
+					certificate.DaysRemaining = &days
+					switch {
+					case !now.Before(expiry):
+						certificate.State = CertificateExpired
+					case days <= s.criticalDays:
+						certificate.State = CertificateCritical
+					case days <= s.warningDays:
+						certificate.State = CertificateWarning
+					default:
+						certificate.State = CertificateHealthy
+					}
 				}
-			} else if snapshot.Document.ObservedOnly.TLS.Enabled && snapshot.Document.ObservedOnly.TLS.ValidCertificate {
-				certificate.State = CertificateHealthy
 			}
 		}
 		result = append(result, certificate)
@@ -528,8 +675,10 @@ func (s *Service) MaintenancePreflight(ctx context.Context, nodeID string) (Main
 		return MaintenancePreflight{}, err
 	}
 	activeDHCP := s.nodeActiveDHCP(ctx, node.ClusterID, nodeID)
+	now := s.now().UTC()
+	freshnessWindow := s.dnsFreshnessWindow()
 	remaining := summary.ServingDNSNodes
-	if latest, latestErr := s.repository.LatestDNSProbe(ctx, nodeID); latestErr == nil && latest.Status == "healthy" && !node.MaintenanceMode && s.now().UTC().Sub(latest.ProbedAt) <= 2*time.Minute {
+	if latest, latestErr := s.repository.LatestDNSProbe(ctx, nodeID); latestErr == nil && latest.Status == "healthy" && !node.MaintenanceMode && now.Sub(latest.ProbedAt) <= freshnessWindow {
 		remaining--
 	}
 	if remaining < 0 {
@@ -544,7 +693,7 @@ func (s *Service) MaintenancePreflight(ctx context.Context, nodeID string) (Main
 	}
 	targetDNSHealthy := false
 	if latest, latestErr := s.repository.LatestDNSProbe(ctx, nodeID); latestErr == nil {
-		targetDNSHealthy = latest.Status == "healthy" && s.now().UTC().Sub(latest.ProbedAt) <= 2*time.Minute
+		targetDNSHealthy = latest.Status == "healthy" && now.Sub(latest.ProbedAt) <= freshnessWindow
 	}
 	tlsCheck := Check{Name: "tls", Status: "unknown", ErrorCode: "TLS_STATE_UNAVAILABLE", Message: "TLS configuration state is unavailable"}
 	if snapshots, snapshotErr := s.repository.LatestSuccessfulSnapshots(ctx, node.ClusterID); snapshotErr == nil {
@@ -1005,26 +1154,8 @@ func returnTLSCheck(snapshot inventory.Snapshot, observationErr error, now time.
 	failure := func(code, message string) Check {
 		return Check{Name: "tls", Status: "fail", Required: true, ErrorCode: code, Message: message}
 	}
-	if strings.TrimSpace(tls.NotBefore) != "" {
-		notBefore, ok := parseCertificateTime(tls.NotBefore)
-		if !ok {
-			return failure("TLS_CERTIFICATE_TIME_INVALID", "TLS certificate start time could not be interpreted")
-		}
-		if now.Before(notBefore) {
-			return failure("TLS_CERTIFICATE_NOT_YET_VALID", "TLS certificate is not valid before "+notBefore.Format("2006-01-02"))
-		}
-	}
-	if strings.TrimSpace(tls.NotAfter) != "" {
-		notAfter, ok := parseCertificateTime(tls.NotAfter)
-		if !ok {
-			return failure("TLS_CERTIFICATE_TIME_INVALID", "TLS certificate expiry could not be interpreted")
-		}
-		if !now.Before(notAfter) {
-			return failure("TLS_CERTIFICATE_EXPIRED", "TLS certificate expired on "+notAfter.Format("2006-01-02"))
-		}
-	}
 	if !tls.ValidCertificate {
-		return failure("TLS_CERTIFICATE_INVALID", "AdGuard Home reports that the TLS certificate is invalid")
+		return failure("TLS_CERTIFICATE_INVALID", "AdGuard Home reports that the TLS certificate is missing or invalid")
 	}
 	if !tls.ValidChain {
 		return failure("TLS_CERTIFICATE_CHAIN_INVALID", "AdGuard Home reports that the TLS certificate chain is invalid")
@@ -1034,6 +1165,25 @@ func returnTLSCheck(snapshot inventory.Snapshot, observationErr error, now time.
 	}
 	if !tls.ValidPair {
 		return failure("TLS_CERTIFICATE_KEY_MISMATCH", "AdGuard Home reports that the TLS certificate and private key do not match")
+	}
+	if strings.TrimSpace(tls.NotBefore) != "" {
+		notBefore, ok := parseCertificateTime(tls.NotBefore)
+		if !ok {
+			return failure("TLS_CERTIFICATE_TIME_INVALID", "TLS certificate start time could not be interpreted")
+		}
+		if now.Before(notBefore) {
+			return failure("TLS_CERTIFICATE_NOT_YET_VALID", "TLS certificate is not valid before "+notBefore.Format("2006-01-02"))
+		}
+	}
+	if strings.TrimSpace(tls.NotAfter) == "" {
+		return failure("TLS_CERTIFICATE_TIME_INVALID", "TLS certificate expiry was not reported")
+	}
+	notAfter, ok := parseCertificateTime(tls.NotAfter)
+	if !ok {
+		return failure("TLS_CERTIFICATE_TIME_INVALID", "TLS certificate expiry could not be interpreted")
+	}
+	if !now.Before(notAfter) {
+		return failure("TLS_CERTIFICATE_EXPIRED", "TLS certificate expired on "+notAfter.Format("2006-01-02"))
 	}
 	return Check{Name: "tls", Status: "pass", Required: true, Message: "TLS encryption is enabled and AdGuard Home reports valid certificate metadata"}
 }

@@ -13,12 +13,14 @@ import (
 	"strings"
 	"time"
 
+	auditservice "github.com/benchristian88/atlas-dns/internal/audit"
 	"github.com/benchristian88/atlas-dns/internal/auth"
 	"github.com/benchristian88/atlas-dns/internal/backup"
 	"github.com/benchristian88/atlas-dns/internal/controlplane"
 	"github.com/benchristian88/atlas-dns/internal/domain"
 	"github.com/benchristian88/atlas-dns/internal/haoperations"
 	"github.com/benchristian88/atlas-dns/internal/inventory"
+	"github.com/benchristian88/atlas-dns/internal/onboarding"
 	"github.com/benchristian88/atlas-dns/internal/operationalhealth"
 	"github.com/benchristian88/atlas-dns/internal/operations"
 	"github.com/benchristian88/atlas-dns/internal/querylog"
@@ -37,7 +39,8 @@ const (
 )
 
 type AuditReader interface {
-	ListAuditEvents(context.Context, int, int) ([]domain.AuditEvent, error)
+	List(context.Context, auditservice.ListRequest) (auditservice.Page, error)
+	Detail(context.Context, string) (domain.AuditEvent, error)
 }
 
 type HealthChecker interface {
@@ -110,9 +113,11 @@ type HAOperationsService interface {
 }
 
 type NotificationSettingsService interface {
+	Policy(context.Context) (haoperations.NotificationPolicy, error)
+	UpdatePolicy(context.Context, domain.Actor, []string, int) (haoperations.NotificationPolicy, error)
 	List(context.Context, string) ([]haoperations.NotificationChannel, error)
-	Create(context.Context, domain.Actor, string, string, string, bool) (haoperations.NotificationChannel, error)
-	Update(context.Context, domain.Actor, string, string, *string, bool, int) (haoperations.NotificationChannel, error)
+	Create(context.Context, domain.Actor, string, string, string, bool, []string) (haoperations.NotificationChannel, error)
+	Update(context.Context, domain.Actor, string, string, *string, bool, int, []string) (haoperations.NotificationChannel, error)
 	Delete(context.Context, domain.Actor, string, string, int) error
 	Test(context.Context, domain.Actor, string) (haoperations.NotificationTestResult, error)
 }
@@ -122,6 +127,7 @@ type UserAdministrationService interface {
 	Create(context.Context, domain.Actor, useradmin.CreateInput) (domain.User, error)
 	Update(context.Context, domain.Actor, string, useradmin.UpdateInput) (domain.User, error)
 	ResetPassword(context.Context, domain.Actor, string, string) error
+	ChangeOwnPassword(context.Context, domain.Actor, string, string, string, string) error
 }
 
 type BackupService interface {
@@ -134,7 +140,14 @@ type ControllerUpdateService interface {
 
 type SystemSettingsService interface {
 	Get(context.Context) (systemsettings.Settings, error)
-	Update(context.Context, domain.Actor, bool, int) (systemsettings.Settings, error)
+	Update(context.Context, domain.Actor, systemsettings.Settings, int) (systemsettings.Settings, error)
+	ClearOperationalHistory(context.Context, domain.Actor, string) (systemsettings.ClearOperationalHistoryResult, error)
+}
+
+type OnboardingService interface {
+	Status(context.Context, string) (onboarding.Status, error)
+	Progress(context.Context, domain.Actor, string, int, onboarding.ProgressInput) (onboarding.Status, error)
+	Finish(context.Context, domain.Actor, string, int) (onboarding.Status, error)
 }
 
 type Server struct {
@@ -157,6 +170,7 @@ type Server struct {
 	backups        BackupService
 	updates        ControllerUpdateService
 	settings       SystemSettingsService
+	onboarding     OnboardingService
 	metrics        *operationalhealth.Tracker
 	metricsToken   string
 	controlplane   *controlplane.Service
@@ -166,8 +180,11 @@ type Server struct {
 	secureCookies  bool
 	publicBaseURL  string
 	healthInterval time.Duration
-	webDist        string
-	mux            *http.ServeMux
+	runtime        interface {
+		RuntimeSettings() systemsettings.RuntimeSettings
+	}
+	webDist string
+	mux     *http.ServeMux
 }
 
 func (s *Server) SetDNSOperations(service DNSOperationService)          { s.dnsOperations = service }
@@ -182,17 +199,23 @@ func (s *Server) SetUserAdministration(service UserAdministrationService) { s.us
 func (s *Server) SetBackups(service BackupService)                        { s.backups = service }
 func (s *Server) SetControllerUpdates(service ControllerUpdateService)    { s.updates = service }
 func (s *Server) SetSystemSettings(service SystemSettingsService)         { s.settings = service }
+func (s *Server) SetOnboarding(service OnboardingService)                 { s.onboarding = service }
+func (s *Server) SetRuntimeSettings(provider interface {
+	RuntimeSettings() systemsettings.RuntimeSettings
+}) {
+	s.runtime = provider
+}
 func (s *Server) SetMetrics(tracker *operationalhealth.Tracker, token string) {
 	s.metrics, s.metricsToken = tracker, token
 }
 
-func NewServer(authService *auth.Service, management *domain.ManagementService, inventoryService *inventory.Service, audit AuditReader, health HealthChecker, logger *slog.Logger, secureCookies bool, publicBaseURL string, healthInterval time.Duration, webDist string, controlplanes ...*controlplane.Service) *Server {
+func NewServer(authService *auth.Service, management *domain.ManagementService, inventoryService *inventory.Service, auditRepository auditservice.Repository, health HealthChecker, logger *slog.Logger, secureCookies bool, publicBaseURL string, healthInterval time.Duration, webDist string, controlplanes ...*controlplane.Service) *Server {
 	var controlplaneService *controlplane.Service
 	if len(controlplanes) > 0 {
 		controlplaneService = controlplanes[0]
 	}
 	server := &Server{
-		auth: authService, management: management, inventory: inventoryService, catalogue: inventoryService, blocklists: inventoryService, allowlists: inventoryService, dhcpInterfaces: inventoryService, dhcpChecker: inventoryService, dhcpOperations: inventoryService, audit: audit, health: health,
+		auth: authService, management: management, inventory: inventoryService, catalogue: inventoryService, blocklists: inventoryService, allowlists: inventoryService, dhcpInterfaces: inventoryService, dhcpChecker: inventoryService, dhcpOperations: inventoryService, audit: auditservice.NewService(auditRepository), health: health,
 		controlplane: controlplaneService,
 		logger:       logger, secureCookies: secureCookies, publicBaseURL: publicBaseURL, healthInterval: healthInterval,
 		webDist: webDist, mux: http.NewServeMux(),
@@ -212,8 +235,17 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/v1/setup/status", s.handleSetupStatus)
 	s.mux.HandleFunc("POST /api/v1/setup", s.handleSetup)
 	s.mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
+	s.mux.HandleFunc("POST /api/v1/auth/mfa/verify", s.handleMFAVerify)
+	s.mux.HandleFunc("POST /api/v1/auth/mfa/recovery", s.handleMFARecovery)
+	s.mux.HandleFunc("POST /api/v1/auth/mfa/cancel", s.handleMFACancel)
 	s.mux.Handle("POST /api/v1/auth/logout", s.authenticated(true, http.HandlerFunc(s.handleLogout)))
 	s.mux.Handle("GET /api/v1/auth/me", s.authenticated(false, http.HandlerFunc(s.handleMe)))
+	s.mux.Handle("POST /api/v1/auth/password", s.authenticated(true, http.HandlerFunc(s.handleChangeOwnPassword)))
+	s.mux.Handle("GET /api/v1/account/mfa", s.authenticated(false, http.HandlerFunc(s.handleMFAStatus)))
+	s.mux.Handle("POST /api/v1/account/mfa/enroll/start", s.authenticated(true, http.HandlerFunc(s.handleMFAEnrollmentStart)))
+	s.mux.Handle("POST /api/v1/account/mfa/enroll/verify", s.authenticated(true, http.HandlerFunc(s.handleMFAEnrollmentVerify)))
+	s.mux.Handle("POST /api/v1/account/mfa/recovery-codes/regenerate", s.authenticated(true, http.HandlerFunc(s.handleMFARecoveryRegenerate)))
+	s.mux.Handle("POST /api/v1/account/mfa/disable", s.authenticated(true, http.HandlerFunc(s.handleMFADisable)))
 	s.mux.Handle("GET /api/v1/users", s.administrator(false, http.HandlerFunc(s.handleListUsers)))
 	s.mux.Handle("POST /api/v1/users", s.administrator(true, http.HandlerFunc(s.handleCreateUser)))
 	s.mux.Handle("PATCH /api/v1/users/{userId}", s.administrator(true, http.HandlerFunc(s.handleUpdateUser)))
@@ -224,12 +256,17 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/v1/system/update/check", s.administrator(true, http.HandlerFunc(s.handleCheckControllerUpdate)))
 	s.mux.Handle("GET /api/v1/system/settings", s.administrator(false, http.HandlerFunc(s.handleSystemSettings)))
 	s.mux.Handle("PATCH /api/v1/system/settings", s.administrator(true, http.HandlerFunc(s.handleUpdateSystemSettings)))
+	s.mux.Handle("DELETE /api/v1/system/operational-history", s.administrator(true, http.HandlerFunc(s.handleClearOperationalHistory)))
+	s.mux.Handle("GET /api/v1/onboarding/status", s.administrator(false, http.HandlerFunc(s.handleOnboardingStatus)))
+	s.mux.Handle("PATCH /api/v1/clusters/{clusterId}/onboarding", s.administrator(true, http.HandlerFunc(s.handleOnboardingProgress)))
+	s.mux.Handle("POST /api/v1/clusters/{clusterId}/onboarding/finish", s.administrator(true, http.HandlerFunc(s.handleFinishOnboarding)))
 	s.mux.Handle("GET /api/v1/clusters", s.authenticated(false, http.HandlerFunc(s.handleListClusters)))
 	s.mux.Handle("POST /api/v1/clusters", s.authenticated(true, http.HandlerFunc(s.handleCreateCluster)))
 	s.mux.Handle("GET /api/v1/clusters/{clusterId}", s.authenticated(false, http.HandlerFunc(s.handleGetCluster)))
 	s.mux.Handle("PATCH /api/v1/clusters/{clusterId}", s.authenticated(true, http.HandlerFunc(s.handleUpdateCluster)))
 	s.mux.Handle("GET /api/v1/clusters/{clusterId}/nodes", s.authenticated(false, http.HandlerFunc(s.handleListNodes)))
 	s.mux.Handle("POST /api/v1/clusters/{clusterId}/nodes", s.authenticated(true, http.HandlerFunc(s.handleCreateNode)))
+	s.mux.Handle("POST /api/v1/clusters/{clusterId}/nodes/validate", s.administrator(true, http.HandlerFunc(s.handleValidateNodeCandidate)))
 	s.mux.Handle("GET /api/v1/clusters/{clusterId}/statistics", s.authenticated(false, http.HandlerFunc(s.handleStatistics)))
 	s.mux.Handle("GET /api/v1/clusters/{clusterId}/query-events", s.authenticated(false, http.HandlerFunc(s.handleQueryEvents)))
 	s.mux.Handle("GET /api/v1/clusters/{clusterId}/query-events/{eventId}", s.authenticated(false, http.HandlerFunc(s.handleQueryEventDetail)))
@@ -240,6 +277,8 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/v1/clusters/{clusterId}/versions", s.authenticated(false, http.HandlerFunc(s.handleVersions)))
 	s.mux.Handle("GET /api/v1/clusters/{clusterId}/upgrades", s.authenticated(false, http.HandlerFunc(s.handleUpgrades)))
 	s.mux.Handle("GET /api/v1/clusters/{clusterId}/notification-channels", s.authenticated(false, http.HandlerFunc(s.handleNotificationChannels)))
+	s.mux.Handle("GET /api/v1/system/notification-policy", s.administrator(false, http.HandlerFunc(s.handleNotificationPolicy)))
+	s.mux.Handle("PATCH /api/v1/system/notification-policy", s.administrator(true, http.HandlerFunc(s.handleUpdateNotificationPolicy)))
 	s.mux.Handle("POST /api/v1/clusters/{clusterId}/notification-channels", s.administrator(true, http.HandlerFunc(s.handleCreateNotificationChannel)))
 	s.mux.Handle("GET /api/v1/nodes/{nodeId}", s.authenticated(false, http.HandlerFunc(s.handleGetNode)))
 	s.mux.Handle("GET /api/v1/nodes/{nodeId}/lifecycle", s.authenticated(false, http.HandlerFunc(s.handleNodeLifecycle)))
@@ -300,6 +339,7 @@ func (s *Server) routes() {
 		s.mux.Handle("POST /api/v1/drift-events/{driftId}/adopt", s.authenticated(true, http.HandlerFunc(s.handleAdoptDrift)))
 	}
 	s.mux.Handle("GET /api/v1/audit-events", s.authenticated(false, http.HandlerFunc(s.handleAuditEvents)))
+	s.mux.Handle("GET /api/v1/audit-events/{auditEventId}", s.authenticated(false, http.HandlerFunc(s.handleAuditEvent)))
 	s.mux.Handle("GET /api/v1/system/version", s.authenticated(false, http.HandlerFunc(s.handleVersion)))
 	s.mux.HandleFunc("/", s.handleFrontend)
 }

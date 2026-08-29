@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/benchristian88/atlas-dns/internal/domain"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 )
 
 type Repository interface {
@@ -23,6 +24,15 @@ type Service struct {
 	pollInterval time.Duration
 	timeout      time.Duration
 	now          func() time.Time
+	settings     interface {
+		RuntimeSettings() systemsettings.RuntimeSettings
+	}
+}
+
+func (s *Service) SetRuntimeSettings(provider interface {
+	RuntimeSettings() systemsettings.RuntimeSettings
+}) {
+	s.settings = provider
 }
 
 func NewService(repository Repository, pollInterval, timeout time.Duration) *Service {
@@ -149,7 +159,18 @@ func (s *Service) Statistics(ctx context.Context, clusterID string, window Range
 
 func (s *Service) aggregate(window Range, nodeID string, limit int, nodes []domain.Node, snapshots []Snapshot, attempts []NodeAttempt) Report {
 	now := s.now().UTC()
-	staleAfter := 2*s.pollInterval + s.timeout
+	pollInterval := s.pollInterval
+	timeout := s.timeout
+	if s.settings != nil {
+		runtime := s.settings.RuntimeSettings()
+		if runtime.StatisticsPollInterval > 0 {
+			pollInterval = runtime.StatisticsPollInterval
+		}
+		if runtime.NodeRequestTimeout > 0 {
+			timeout = runtime.NodeRequestTimeout
+		}
+	}
+	staleAfter := 2*pollInterval + timeout
 	if staleAfter < 3*time.Hour {
 		staleAfter = 3 * time.Hour
 	}

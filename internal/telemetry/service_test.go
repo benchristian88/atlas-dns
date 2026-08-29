@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/benchristian88/atlas-dns/internal/domain"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 )
 
 const (
@@ -83,6 +84,19 @@ func TestStatisticsNodeScopeRejectsNodeOutsideCluster(t *testing.T) {
 	_, err := service.Statistics(context.Background(), testClusterID, Range24Hours, testNodeOne, 10)
 	if err == nil {
 		t.Fatal("Statistics() accepted a node outside the cluster")
+	}
+}
+
+func TestStatisticsFreshnessUsesLivePersistedPollInterval(t *testing.T) {
+	service := NewService(repositoryFake{}, time.Hour, 10*time.Second)
+	runtime := systemsettings.NewRuntimeStore(systemsettings.RuntimeSettings{
+		NodeHealthInterval: 30 * time.Second, StatisticsPollInterval: 24 * time.Hour,
+		QueryLogCollection: true, QueryLogPollInterval: 30 * time.Second, QueryLogRetention: 7 * 24 * time.Hour,
+	})
+	service.SetRuntimeSettings(runtime)
+	report := service.aggregate(Range24Hours, "", 10, nil, nil, nil)
+	if report.Freshness.StaleAfterSeconds != int64((48*time.Hour+10*time.Second)/time.Second) {
+		t.Fatalf("dynamic stale threshold = %d", report.Freshness.StaleAfterSeconds)
 	}
 }
 

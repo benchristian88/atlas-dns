@@ -66,7 +66,6 @@ func (f *dhcpOperationRepositoryFake) SaveObservation(_ context.Context, snapsho
 }
 
 type dhcpOperationReaderFake struct {
-	unusedReader
 	leasesCalls int
 	configCalls int
 	err         error

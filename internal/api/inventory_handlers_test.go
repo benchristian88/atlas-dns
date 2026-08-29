@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/benchristian88/atlas-dns/internal/auth"
+	"github.com/benchristian88/atlas-dns/internal/configuration"
 	"github.com/benchristian88/atlas-dns/internal/domain"
 	"github.com/benchristian88/atlas-dns/internal/inventory"
 	"github.com/benchristian88/atlas-dns/internal/operations"
@@ -21,7 +22,7 @@ import (
 
 func TestConfigurationInventoryResponseOmitsMissingDraft(t *testing.T) {
 	body, err := json.Marshal(configurationInventoryResponse{
-		SchemaVersion: 1,
+		SchemaVersion: configuration.SchemaVersion,
 		Snapshots:     nil,
 		Capabilities:  nil,
 	})

@@ -25,3 +25,22 @@ func TestTrackerFailureAndRecovery(t *testing.T) {
 		t.Fatalf("unexpected recovery state: %#v", recovered)
 	}
 }
+
+func TestTrackerCanPauseAndResumeDynamicCollection(t *testing.T) {
+	now := time.Date(2026, 8, 24, 1, 0, 0, 0, time.UTC)
+	tracker := NewTracker()
+	tracker.now = func() time.Time { return now }
+	tracker.Register("query_log_collection", false)
+	tracker.Start("query_log_collection", now.Add(time.Minute))
+	tracker.Failure("query_log_collection", "QUERY_LOG_FAILED", now.Add(time.Minute))
+	tracker.Pause("query_log_collection", now.Add(2*time.Minute))
+	paused := tracker.Snapshot()[0]
+	if paused.State != Paused || paused.Running || paused.ErrorCode != "" || paused.ConsecutiveFailures != 0 {
+		t.Fatalf("unexpected paused state: %#v", paused)
+	}
+	tracker.Start("query_log_collection", now.Add(time.Minute))
+	tracker.Success("query_log_collection", now.Add(time.Minute))
+	if resumed := tracker.Snapshot()[0]; resumed.State != Healthy {
+		t.Fatalf("unexpected resumed state: %#v", resumed)
+	}
+}

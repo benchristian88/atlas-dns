@@ -3,6 +3,7 @@ import type {
   AllowlistPresentation,
   ApiErrorBody,
   AuditEvent,
+  AuditEventPage,
   AuthResponse,
   BlockedServicesCatalogue,
   BlocklistPresentation,
@@ -26,14 +27,18 @@ import type {
   HAHistoryPage,
   HASummary,
   LifecycleSettings,
+  LoginResponse,
   MaintenancePreflight,
+  MFAEnrollment,
+  MFARecoveryResult,
+  MFAStatus,
   Node,
   NodeLifecycle,
   NotificationChannel,
+  NotificationPolicy,
   NotificationTestResult,
   OperationalStatus,
   OperationalTarget,
-  QueryEvent,
   QueryEventPage,
   RestorePreflight,
   StatisticsReport,
@@ -142,6 +147,21 @@ export interface NodePayload {
   recordVersion?: number;
 }
 
+type MutableSystemSettings = Pick<
+  SystemSettings,
+  | "updateChecksEnabled"
+  | "recordVersion"
+  | "sessionDurationSeconds"
+  | "nodeHealthIntervalSeconds"
+  | "nodeRequestTimeoutSeconds"
+  | "statisticsPollIntervalSeconds"
+  | "queryLogCollectionEnabled"
+  | "queryLogPollIntervalSeconds"
+  | "queryLogRetentionSeconds"
+  | "logLevel"
+  | "operationalHistoryRetentionDays"
+>;
+
 export const api = {
   setupStatus: () =>
     request<{
@@ -156,14 +176,91 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  onboardingStatus: (clusterId = "") => {
+    const query = clusterId
+      ? `?${new URLSearchParams({ clusterId }).toString()}`
+      : "";
+    return request<import("./types").OnboardingStatus>(
+      `/api/v1/onboarding/status${query}`,
+    );
+  },
+  updateOnboardingProgress: (
+    clusterId: string,
+    recordVersion: number,
+    input: {
+      redundancySkipped?: boolean;
+      monitoringReviewed?: boolean;
+      notificationsSkipped?: boolean;
+    },
+  ) =>
+    request<import("./types").OnboardingStatus>(
+      `/api/v1/clusters/${clusterId}/onboarding`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ ...input, recordVersion }),
+      },
+    ),
+  finishOnboarding: (clusterId: string, recordVersion: number) =>
+    request<import("./types").OnboardingStatus>(
+      `/api/v1/clusters/${clusterId}/onboarding/finish`,
+      { method: "POST", body: JSON.stringify({ recordVersion }) },
+    ),
   login: (input: { email: string; password: string }) =>
-    request<AuthResponse>("/api/v1/auth/login", {
+    request<LoginResponse>("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify(input),
     }),
   me: () => request<AuthResponse>("/api/v1/auth/me"),
+  verifyMFA: (challenge: string, code: string) =>
+    request<AuthResponse>("/api/v1/auth/mfa/verify", {
+      method: "POST",
+      body: JSON.stringify({ challenge, code }),
+    }),
+  verifyMFARecovery: (challenge: string, recoveryCode: string) =>
+    request<AuthResponse>("/api/v1/auth/mfa/recovery", {
+      method: "POST",
+      body: JSON.stringify({ challenge, recoveryCode }),
+    }),
+  cancelMFA: (challenge: string) =>
+    request<void>("/api/v1/auth/mfa/cancel", {
+      method: "POST",
+      body: JSON.stringify({ challenge }),
+    }),
   logout: () =>
     request<void>("/api/v1/auth/logout", { method: "POST", body: "{}" }),
+  changeOwnPassword: (
+    currentPassword: string,
+    newPassword: string,
+    totpCode = "",
+  ) =>
+    request<void>("/api/v1/auth/password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword, totpCode }),
+    }),
+  mfaStatus: () => request<MFAStatus>("/api/v1/account/mfa"),
+  startMFAEnrollment: (currentPassword: string) =>
+    request<MFAEnrollment>("/api/v1/account/mfa/enroll/start", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword }),
+    }),
+  verifyMFAEnrollment: (code: string) =>
+    request<MFARecoveryResult>("/api/v1/account/mfa/enroll/verify", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+  regenerateMFARecoveryCodes: (currentPassword: string, code: string) =>
+    request<MFARecoveryResult>(
+      "/api/v1/account/mfa/recovery-codes/regenerate",
+      {
+        method: "POST",
+        body: JSON.stringify({ currentPassword, code }),
+      },
+    ),
+  disableMFA: (currentPassword: string, code: string) =>
+    request<void>("/api/v1/account/mfa/disable", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, code }),
+    }),
   users: () => request<{ items: AdminUser[] }>("/api/v1/users"),
   createUser: (input: {
     email: string;
@@ -229,17 +326,32 @@ export const api = {
     }),
   versionInfo: () => request<VersionInfo>("/api/v1/system/version"),
   systemSettings: () => request<SystemSettings>("/api/v1/system/settings"),
-  updateSystemSettings: (
-    settings: SystemSettings,
-    updateChecksEnabled: boolean,
-  ) =>
+  updateSystemSettings: (settings: MutableSystemSettings) =>
     request<SystemSettings>("/api/v1/system/settings", {
       method: "PATCH",
+      // The GET representation also contains read-only display values. Keep
+      // the strict PATCH contract at this boundary so those fields never get
+      // reflected back to the server.
       body: JSON.stringify({
-        updateChecksEnabled,
+        updateChecksEnabled: settings.updateChecksEnabled,
         recordVersion: settings.recordVersion,
+        sessionDurationSeconds: settings.sessionDurationSeconds,
+        nodeHealthIntervalSeconds: settings.nodeHealthIntervalSeconds,
+        nodeRequestTimeoutSeconds: settings.nodeRequestTimeoutSeconds,
+        statisticsPollIntervalSeconds: settings.statisticsPollIntervalSeconds,
+        queryLogCollectionEnabled: settings.queryLogCollectionEnabled,
+        queryLogPollIntervalSeconds: settings.queryLogPollIntervalSeconds,
+        queryLogRetentionSeconds: settings.queryLogRetentionSeconds,
+        logLevel: settings.logLevel,
+        operationalHistoryRetentionDays:
+          settings.operationalHistoryRetentionDays,
       }),
     }),
+  clearOperationalHistory: (confirmation: string) =>
+    request<{ eventsDeleted: number; deliveriesDeleted: number }>(
+      "/api/v1/system/operational-history",
+      { method: "DELETE", body: JSON.stringify({ confirmation }) },
+    ),
   clusters: () => request<{ items: Cluster[] }>("/api/v1/clusters"),
   createCluster: (input: { name: string; description: string }) =>
     request<Cluster>("/api/v1/clusters", {
@@ -340,12 +452,23 @@ export const api = {
     request<{ items: NotificationChannel[] }>(
       `/api/v1/clusters/${clusterId}/notification-channels`,
     ),
+  notificationPolicy: () =>
+    request<NotificationPolicy>("/api/v1/system/notification-policy"),
+  updateNotificationPolicy: (
+    enabledEventTypes: string[],
+    recordVersion: number,
+  ) =>
+    request<NotificationPolicy>("/api/v1/system/notification-policy", {
+      method: "PATCH",
+      body: JSON.stringify({ enabledEventTypes, recordVersion }),
+    }),
   createNotificationChannel: (
     clusterId: string,
     input: {
       name: string;
       destination: string;
       enabled: boolean;
+      subscribedCategories: string[];
     },
   ) =>
     request<NotificationChannel>(
@@ -361,6 +484,7 @@ export const api = {
       name: string;
       enabled: boolean;
       recordVersion: number;
+      subscribedCategories: string[];
       destination?: string;
       replaceDestination?: boolean;
     },
@@ -413,12 +537,19 @@ export const api = {
       `/api/v1/clusters/${clusterId}/query-events?${query.toString()}`,
     );
   },
-  queryEvent: (clusterId: string, eventId: string) =>
-    request<QueryEvent>(
-      `/api/v1/clusters/${clusterId}/query-events/${eventId}`,
-    ),
   createNode: (clusterId: string, input: NodePayload) =>
     request<Node>(`/api/v1/clusters/${clusterId}/nodes`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  validateNodeCandidate: (clusterId: string, input: NodePayload) =>
+    request<{
+      version: string;
+      compatibility: string;
+      onboardingCompatibility: string;
+      running: boolean;
+      latencyMs: number;
+    }>(`/api/v1/clusters/${clusterId}/nodes/validate`, {
       method: "POST",
       body: JSON.stringify(input),
     }),
@@ -717,6 +848,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ expectedDraftVersion }),
     }),
-  auditEvents: () =>
-    request<{ items: AuditEvent[] }>("/api/v1/audit-events?limit=100"),
+  auditEvents: (
+    options: {
+      cursor?: string;
+      limit?: number;
+      clusterId?: string;
+      includeController?: boolean;
+    } = {},
+  ) => {
+    const query = new URLSearchParams({
+      limit: String(options.limit ?? 50),
+    });
+    if (options.cursor) query.set("cursor", options.cursor);
+    if (options.clusterId) query.set("clusterId", options.clusterId);
+    if (options.includeController) query.set("includeController", "true");
+    return request<AuditEventPage>(`/api/v1/audit-events?${query}`);
+  },
+  auditEvent: (auditEventId: string) =>
+    request<AuditEvent>(
+      `/api/v1/audit-events/${encodeURIComponent(auditEventId)}`,
+    ),
 };

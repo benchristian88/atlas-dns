@@ -1,19 +1,27 @@
 # Release Process
 
-Release 1.0 establishes the repeatable process for stable 1.x releases. Feature
-work stops before release preparation; only blocker fixes, compatibility work,
+This is the repeatable process for stable 1.x releases. Feature work stops
+before release preparation; only blocker fixes, compatibility work,
 documentation, and release engineering enter the candidate.
+
+## Version identities
+
+Release tags include the `v` prefix, while build versions and release output
+directories do not. The reusable forms are `vX.Y.Z-rc.N` / `X.Y.Z-rc.N` for a
+release candidate and `vX.Y.Z` / `X.Y.Z` for a final release. For the current
+release, development builds report `1.1.0-dev`, candidates use
+`v1.1.0-rc.N`, and the final release is `v1.1.0`.
 
 ## Candidate gate
 
-1. Select a semantic candidate version such as `1.0.1-rc.1` and freeze scope.
+1. Select a semantic candidate version such as `X.Y.Z-rc.1` and freeze scope.
 2. Update the changelog, compatibility matrix, support policy, upgrade notes,
    and any schema/API documentation affected by the release.
 3. Run formatting, lint, full Go tests and race tests, frontend unit/Axe/assets/
    type/lint/build checks, integration tests, production dependency audit, and
    documentation link/identity checks.
-4. Review migrations as append-only and exercise them from the clean 1.0
-   baseline (or every supported prior 1.x baseline for later releases).
+4. Review migrations as append-only, replay the full chain into a clean empty
+   database, and exercise every supported prior-release upgrade baseline.
 5. Create and preflight a branded backup, restore it offline into a new empty
    database, and verify the recovery checklist.
 6. Exercise authentication, CSRF, authorization, last-admin protection, secrets,
@@ -32,27 +40,32 @@ documentation, and release engineering enter the candidate.
 Use an unused versioned output directory:
 
 ```bash
-ATLAS_DNS_VERSION=1.0.1-rc.1 scripts/release-artifacts.sh
+ATLAS_DNS_VERSION=X.Y.Z-rc.1 scripts/release-artifacts.sh
 ```
 
 The script produces self-contained Linux amd64 and arm64 archives, production
 Compose and environment inputs, the native installer, BUSL-1.1 terms, and
-`checksums.txt`. Each native archive contains all three commands, the exact
+`checksums.txt`. Each native archive contains all four commands, the exact
 frontend assets, systemd unit, README, and license. If `syft` is available, an
 SPDX JSON SBOM is added. Existing output is never overwritten.
 
 ## GitHub Actions
 
-`.github/workflows/release.yml` accepts `v*` tags and manual candidate builds.
-It reruns required tests, assembles and uploads native artifacts, and builds the
-same `linux/amd64` and `linux/arm64` OCI image. A publish-enabled run uses the
-repository `GITHUB_TOKEN` to create a GitHub Release and publish the linked GHCR
-package; no personal access token is required.
+`.github/workflows/release.yml` accepts `v*` tags and manual version builds. A
+tag supplies the version and always publishes; a manual run uses its version
+input and explicit publish choice. The workflow removes an optional leading
+`v`, validates the version, and injects that resolved version, the Git commit,
+and the UTC build time into native binaries and the OCI image. It reruns its
+required repository gates, assembles and uploads native archives and checksums,
+and builds the same `linux/amd64` and `linux/arm64` image. A publish-enabled run
+uses the repository `GITHUB_TOKEN` to create `vX.Y.Z` or `vX.Y.Z-rc.N` as the
+GitHub Release and publish the linked GHCR package; no personal access token is
+required.
 
-Stable `v1.0.1` publishes image tags `1.0.1`, `1.0`, `1`, and `latest`.
-Prereleases publish only their exact tag and never move `latest`. The workflow
-refuses to replace an existing exact GitHub Release or image tag. Operators
-should pin exact versions.
+Stable `vX.Y.Z` publishes image tags `X.Y.Z`, `X.Y`, `X`, and `latest`.
+Prereleases such as `vX.Y.Z-rc.N` publish only their exact version tag and never
+move `latest`. The workflow refuses to replace an existing exact GitHub Release
+or image tag. Operators should pin exact versions.
 
 Third-party actions are pinned to commit SHAs. Workflow permissions are
 read-only by default and elevated only in the publishing job to `contents: write`
@@ -61,7 +74,8 @@ published images.
 
 ## External release validation
 
-Before final `v1.0.1`, publish and install at least one release candidate. Verify:
+Before final `vX.Y.Z`, publish and install at least one `vX.Y.Z-rc.N` release
+candidate. Verify:
 
 - both native archive checksums and runtime contents;
 - anonymous pulls and the amd64/arm64 manifest from GHCR;
@@ -74,6 +88,23 @@ Before final `v1.0.1`, publish and install at least one release candidate. Verif
 GitHub may require the repository owner to make the first GHCR package public
 and confirm its repository association. That one-time setting is an explicit
 external gate; anonymous pull must be retested afterwards.
+
+## Current v1.1 qualification
+
+Before final `v1.1.0`, the candidate evidence must include repository regression
+and PostgreSQL-backed integration; a fresh database migration through `000019`;
+the supported `v1.0.2 → v1.1.0` upgrade applying pending migrations
+`000016` through `000019`; encrypted backup/preflight/empty-database restore;
+security, authentication, and MFA regression; and native archive, checksum,
+version metadata, and image validation. Retained schema-1 records must remain a
+read-only, non-deployable conversion boundary; all authoring and deployment
+remain schema v2.
+
+Manual qualification remains required on the supported LXC/device or
+production-like host paths, including real AdGuard Home v0.107.78 and v0.107.79
+nodes, representative browser/PWA devices, webhook delivery, and relevant
+failure/outage behavior. Record unavailable external gates as unavailable, not
+as passes.
 
 ## Final release
 

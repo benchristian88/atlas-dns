@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +18,8 @@ import { NodeLifecyclePage } from "./NodeLifecyclePage";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  document.documentElement.removeAttribute("data-theme");
+  document.documentElement.removeAttribute("data-theme-preference");
 });
 const cluster = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -49,6 +57,47 @@ function commonMocks() {
 }
 
 describe("HA operations", () => {
+  it("renders disabled TLS as neutral and not applicable", async () => {
+    commonMocks();
+    vi.spyOn(api, "haStatus").mockResolvedValue({
+      state: "at_risk",
+      totalNodes: 1,
+      servingDnsNodes: 1,
+      apiReachableNodes: 1,
+      convergedNodes: 1,
+      maintenanceNodes: 0,
+      certificateWarnings: 0,
+      updateAvailableNodes: 0,
+      message: "No redundancy.",
+      nodes: [
+        {
+          nodeId: node.id,
+          dnsStatus: "healthy",
+          udpStatus: "healthy",
+          tcpStatus: "healthy",
+        },
+      ],
+    });
+    vi.spyOn(api, "certificates").mockResolvedValue({
+      items: [
+        { nodeId: node.id, nodeName: node.name, state: "not_applicable" },
+      ],
+    });
+    vi.spyOn(api, "versions").mockResolvedValue({ items: [] });
+    vi.spyOn(api, "haHistory").mockResolvedValue({ items: [], hasMore: false });
+    vi.spyOn(api, "notificationChannels").mockResolvedValue({ items: [] });
+
+    render(<HAOperationsPage cluster={cluster} />);
+    expect(await screen.findByText("Not configured")).toBeTruthy();
+    expect(screen.getByText("Not applicable")).toBeTruthy();
+    expect(
+      screen
+        .getByText("not applicable")
+        .classList.contains("status--not_applicable"),
+    ).toBe(true);
+    expect(screen.queryByText("Expired")).toBeNull();
+  });
+
   it("renders separate DNS, API, convergence, certificates, versions, notifications, and history dimensions", async () => {
     commonMocks();
     vi.spyOn(api, "haStatus").mockResolvedValue({
@@ -184,13 +233,38 @@ describe("HA operations", () => {
     expect(
       await screen.findByRole("heading", { name: "HA Operations" }),
     ).toBeTruthy();
+    const lifecycleHeading = screen.getByRole("heading", {
+      name: "Node lifecycle",
+    });
+    const lifecycleSection = lifecycleHeading.closest("section");
+    if (!(lifecycleSection instanceof HTMLElement))
+      throw new Error("Missing Node lifecycle section");
+    const lifecycleDescriptor = within(lifecycleSection).getByText(
+      "Open a node for maintenance, DNS probe, TLS, and guided upgrade workflows.",
+    );
+    expect(lifecycleDescriptor.tagName).toBe("CAPTION");
+    const lifecycleTable = lifecycleDescriptor.closest("table");
+    if (!(lifecycleTable instanceof HTMLTableElement))
+      throw new Error("Node lifecycle descriptor is not inside its table");
+    expect(lifecycleTable.closest(".table-wrap")).toBeTruthy();
+    expect(
+      within(lifecycleTable).getByRole("columnheader", { name: "Node" }),
+    ).toBeTruthy();
+    expect(
+      within(lifecycleTable)
+        .getByRole("link", { name: "Primary" })
+        .getAttribute("href"),
+    ).toBe(`/ha/nodes/${node.id}`);
     expect(
       screen.getAllByText("1 / 1", { selector: "strong" }).length,
     ).toBeGreaterThan(0);
     const summary = container.querySelector(
       '[aria-label="HA redundancy summary"]',
     );
-    expect(summary?.querySelectorAll(":scope > .metric-card")).toHaveLength(4);
+    expect(
+      summary?.querySelectorAll(":scope > .health-summary-card"),
+    ).toHaveLength(4);
+    expect(summary?.querySelector(".metric-card")).toBeNull();
     expect(summary?.querySelector(".metric")).toBeNull();
     expect(screen.getByText("DNS certificate")).toBeTruthy();
     expect(screen.getAllByText("DNS failed")).toHaveLength(2);
@@ -219,8 +293,60 @@ describe("HA operations", () => {
     expect(accessibility.violations).toEqual([]);
   });
 
-  it("completes add, preserved/replaced-secret edit, enable state, test, and delete webhook workflows", async () => {
-    const user = userEvent.setup();
+  it.each([
+    ["light", "light", 1440],
+    ["system", "light", 1280],
+    ["dark", "dark", 768],
+    ["system", "dark", 390],
+  ] as const)(
+    "keeps the Node lifecycle descriptor panel cohesive with %s preference resolved to %s at %dpx",
+    async (preference, resolved, width) => {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: width,
+      });
+      document.documentElement.dataset.theme = resolved;
+      document.documentElement.dataset.themePreference = preference;
+      commonMocks();
+      vi.spyOn(api, "haStatus").mockResolvedValue({
+        state: "healthy",
+        totalNodes: 1,
+        servingDnsNodes: 1,
+        apiReachableNodes: 1,
+        convergedNodes: 1,
+        maintenanceNodes: 0,
+        certificateWarnings: 0,
+        updateAvailableNodes: 0,
+        message: "Healthy.",
+        nodes: [
+          {
+            nodeId: node.id,
+            dnsStatus: "healthy",
+            udpStatus: "healthy",
+            tcpStatus: "healthy",
+          },
+        ],
+      });
+      vi.spyOn(api, "certificates").mockResolvedValue({ items: [] });
+      vi.spyOn(api, "versions").mockResolvedValue({ items: [] });
+      vi.spyOn(api, "haHistory").mockResolvedValue({
+        items: [],
+        hasMore: false,
+      });
+      const { container } = render(<HAOperationsPage cluster={cluster} />);
+
+      const descriptor = await screen.findByText(
+        "Open a node for maintenance, DNS probe, TLS, and guided upgrade workflows.",
+      );
+      expect(descriptor.tagName).toBe("CAPTION");
+      expect(descriptor.closest(".table-wrap")).toBeTruthy();
+      expect(container.querySelector(".table-wrap table")).toBeTruthy();
+      expect(document.documentElement.dataset.theme).toBe(resolved);
+      expect(document.documentElement.dataset.themePreference).toBe(preference);
+    },
+  );
+
+  it("delegates notification management while retaining the history destination", async () => {
     commonMocks();
     vi.spyOn(api, "haStatus").mockResolvedValue({
       state: "healthy",
@@ -240,117 +366,74 @@ describe("HA operations", () => {
       items: [],
       hasMore: false,
     });
-    const channel = {
-      id: "44444444-4444-4444-8444-444444444444",
-      clusterId: cluster.id,
-      name: "Operations",
-      channelType: "webhook" as const,
-      enabled: true,
-      destinationSet: true,
-      destinationSummary: "https://hooks.example.test",
-      subscribedEvents: ["all_ha_transitions"],
-      recordVersion: 3,
-      createdAt: "2026-08-09T00:00:00Z",
-      updatedAt: "2026-08-09T01:00:00Z",
-    };
-    vi.spyOn(api, "notificationChannels").mockResolvedValue({
-      items: [channel],
+    const channels = vi.spyOn(api, "notificationChannels");
+    render(<HAOperationsPage cluster={cluster} />);
+    const manage = await screen.findByRole("link", {
+      name: "Manage Notifications",
     });
-    const create = vi
-      .spyOn(api, "createNotificationChannel")
-      .mockResolvedValue(channel);
-    const update = vi
-      .spyOn(api, "updateNotificationChannel")
-      .mockResolvedValue({ ...channel, recordVersion: 4 });
-    const test = vi.spyOn(api, "testNotificationChannel").mockResolvedValue({
-      channelId: channel.id,
-      success: true,
-      testedAt: "2026-08-09T02:00:00Z",
-    });
-    const remove = vi
-      .spyOn(api, "deleteNotificationChannel")
-      .mockResolvedValue(undefined);
-    vi.spyOn(window, "prompt").mockReturnValue(channel.name);
-
-    const { container } = render(<HAOperationsPage cluster={cluster} />);
-    expect(await screen.findByText("https://hooks.example.test")).toBeTruthy();
-    expect(screen.queryByText(/token=/)).toBeNull();
-    const notifications = screen
-      .getByRole("heading", { name: "Notifications" })
-      .closest(".settings-group");
+    expect(manage.getAttribute("href")).toBe("/ha/notifications");
     expect(
-      notifications?.querySelector(".settings-group__body--padded"),
+      screen.getByRole("heading", { name: "Operational history" }),
     ).toBeTruthy();
-
-    await user.click(screen.getByRole("button", { name: "Edit" }));
-    expect(container.querySelector("form.panel-form")).toBeTruthy();
-    const name = screen.getByLabelText(/Channel name/);
-    await user.clear(name);
-    await user.type(name, "Operations renamed");
+    expect(screen.queryByRole("button", { name: "Add webhook" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Test" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
     expect(screen.queryByLabelText(/HTTPS webhook URL/)).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Save webhook" }));
-    await waitFor(() =>
-      expect(update).toHaveBeenCalledWith(channel.id, {
-        name: "Operations renamed",
-        enabled: true,
-        recordVersion: 3,
-      }),
-    );
+    expect(channels).not.toHaveBeenCalled();
+  });
 
-    await user.click(screen.getByRole("button", { name: "Edit" }));
-    await user.click(screen.getByLabelText("Replace destination secret"));
-    await user.type(
-      screen.getByLabelText(/HTTPS webhook URL/),
-      "https://replacement.example.test/private?token=new-hidden",
+  it("keeps healthy sources and notification evidence visible when an optional source fails", async () => {
+    commonMocks();
+    vi.spyOn(api, "haStatus").mockResolvedValue({
+      state: "healthy",
+      totalNodes: 1,
+      servingDnsNodes: 1,
+      apiReachableNodes: 1,
+      convergedNodes: 1,
+      maintenanceNodes: 0,
+      certificateWarnings: 0,
+      updateAvailableNodes: 0,
+      message: "Healthy",
+      nodes: [],
+    });
+    vi.spyOn(api, "certificates").mockRejectedValue(
+      new Error("Certificate source timed out"),
     );
-    await user.click(screen.getByRole("button", { name: "Save webhook" }));
-    await waitFor(() =>
-      expect(update).toHaveBeenCalledWith(channel.id, {
-        name: channel.name,
-        enabled: true,
-        recordVersion: 3,
-        destination:
-          "https://replacement.example.test/private?token=new-hidden",
-        replaceDestination: true,
-      }),
-    );
+    vi.spyOn(api, "versions").mockResolvedValue({ items: [] });
+    vi.spyOn(api, "haHistory").mockResolvedValue({
+      items: [
+        {
+          id: "55555555-5555-4555-8555-555555555555",
+          kind: "notification",
+          clusterId: cluster.id,
+          eventType: "notification.test",
+          severity: "info",
+          summary: "Atlas webhook test",
+          details: {},
+          occurredAt: "2026-08-09T00:59:00Z",
+          notification: {
+            channelName: "Operations",
+            status: "delivered",
+            attemptCount: 1,
+            httpStatus: 204,
+            test: true,
+          },
+        },
+      ],
+      hasMore: false,
+    });
 
-    await user.click(screen.getByRole("button", { name: "Disable" }));
-    await waitFor(() =>
-      expect(update).toHaveBeenCalledWith(channel.id, {
-        name: channel.name,
-        enabled: false,
-        recordVersion: 3,
-      }),
-    );
-    await user.click(screen.getByRole("button", { name: "Test" }));
-    await waitFor(() => expect(test).toHaveBeenCalledWith(channel.id));
+    render(<HAOperationsPage cluster={cluster} />);
     expect(
-      await screen.findByText(/endpoint accepted the bounded test/i),
+      await screen.findByText("Certificate status unavailable"),
     ).toBeTruthy();
-
-    await user.click(screen.getByRole("button", { name: "Delete" }));
-    await waitFor(() =>
-      expect(remove).toHaveBeenCalledWith(channel.id, 3, channel.name),
-    );
-
-    await user.click(screen.getByRole("button", { name: "Add webhook" }));
-    await user.type(screen.getByLabelText(/Channel name/), "Pager");
-    await user.type(
-      screen.getByLabelText(/HTTPS webhook URL/),
-      "https://pager.example.test/hook?token=hidden",
-    );
-    await user.click(
-      screen.getByRole("button", { name: "Add encrypted webhook" }),
-    );
-    await waitFor(() =>
-      expect(create).toHaveBeenCalledWith(cluster.id, {
-        name: "Pager",
-        destination: "https://pager.example.test/hook?token=hidden",
-        enabled: true,
-      }),
-    );
-  }, 15_000);
+    expect(screen.getByText("Certificate source timed out")).toBeTruthy();
+    expect(screen.getByText("Primary")).toBeTruthy();
+    expect(screen.getByText("Webhook test")).toBeTruthy();
+    expect(screen.getByText("Delivered")).toBeTruthy();
+    expect(screen.getByLabelText("HA redundancy summary")).toBeTruthy();
+  });
 
   it("shows bounded loading and a retryable error when the node no longer exists", async () => {
     vi.spyOn(api, "nodes").mockResolvedValue({
@@ -439,6 +522,11 @@ describe("HA operations", () => {
       await screen.findByRole("heading", { name: "Maintenance and DHCP" }),
     ).toBeTruthy();
     expect(container.querySelector(".page-container--wide")).toBeTruthy();
+    const lifecycleSummary = screen.getByLabelText("Node lifecycle status");
+    expect(
+      lifecycleSummary.querySelectorAll(":scope > .health-summary-card"),
+    ).toHaveLength(4);
+    expect(lifecycleSummary.querySelector(".metric-card")).toBeNull();
     expect(
       container.querySelectorAll(".settings-group").length,
     ).toBeGreaterThanOrEqual(7);

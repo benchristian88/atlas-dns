@@ -5,17 +5,44 @@ node management, desired configuration, deployments, drift, Statistics, Query
 Log, and HA operations. Browser actions always go to the controller API; the
 browser never calls an AdGuard Home node directly.
 
+Desktop navigation uses a collapsible left rail. On tablets and phones the same
+hierarchy opens in a navigation drawer. Monitoring contains Statistics, Query
+Log, and Operational Status. Settings and Filters contain only AdGuard Home
+configuration; Atlas functions live under HA Controller or Administration.
+Setup Guide remains available near the bottom of the rail as reference/help.
+The signed-in account menu sits at the bottom of the rail and opens My Account,
+Preferences, and Sign out. Atlas retains cluster-scoped backend and API data,
+but v1.1 shows only the current cluster because cluster creation/switching is not
+a supported UI workflow yet.
+
+## Guided onboarding
+
+After administrator bootstrap, Atlas offers onboarding until the selected
+cluster has compatible observed topology, an initial immutable schema-v2
+revision, reviewed monitoring settings, and either a configured webhook or an
+explicit notification skip. A second node is recommended but may be
+deliberately skipped with a visible no-redundancy warning.
+
+The initial configuration source is never inferred. Review normalized
+differences and select the intended node before Atlas imports into the normal
+draft, validates capabilities, and publishes the initial revision. Publication
+does not deploy. You can exit and resume safely; Setup Guide reads the same
+canonical status. See [Guided Onboarding](../getting-started/onboarding.md).
+
 ## Dashboard
 
-The Dashboard summarizes node availability, controller health, recent DNS
-activity, and safety interventions. A healthy controller summary does not imply
-that every node is serving DNS, and partial collector coverage is shown rather
-than averaged away. Use the links on each panel for the authoritative detail.
+The Dashboard summarizes verified DNS serving, management API reachability, HA
+state, collection health, current attention, recent safe changes, DNS activity,
+node state, and top queried/blocked domains. A healthy controller summary does
+not imply that every node is serving DNS, and partial collector coverage is
+shown rather than averaged away. Use the links on each panel for the
+authoritative detail.
+Dashboard traffic and domain rankings are always cluster-wide.
 
 ## Statistics
 
-Statistics aggregates supported node counters for fixed time ranges. Select the
-whole cluster or one node. Coverage identifies current, stale, unsupported,
+Statistics aggregates supported node counters for fixed time ranges and owns
+the traffic selector for Entire Cluster or one node. Coverage identifies current, stale, unsupported,
 maintenance, and failed nodes. Totals are additive; percentages and latency
 metrics use the relevant query/response weighting. Node-local statistics policy
 is edited under General settings, while controller collection cadence is an
@@ -24,7 +51,7 @@ operator setting.
 ## Query Log
 
 Query Log stores bounded, node-attributed events collected from supported node
-APIs. Search by domain/client and filter by status, query type, client, or node.
+APIs. Search by domain/client and filter by status, query type, or client.
 Every row and detail view retains the source node. Context links can prefill an
 allow/block rule, DNS rewrite, or client search, but never bypass the desired
 configuration workflow.
@@ -32,6 +59,29 @@ configuration workflow.
 Collection cannot recover events already removed by a node and preserves
 anonymized client data as received. Coverage reports known gaps and collection
 state. Treat all retained query data as sensitive.
+
+## My Account and Preferences
+
+My Account shows the current display identity, email, role, and Security section.
+Optional two-factor authentication can be enrolled with any standards-compatible
+TOTP authenticator: confirm the current password, scan the locally generated QR
+code (or enter the manual seed), and verify a current six-digit code. MFA is not
+enabled until verification succeeds. Save the ten recovery codes shown once;
+each completes one login and is then invalid. Historical seeds and codes are
+never displayed.
+
+When enabled, Security shows only the remaining recovery-code count. Regeneration
+and disabling both require the current password plus current TOTP. Regeneration
+invalidates every earlier unused recovery code. Enabling, regenerating, and
+disabling retain the current strongly reauthenticated session and revoke other
+sessions. Changing your own password also requires current TOTP when MFA is
+enabled, retains the current session, revokes other sessions, and is audited
+without password or factor material. Administration → Users remains the separate
+surface for account management and shows only read-only 2FA status; it provides
+no MFA bypass.
+
+Preferences contains only System, Light, and Dark appearance. The preference is
+stored in this browser; System follows the browser/operating-system appearance.
 
 ## Settings and Filters
 
@@ -88,15 +138,17 @@ started or produced an effect and no other record references it.
 
 Drift compares the active desired revision with fresh node observations. Manual
 policy leaves resolution to the operator; Alert records a visible incident;
-Enforce creates a targeted verified deployment. You can restore desired state,
-adopt an observation into the draft, or place the node in maintenance. Adoption
-still requires validation, publication, and deployment.
+Enforce creates a targeted verified deployment. You can restore desired state
+or adopt an observation into the draft. Maintenance state remains visible, but
+entry and return are owned by the exact Node Detail page. Adoption still
+requires validation, publication, and deployment.
 
 ## Nodes and Node Detail
 
 Nodes lists managed infrastructure, health, compatibility, latest observation,
-and convergence. Open a node to answer: “What is this node's current operational
-state, and what can I safely do next?”
+and convergence. It owns create/edit/delete and candidate validation, but not
+existing-node connection tests or maintenance mutation. Open a node to answer:
+“What is this node's current operational state, and what can I safely do next?”
 
 Node Detail groups overview, DNS service, maintenance/DHCP, TLS, software,
 collectors, and operational history. Its actions test connectivity, refresh
@@ -119,9 +171,22 @@ and Request ID instead of treating it as a successful exit.
 ## HA Operations
 
 HA Operations presents serving capacity, DNS probe evidence, certificate and
-version warnings, lifecycle event history, webhook channels, and guided upgrade
-history. A guided upgrade records operator progress and validation; it never
+version warnings, lifecycle event history, notification delivery outcomes, and
+guided upgrade history. Notification policy/channel management links to
+Notifications and is not duplicated. Independent source failures leave healthy
+sections visible, show a scoped retryable warning, and label retained last-good
+data stale. A guided upgrade records operator progress and validation; it never
 runs host or node package commands.
+
+## Notifications
+
+Notifications is an Atlas HA Controller function, not an AdGuard Home setting.
+It is the sole permanent management surface for the exact grouped event policy
+and HA lifecycle webhook channels. Conservative failure, recovery, and
+redundancy events are enabled by default; informational lifecycle events are
+opt-in. Delivery outcomes remain in HA Operations history. If a later refresh
+fails, last-known-good policy/channel data stays visible with an explicit stale
+warning and retry.
 
 Webhook endpoints are write-only secrets. The list shows only a safe
 scheme/host summary. Administrators can add, edit, pause, resume, test, or delete
@@ -133,7 +198,9 @@ retains delivery evidence with a safe channel-name snapshot.
 
 Operational Status separates API/PostgreSQL health, node reachability, complete
 observation, Statistics, Query Log, background worker, retention, and storage
-state. Use it when a Dashboard or feature page reports partial/stale data. Public
-`/health` is liveness; `/ready` includes PostgreSQL readiness.
+state under Monitoring. Compact section headers preserve accessible heading
+hierarchy while reducing diagnostic-page height. Use it when a Dashboard or
+feature page reports partial/stale data. Public `/health` is liveness; `/ready`
+includes PostgreSQL readiness.
 
 For recovery procedures, continue with the [operations runbook](../operations/runbook.md).

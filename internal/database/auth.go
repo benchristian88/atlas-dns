@@ -70,12 +70,13 @@ func (s *Store) CreateInitialUser(ctx context.Context, user domain.User, session
 func (s *Store) UserByEmail(ctx context.Context, email string) (domain.User, error) {
 	var user domain.User
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, email, display_name, password_hash, role, enabled,
-		       created_at, updated_at, last_login_at
-		FROM users
-		WHERE email = $1`, email).Scan(
+		SELECT u.id, u.email, u.display_name, u.password_hash, u.role, u.enabled,
+		       u.created_at, u.updated_at, u.last_login_at,
+		       EXISTS(SELECT 1 FROM user_mfa m WHERE m.user_id=u.id AND m.enabled_at IS NOT NULL)
+		FROM users u
+		WHERE u.email = $1`, email).Scan(
 		&user.ID, &user.Email, &user.DisplayName, &user.PasswordHash, &user.Role, &user.Enabled,
-		&user.CreatedAt, &user.UpdatedAt, &user.LastLoginAt)
+		&user.CreatedAt, &user.UpdatedAt, &user.LastLoginAt, &user.MFAEnabled)
 	if err != nil {
 		return domain.User{}, mapDatabaseError(err, "user")
 	}
@@ -85,12 +86,13 @@ func (s *Store) UserByEmail(ctx context.Context, email string) (domain.User, err
 func (s *Store) UserByID(ctx context.Context, id string) (domain.User, error) {
 	var user domain.User
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, email, display_name, password_hash, role, enabled,
-		       created_at, updated_at, last_login_at
-		FROM users
-		WHERE id = $1`, id).Scan(
+		SELECT u.id, u.email, u.display_name, u.password_hash, u.role, u.enabled,
+		       u.created_at, u.updated_at, u.last_login_at,
+		       EXISTS(SELECT 1 FROM user_mfa m WHERE m.user_id=u.id AND m.enabled_at IS NOT NULL)
+		FROM users u
+		WHERE u.id = $1`, id).Scan(
 		&user.ID, &user.Email, &user.DisplayName, &user.PasswordHash, &user.Role, &user.Enabled,
-		&user.CreatedAt, &user.UpdatedAt, &user.LastLoginAt)
+		&user.CreatedAt, &user.UpdatedAt, &user.LastLoginAt, &user.MFAEnabled)
 	if err != nil {
 		return domain.User{}, mapDatabaseError(err, "user")
 	}
@@ -103,7 +105,27 @@ func (s *Store) CreateLoginSession(ctx context.Context, session domain.Session, 
 		return fmt.Errorf("begin login transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
-	_, err = tx.Exec(ctx, `
+	if err := createLoginSession(ctx, tx, session, event); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit login: %w", err)
+	}
+	return nil
+}
+
+func createLoginSession(ctx context.Context, tx pgx.Tx, session domain.Session, event domain.AuditEvent) error {
+	var enabled bool
+	if err := tx.QueryRow(ctx, `SELECT enabled FROM users WHERE id=$1 FOR UPDATE`, session.UserID).Scan(&enabled); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.NewError(domain.ErrorAuthentication, "authentication is required")
+		}
+		return fmt.Errorf("lock login user: %w", err)
+	}
+	if !enabled {
+		return domain.NewError(domain.ErrorAuthentication, "authentication is required")
+	}
+	_, err := tx.Exec(ctx, `
 		INSERT INTO sessions
 			(id, user_id, token_hash, csrf_hash, created_at, expires_at, last_seen_at, ip_metadata, user_agent)
 		VALUES ($1, $2, $3, $4, $5, $6, $5, $7, $8)`,
@@ -118,9 +140,6 @@ func (s *Store) CreateLoginSession(ctx context.Context, session domain.Session, 
 	if err := audit(ctx, tx, event); err != nil {
 		return err
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit login: %w", err)
-	}
 	return nil
 }
 
@@ -131,7 +150,8 @@ func (s *Store) AuthenticatedSession(ctx context.Context, tokenHash []byte, now 
 		SELECT s.id, s.user_id, s.token_hash, s.csrf_hash, s.created_at, s.expires_at,
 		       s.last_seen_at, s.revoked_at, s.ip_metadata, s.user_agent,
 		       u.id, u.email, u.display_name, u.password_hash, u.role, u.enabled,
-		       u.created_at, u.updated_at, u.last_login_at
+		       u.created_at, u.updated_at, u.last_login_at,
+		       EXISTS(SELECT 1 FROM user_mfa m WHERE m.user_id=u.id AND m.enabled_at IS NOT NULL)
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > $2 AND u.enabled`,
@@ -139,7 +159,7 @@ func (s *Store) AuthenticatedSession(ctx context.Context, tokenHash []byte, now 
 		&session.ID, &session.UserID, &session.TokenHash, &session.CSRFHash, &session.CreatedAt,
 		&session.ExpiresAt, &session.LastSeenAt, &session.RevokedAt, &session.IPMetadata, &session.UserAgent,
 		&user.ID, &user.Email, &user.DisplayName, &user.PasswordHash, &user.Role, &user.Enabled,
-		&user.CreatedAt, &user.UpdatedAt, &user.LastLoginAt)
+		&user.CreatedAt, &user.UpdatedAt, &user.LastLoginAt, &user.MFAEnabled)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Session{}, domain.User{}, domain.NewError(domain.ErrorAuthentication, "authentication is required")

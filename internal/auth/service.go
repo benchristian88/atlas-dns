@@ -4,12 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/benchristian88/atlas-dns/internal/domain"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 )
 
 type Repository interface {
@@ -24,30 +24,57 @@ type Repository interface {
 }
 
 type Service struct {
-	repository      Repository
-	tokens          *TokenManager
-	limiter         *LoginLimiter
-	sessionDuration time.Duration
-	dummyHash       string
-	now             func() time.Time
+	repository       Repository
+	mfaRepository    MFARepository
+	tokens           *TokenManager
+	limiter          *LoginLimiter
+	factorLimiter    *LoginLimiter
+	credentialCipher *CredentialCipher
+	sessionDuration  time.Duration
+	runtime          interface {
+		RuntimeSettings() systemsettings.RuntimeSettings
+	}
+	dummyHash string
+	now       func() time.Time
+}
+
+func (s *Service) SetRuntimeSettings(provider interface {
+	RuntimeSettings() systemsettings.RuntimeSettings
+}) {
+	s.runtime = provider
+}
+
+func (s *Service) currentSessionDuration() time.Duration {
+	if s.runtime != nil {
+		return s.runtime.RuntimeSettings().SessionDuration
+	}
+	return s.sessionDuration
 }
 
 type SessionResult struct {
-	User      domain.User
-	Session   domain.Session
-	Token     string
-	CSRFToken string
+	User               domain.User
+	Session            domain.Session
+	Token              string
+	CSRFToken          string
+	MFARequired        bool
+	MFAChallenge       string
+	ChallengeExpiresAt time.Time
 }
 
-func NewService(repository Repository, tokens *TokenManager, sessionDuration time.Duration) (*Service, error) {
+func NewService(repository Repository, tokens *TokenManager, sessionDuration time.Duration, ciphers ...*CredentialCipher) (*Service, error) {
 	dummyHash, err := HashPassword("not-a-real-password-value")
 	if err != nil {
 		return nil, fmt.Errorf("create authentication timing hash: %w", err)
 	}
-	return &Service{
+	service := &Service{
 		repository: repository, tokens: tokens, limiter: NewLoginLimiter(5, 15*time.Minute),
-		sessionDuration: sessionDuration, dummyHash: dummyHash, now: time.Now,
-	}, nil
+		factorLimiter: NewLoginLimiter(5, 15*time.Minute), sessionDuration: sessionDuration, dummyHash: dummyHash, now: time.Now,
+	}
+	service.mfaRepository, _ = repository.(MFARepository)
+	if len(ciphers) > 0 {
+		service.credentialCipher = ciphers[0]
+	}
+	return service, nil
 }
 
 func (s *Service) SetupRequired(ctx context.Context) (bool, error) {
@@ -127,6 +154,9 @@ func (s *Service) Login(ctx context.Context, email, password, requestID, sourceI
 		return SessionResult{}, domain.NewError(domain.ErrorInvalidCredentials, "email or password is incorrect")
 	}
 	s.limiter.Success(key)
+	if user.MFAEnabled {
+		return s.createMFAChallenge(ctx, user, sourceIP, userAgent)
+	}
 	return s.createSession(ctx, user, requestID, sourceIP, userAgent)
 }
 
@@ -185,7 +215,7 @@ func (s *Service) buildSession(user domain.User, requestID, sourceIP, userAgent 
 	now := s.now().UTC()
 	session := domain.Session{
 		ID: sessionID, UserID: user.ID, TokenHash: tokenHash, CSRFHash: csrfHash,
-		CreatedAt: now, ExpiresAt: now.Add(s.sessionDuration), LastSeenAt: now,
+		CreatedAt: now, ExpiresAt: now.Add(s.currentSessionDuration()), LastSeenAt: now,
 		IPMetadata: truncate(sourceIP, 128), UserAgent: truncate(userAgent, 512),
 	}
 	event, err := auditEvent("user", &user.ID, "auth.login.succeeded", "session", &sessionID, requestID, map[string]any{"sourceIp": session.IPMetadata}, now)
@@ -224,9 +254,4 @@ func truncate(value string, limit int) string {
 		return value
 	}
 	return value[:limit]
-}
-
-func IsAuthenticationError(err error) bool {
-	var domainError *domain.Error
-	return errors.As(err, &domainError) && domainError.Kind == domain.ErrorAuthentication
 }

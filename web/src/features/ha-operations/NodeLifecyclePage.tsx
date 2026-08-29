@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { MetricCard } from "../../components/DataDisplay";
+import { HealthSummaryCard } from "../../components/DataDisplay";
 import { Banner, ErrorState, Loading } from "../../components/Feedback";
 import { PageContainer, PageHeader } from "../../components/Page";
 import { Field, SettingsGroup } from "../../components/Settings";
-import { StatusBadge } from "../../components/StatusBadge";
+import { StatusBadge, type StatusKind } from "../../components/StatusBadge";
 import { api } from "../../lib/api";
 import type {
   Cluster,
@@ -122,25 +122,40 @@ export function NodeLifecyclePage({
             : "The operation could not be completed."}
         </Banner>
       )}
-      <section className="metrics" aria-label="Node lifecycle status">
-        <MetricCard
+      <section
+        className="health-summary-grid health-summary-grid--four"
+        aria-label="Node lifecycle status"
+      >
+        <HealthSummaryCard
+          icon="nodes"
           label="API"
           value={node.healthStatus.replaceAll("_", " ")}
+          status={node.healthStatus}
+          detail="controller connection"
           valueClassName="operational-value"
         />
-        <MetricCard
+        <HealthSummaryCard
+          icon="dns"
           label="DNS"
           value={(lifecycle.dns?.status ?? "unknown").replaceAll("_", " ")}
+          status={lifecycle.dns?.status ?? "unknown"}
+          detail="last active probe"
           valueClassName="operational-value"
         />
-        <MetricCard
+        <HealthSummaryCard
+          icon="revisions"
           label="Configuration"
           value={node.convergenceStatus.replaceAll("_", " ")}
+          status={convergenceStatus(node.convergenceStatus)}
+          detail="desired-state position"
           valueClassName="operational-value"
         />
-        <MetricCard
+        <HealthSummaryCard
+          icon="updates"
           label="Version"
           value={(node.version ?? "unknown").replaceAll("_", " ")}
+          status={compatibilityStatus(node.compatibilityStatus)}
+          detail={`${node.compatibilityStatus.replaceAll("_", " ")} compatibility`}
         />
       </section>
 
@@ -403,11 +418,19 @@ export function NodeLifecyclePage({
         <dl className="detail-list">
           <div>
             <dt>Subject</dt>
-            <dd>{lifecycle.certificate.subject || "Not reported"}</dd>
+            <dd>
+              {lifecycle.certificate.state === "not_applicable"
+                ? "Not configured"
+                : lifecycle.certificate.subject || "Not reported"}
+            </dd>
           </div>
           <div>
             <dt>Expiry</dt>
-            <dd>{formatTime(lifecycle.certificate.notAfter)}</dd>
+            <dd>
+              {lifecycle.certificate.state === "not_applicable"
+                ? "Not applicable"
+                : formatTime(lifecycle.certificate.notAfter)}
+            </dd>
           </div>
           <div>
             <dt>Remaining</dt>
@@ -419,7 +442,17 @@ export function NodeLifecyclePage({
           </div>
           <div>
             <dt>State</dt>
-            <dd>{lifecycle.certificate.state}</dd>
+            <dd>
+              <StatusBadge
+                status={
+                  lifecycle.certificate.state === "critical" ||
+                  lifecycle.certificate.state === "expired"
+                    ? "failed"
+                    : lifecycle.certificate.state
+                }
+                label={lifecycle.certificate.state.replaceAll("_", " ")}
+              />
+            </dd>
           </div>
         </dl>
         <p className="muted">
@@ -671,6 +704,17 @@ export function NodeLifecyclePage({
       setBusy("");
     }
   }
+}
+
+function convergenceStatus(status: Node["convergenceStatus"]): StatusKind {
+  return status === "apply_failed" || status === "observation_failed"
+    ? "failed"
+    : status;
+}
+
+function compatibilityStatus(status: Node["compatibilityStatus"]): StatusKind {
+  if (status === "supported") return "healthy";
+  return status === "unsupported" ? "incompatible" : "unknown";
 }
 function formatTime(value?: string) {
   return value ? new Date(value).toLocaleString() : "—";

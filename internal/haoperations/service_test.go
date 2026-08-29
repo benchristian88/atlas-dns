@@ -1,8 +1,10 @@
 package haoperations
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"github.com/benchristian88/atlas-dns/internal/configuration"
 	"github.com/benchristian88/atlas-dns/internal/domain"
 	"github.com/benchristian88/atlas-dns/internal/inventory"
+	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 )
 
 const (
@@ -21,19 +24,20 @@ const (
 
 type serviceRepositoryFake struct {
 	Repository
-	nodes            []domain.Node
-	probes           []DNSProbeResult
-	snapshots        []inventory.Snapshot
-	activeDeployment bool
-	openDrift        bool
-	settings         map[string]NodeSettings
-	release          ReleaseCache
-	cluster          domain.Cluster
-	events           []Event
-	history          []HistoryItem
-	lastHistoryQuery HistoryQuery
-	audits           []domain.AuditEvent
-	collectorChecks  []Check
+	nodes                   []domain.Node
+	probes                  []DNSProbeResult
+	snapshots               []inventory.Snapshot
+	activeDeployment        bool
+	openDrift               bool
+	settings                map[string]NodeSettings
+	release                 ReleaseCache
+	cluster                 domain.Cluster
+	events                  []Event
+	history                 []HistoryItem
+	lastHistoryQuery        HistoryQuery
+	audits                  []domain.AuditEvent
+	collectorChecks         []Check
+	monitoringDisabledSince bool
 }
 
 func (r *serviceRepositoryFake) ListNodes(context.Context, string) ([]domain.Node, error) {
@@ -61,14 +65,17 @@ func (r *serviceRepositoryFake) LatestDNSProbes(context.Context, string) ([]DNSP
 	return r.probes, nil
 }
 func (r *serviceRepositoryFake) LatestDNSProbe(_ context.Context, nodeID string) (DNSProbeResult, error) {
-	for _, probe := range r.probes {
-		if probe.NodeID == nodeID {
-			return probe, nil
+	for index := len(r.probes) - 1; index >= 0; index-- {
+		if r.probes[index].NodeID == nodeID {
+			return r.probes[index], nil
 		}
 	}
 	return DNSProbeResult{}, domain.NewError(domain.ErrorNotFound, "probe was not found")
 }
 func (r *serviceRepositoryFake) LatestSuccessfulSnapshots(context.Context, string) ([]inventory.Snapshot, error) {
+	return r.snapshots, nil
+}
+func (r *serviceRepositoryFake) LatestSnapshots(context.Context, string) ([]inventory.Snapshot, error) {
 	return r.snapshots, nil
 }
 func (r *serviceRepositoryFake) ActiveDeploymentExists(context.Context, string) (bool, error) {
@@ -99,6 +106,20 @@ func (r *serviceRepositoryFake) SaveDNSProbe(_ context.Context, value DNSProbeRe
 func (r *serviceRepositoryFake) RecordHAEvent(_ context.Context, event Event) error {
 	r.events = append(r.events, event)
 	return nil
+}
+func (r *serviceRepositoryFake) ListHAEvents(_ context.Context, clusterID, nodeID string, limit int) ([]Event, error) {
+	result := []Event{}
+	for index := len(r.events) - 1; index >= 0 && len(result) < limit; index-- {
+		event := r.events[index]
+		if event.ClusterID != clusterID || nodeID != "" && (event.NodeID == nil || *event.NodeID != nodeID) {
+			continue
+		}
+		result = append(result, event)
+	}
+	return result, nil
+}
+func (r *serviceRepositoryFake) CertificateMonitoringDisabledSince(context.Context, string, time.Time) (bool, error) {
+	return r.monitoringDisabledSince, nil
 }
 func (r *serviceRepositoryFake) RecordHAEventAndAudit(_ context.Context, event Event, audit domain.AuditEvent) error {
 	r.events = append(r.events, event)
@@ -276,6 +297,250 @@ func TestSummaryReportsAllDNSFailedAtRisk(t *testing.T) {
 	}
 }
 
+func TestExplicitDNSFailureRemainsFailedAfterFreshnessWindow(t *testing.T) {
+	now := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	repository := &serviceRepositoryFake{
+		nodes:    []domain.Node{healthyNode(serviceNodeA)},
+		probes:   []DNSProbeResult{{NodeID: serviceNodeA, Status: "failed", ProbedAt: now.Add(-20 * time.Minute), ErrorCode: "DNS_PROBE_UNREACHABLE"}},
+		settings: map[string]NodeSettings{},
+	}
+	service := NewService(repository, nil, nil, nil, nil, nil)
+	service.now = func() time.Time { return now }
+
+	summary, err := service.Summary(context.Background(), serviceClusterID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Nodes[0].DNSStatus != "failed" || summary.ServingDNSNodes != 0 {
+		t.Fatalf("aged explicit failure summary=%#v", summary)
+	}
+}
+
+func TestSummaryUsesLiveRuntimeIntervalForSuccessfulDNSProbeFreshness(t *testing.T) {
+	now := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	probedAt := now.Add(-5 * time.Minute)
+	repository := &serviceRepositoryFake{
+		nodes: []domain.Node{healthyNode(serviceNodeA), healthyNode(serviceNodeB)},
+		probes: []DNSProbeResult{
+			{NodeID: serviceNodeA, Status: "healthy", UDPStatus: "healthy", TCPStatus: "healthy", ProbedAt: probedAt},
+			{NodeID: serviceNodeB, Status: "healthy", UDPStatus: "healthy", TCPStatus: "healthy", ProbedAt: probedAt},
+		},
+		settings: map[string]NodeSettings{},
+	}
+	runtime := systemsettings.NewRuntimeStore(systemsettings.RuntimeSettings{NodeHealthInterval: 6 * time.Minute})
+	service := NewService(repository, nil, nil, nil, nil, nil)
+	service.SetRuntimeSettings(runtime)
+	service.now = func() time.Time { return now }
+
+	summary, err := service.Summary(context.Background(), serviceClusterID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.State != "healthy" || summary.ServingDNSNodes != 2 || summary.Nodes[0].DNSStatus != "healthy" {
+		t.Fatalf("six-minute interval summary=%#v", summary)
+	}
+
+	runtime.Update(systemsettings.RuntimeSettings{NodeHealthInterval: 30 * time.Second})
+	summary, err = service.Summary(context.Background(), serviceClusterID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.State != "at_risk" || summary.ServingDNSNodes != 0 || summary.Nodes[0].DNSStatus != "stale" {
+		t.Fatalf("live 30-second interval summary=%#v", summary)
+	}
+}
+
+func TestMaintenancePreflightUsesSameRuntimeDNSFreshnessWindow(t *testing.T) {
+	now := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	probedAt := now.Add(-5 * time.Minute)
+	repository := &serviceRepositoryFake{
+		nodes: []domain.Node{healthyNode(serviceNodeA), healthyNode(serviceNodeB)},
+		probes: []DNSProbeResult{
+			{NodeID: serviceNodeA, Status: "healthy", ProbedAt: probedAt},
+			{NodeID: serviceNodeB, Status: "healthy", ProbedAt: probedAt},
+		},
+		settings: map[string]NodeSettings{},
+	}
+	runtime := systemsettings.NewRuntimeStore(systemsettings.RuntimeSettings{NodeHealthInterval: 6 * time.Minute})
+	service := NewService(repository, nil, nil, nil, nil, nil)
+	service.SetRuntimeSettings(runtime)
+	service.now = func() time.Time { return now }
+
+	preflight, err := service.MaintenancePreflight(context.Background(), serviceNodeA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preflight.HealthyDNSNodesRemaining != 1 || preflight.BreakGlassRequired {
+		t.Fatalf("long-interval preflight=%#v", preflight)
+	}
+	for _, check := range preflight.Checks {
+		if check.Name == "target_dns" && check.Status != "pass" {
+			t.Fatalf("target DNS check=%#v", check)
+		}
+	}
+}
+
+func TestDNSFreshnessWindowIncludesScheduleGrace(t *testing.T) {
+	if got := DNSFreshnessWindow(30 * time.Second); got != 2*time.Minute {
+		t.Fatalf("default freshness window=%s", got)
+	}
+	if got := DNSFreshnessWindow(6 * time.Minute); got != 18*time.Minute {
+		t.Fatalf("long freshness window=%s", got)
+	}
+}
+
+func TestProbeNodeTransientConfirmationStaysOperationallyQuiet(t *testing.T) {
+	now := time.Date(2026, 8, 29, 1, 0, 0, 0, time.UTC)
+	failure := failedDNSProbe("DNS_PROBE_TIMEOUT")
+	failure.result.ProbedAt = now
+	success := healthyDNSProbe()
+	success.result.ProbedAt = now.Add(time.Millisecond)
+	base := &sequenceDNSProber{outcomes: []dnsProbeOutcome{failure, success}}
+	repository := &serviceRepositoryFake{
+		nodes: []domain.Node{healthyNode(serviceNodeA), healthyNode(serviceNodeB)},
+		probes: []DNSProbeResult{
+			{NodeID: serviceNodeA, ClusterID: serviceClusterID, Status: "healthy", UDPStatus: "healthy", TCPStatus: "healthy", ProbedAt: now.Add(-time.Second)},
+			{NodeID: serviceNodeB, ClusterID: serviceClusterID, Status: "healthy", UDPStatus: "healthy", TCPStatus: "healthy", ProbedAt: now.Add(-time.Second)},
+		},
+		settings: map[string]NodeSettings{
+			serviceNodeA: {NodeID: serviceNodeA, DNSProbeHost: "192.0.2.10", DNSProbePort: 53, DNSProbeName: ".", DNSProbeType: "NS", ProbeUDP: true, ProbeTCP: true},
+		},
+		events: []Event{{ClusterID: serviceClusterID, EventType: "redundancy.restored", OccurredAt: now.Add(-time.Second)}},
+	}
+	prober := newConfirmingDNSProber(base, []time.Duration{0, 0}, waitForDNSProbeConfirmation, time.Now)
+	service := NewService(repository, nil, nil, nil, nil, prober)
+	service.now = func() time.Time { return now.Add(time.Second) }
+	var logs bytes.Buffer
+	service.SetLogger(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+
+	result, err := service.ProbeNode(context.Background(), serviceNodeA)
+	if err != nil || result.Status != "healthy" || result.dnsProbeAttempts != 2 || len(repository.probes) != 3 {
+		t.Fatalf("result=%#v probes=%#v err=%v", result, repository.probes, err)
+	}
+	if err := service.recordRedundancyTransition(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("transient confirmation created transition noise: %#v", repository.events)
+	}
+	summary, err := service.Summary(context.Background(), serviceClusterID)
+	if err != nil || summary.State != "healthy" || summary.ServingDNSNodes != 2 || summary.Nodes[0].DNSStatus != "healthy" {
+		t.Fatalf("summary=%#v err=%v", summary, err)
+	}
+	if output := logs.String(); !strings.Contains(output, "DNS probe recovered during confirmation") || !strings.Contains(output, "dns_probe_attempts=2") || !strings.Contains(output, "prior_error_code=DNS_PROBE_TIMEOUT") {
+		t.Fatalf("confirmation diagnostics=%q", output)
+	}
+}
+
+func TestProbeNodeConfirmedFailureAndRecoveryTransitionOnce(t *testing.T) {
+	now := time.Date(2026, 8, 29, 2, 0, 0, 0, time.UTC)
+	outcomes := make([]dnsProbeOutcome, 0, 7)
+	for index := 0; index < 6; index++ {
+		outcome := failedDNSProbe("DNS_PROBE_UNREACHABLE")
+		outcome.result.ProbedAt = now.Add(time.Duration(index) * time.Millisecond)
+		outcomes = append(outcomes, outcome)
+	}
+	recovery := healthyDNSProbe()
+	recovery.result.ProbedAt = now.Add(10 * time.Millisecond)
+	outcomes = append(outcomes, recovery)
+	base := &sequenceDNSProber{outcomes: outcomes}
+	repository := &serviceRepositoryFake{
+		nodes: []domain.Node{healthyNode(serviceNodeA), healthyNode(serviceNodeB)},
+		probes: []DNSProbeResult{
+			{NodeID: serviceNodeA, ClusterID: serviceClusterID, Status: "healthy", UDPStatus: "healthy", TCPStatus: "healthy", ProbedAt: now.Add(-time.Second)},
+			{NodeID: serviceNodeB, ClusterID: serviceClusterID, Status: "healthy", UDPStatus: "healthy", TCPStatus: "healthy", ProbedAt: now.Add(-time.Second)},
+		},
+		settings: map[string]NodeSettings{
+			serviceNodeA: {NodeID: serviceNodeA, DNSProbeHost: "192.0.2.10", DNSProbePort: 53, DNSProbeName: ".", DNSProbeType: "NS", ProbeUDP: true, ProbeTCP: true},
+		},
+		events: []Event{{ClusterID: serviceClusterID, EventType: "redundancy.restored", OccurredAt: now.Add(-time.Second)}},
+	}
+	service := NewService(repository, nil, nil, nil, nil, newConfirmingDNSProber(base, []time.Duration{0, 0}, waitForDNSProbeConfirmation, time.Now))
+	service.now = func() time.Time { return now.Add(time.Second) }
+
+	failed, err := service.ProbeNode(context.Background(), serviceNodeA)
+	if err == nil || failed.Status != "failed" || failed.dnsProbeAttempts != 3 {
+		t.Fatalf("confirmed failure=%#v err=%v", failed, err)
+	}
+	if err := service.recordRedundancyTransition(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if got := eventTypes(repository.events); !reflectStringSlicesEqual(got, []string{"redundancy.restored", "dns.failed", "redundancy.at_risk"}) {
+		t.Fatalf("failure transitions=%v", got)
+	}
+	failureDetails := repository.events[1].Details
+	if failureDetails["dnsProbeAttempts"] != 3 || failureDetails["errorCode"] != "DNS_PROBE_UNREACHABLE" || !reflectStringSlicesEqual(failureDetails["failedProtocols"].([]string), []string{"udp", "tcp"}) {
+		t.Fatalf("failure details=%#v", failureDetails)
+	}
+
+	if _, err := service.ProbeNode(context.Background(), serviceNodeA); err == nil {
+		t.Fatal("stable confirmed failure unexpectedly succeeded")
+	}
+	if err := service.recordRedundancyTransition(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 3 {
+		t.Fatalf("stable failure repeated transitions: %#v", repository.events)
+	}
+
+	if recovered, err := service.ProbeNode(context.Background(), serviceNodeA); err != nil || recovered.Status != "healthy" {
+		t.Fatalf("recovery=%#v err=%v", recovered, err)
+	}
+	if err := service.recordRedundancyTransition(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if got := eventTypes(repository.events); !reflectStringSlicesEqual(got, []string{"redundancy.restored", "dns.failed", "redundancy.at_risk", "dns.recovered", "redundancy.restored"}) {
+		t.Fatalf("recovery transitions=%v", got)
+	}
+}
+
+func TestProbeNodeCancellationDoesNotPersistArtificialFailure(t *testing.T) {
+	now := time.Date(2026, 8, 29, 3, 0, 0, 0, time.UTC)
+	failure := failedDNSProbe("DNS_PROBE_TIMEOUT")
+	failure.result.ProbedAt = now
+	base := &sequenceDNSProber{outcomes: []dnsProbeOutcome{failure}}
+	ctx, cancel := context.WithCancel(context.Background())
+	prober := newConfirmingDNSProber(base, defaultDNSProbeConfirmationBackoffs, func(ctx context.Context, delay time.Duration) error {
+		cancel()
+		return waitForDNSProbeConfirmation(ctx, delay)
+	}, time.Now)
+	repository := &serviceRepositoryFake{
+		nodes:  []domain.Node{healthyNode(serviceNodeA)},
+		probes: []DNSProbeResult{{NodeID: serviceNodeA, ClusterID: serviceClusterID, Status: "healthy", ProbedAt: now.Add(-time.Second)}},
+		settings: map[string]NodeSettings{
+			serviceNodeA: {NodeID: serviceNodeA, DNSProbeHost: "192.0.2.10", DNSProbePort: 53, DNSProbeName: ".", DNSProbeType: "NS", ProbeUDP: true, ProbeTCP: true},
+		},
+	}
+	service := NewService(repository, nil, nil, nil, nil, prober)
+
+	if _, err := service.ProbeNode(ctx, serviceNodeA); !errors.Is(err, context.Canceled) {
+		t.Fatalf("ProbeNode() error=%v", err)
+	}
+	if base.calls != 1 || len(repository.probes) != 1 || len(repository.events) != 0 {
+		t.Fatalf("calls=%d probes=%#v events=%#v", base.calls, repository.probes, repository.events)
+	}
+}
+
+func eventTypes(events []Event) []string {
+	result := make([]string, 0, len(events))
+	for _, event := range events {
+		result = append(result, event.EventType)
+	}
+	return result
+}
+
+func reflectStringSlicesEqual(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestSummaryReturnsEmptyNodeCollectionForNewCluster(t *testing.T) {
 	repository := &serviceRepositoryFake{settings: map[string]NodeSettings{}}
 	service := NewService(repository, nil, nil, nil, nil, nil)
@@ -313,6 +578,39 @@ func TestVersionsSupportsRollingV010778ToV010779(t *testing.T) {
 	versions, err = service.Versions(context.Background(), serviceClusterID)
 	if err != nil || versions[0].UpdateAvailable || versions[1].UpdateAvailable {
 		t.Fatalf("completed rolling versions=%+v err=%v", versions, err)
+	}
+}
+
+func TestVersionTransitionsWaitForFreshReleaseEvidenceAndDoNotRepeat(t *testing.T) {
+	now := time.Date(2026, 8, 19, 0, 0, 0, 0, time.UTC)
+	repository := &serviceRepositoryFake{
+		nodes:    []domain.Node{healthyNode(serviceNodeA)},
+		release:  ReleaseCache{Version: "v0.107.79", CheckedAt: now.Add(-2 * time.Hour), ExpiresAt: now.Add(-time.Minute)},
+		settings: map[string]NodeSettings{serviceNodeA: {NodeID: serviceNodeA, InstallationType: InstallationDocker}},
+	}
+	service := NewService(repository, nil, nil, nil, nil, nil)
+	service.now = func() time.Time { return now }
+
+	if err := service.recordVersionTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 0 {
+		t.Fatalf("stale evidence created transitions: %#v", repository.events)
+	}
+
+	repository.release.CheckedAt = now
+	repository.release.ExpiresAt = now.Add(releaseCacheTTL)
+	if err := service.recordVersionTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 1 || repository.events[0].EventType != "version.update_available" {
+		t.Fatalf("fresh transition events=%#v", repository.events)
+	}
+	if err := service.recordVersionTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("unchanged fresh evidence repeated transitions: %#v", repository.events)
 	}
 }
 
@@ -460,6 +758,16 @@ func TestReturnToServiceTLSApplicabilityMatrix(t *testing.T) {
 			wantStatus: "fail", wantCode: "TLS_CERTIFICATE_EXPIRED", wantMessage: "TLS certificate expired on 2026-08-10",
 		},
 		{
+			name:       "configured but certificate missing",
+			tls:        configuration.TLSStatus{Enabled: true, NotAfter: "0001-01-01T00:00:00Z"},
+			wantStatus: "fail", wantCode: "TLS_CERTIFICATE_INVALID", wantMessage: "missing or invalid",
+		},
+		{
+			name:       "configured certificate has malformed expiry",
+			tls:        configuration.TLSStatus{Enabled: true, ValidCertificate: true, ValidChain: true, ValidKey: true, ValidPair: true, NotAfter: "not-a-time"},
+			wantStatus: "fail", wantCode: "TLS_CERTIFICATE_TIME_INVALID", wantMessage: "could not be interpreted",
+		},
+		{
 			name:           "state unavailable",
 			observationErr: errors.New("observation unavailable"),
 			wantStatus:     "unknown", wantCode: "TLS_STATE_UNAVAILABLE",
@@ -533,17 +841,147 @@ func checkByName(checks []Check, name string) (Check, bool) {
 	return Check{}, false
 }
 
-func TestCertificateThresholdsUseRedactedObservation(t *testing.T) {
+func TestCertificateApplicabilityValidityAndExpiryStates(t *testing.T) {
 	now := time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC)
-	document := configuration.Document{ObservedOnly: configuration.ObservedOnly{TLS: configuration.TLSStatus{Enabled: true, Subject: "DNS certificate", Issuer: "Homelab CA", NotAfter: now.Add(6 * 24 * time.Hour).Format(time.RFC3339)}}}
-	repository := &serviceRepositoryFake{nodes: []domain.Node{healthyNode(serviceNodeA)}, snapshots: []inventory.Snapshot{{NodeID: serviceNodeA, ObservedAt: now, Document: &document}}}
+	tests := []struct {
+		name     string
+		tls      configuration.TLSStatus
+		want     CertificateState
+		wantDays *int
+	}{
+		{name: "disabled zero time is not applicable", tls: configuration.TLSStatus{Enabled: false, NotAfter: "0001-01-01T00:00:00Z"}, want: CertificateNotApplicable},
+		{name: "enabled missing certificate is unknown", tls: configuration.TLSStatus{Enabled: true, NotAfter: "0001-01-01T00:00:00Z"}, want: CertificateUnknown},
+		{name: "valid certificate", tls: validCertificateTLS(now.Add(90 * 24 * time.Hour)), want: CertificateHealthy, wantDays: testIntPointer(90)},
+		{name: "warning threshold", tls: validCertificateTLS(now.Add(20 * 24 * time.Hour)), want: CertificateWarning, wantDays: testIntPointer(20)},
+		{name: "critical threshold", tls: validCertificateTLS(now.Add(6 * 24 * time.Hour)), want: CertificateCritical, wantDays: testIntPointer(6)},
+		{name: "past expiry", tls: validCertificateTLS(now.Add(-time.Hour)), want: CertificateExpired, wantDays: testIntPointer(0)},
+		{name: "malformed expected expiry", tls: configuration.TLSStatus{Enabled: true, ValidCertificate: true, NotAfter: "not-a-time"}, want: CertificateUnknown},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			document := configuration.Document{ObservedOnly: configuration.ObservedOnly{TLS: test.tls}}
+			repository := &serviceRepositoryFake{nodes: []domain.Node{healthyNode(serviceNodeA)}, snapshots: []inventory.Snapshot{{NodeID: serviceNodeA, ObservedAt: now, Document: &document}}}
+			service := NewService(repository, nil, nil, nil, nil, nil)
+			service.now = func() time.Time { return now }
+			certificates, err := service.Certificates(context.Background(), serviceClusterID)
+			if err != nil || len(certificates) != 1 || certificates[0].State != test.want {
+				t.Fatalf("certificates=%#v err=%v", certificates, err)
+			}
+			if test.wantDays == nil {
+				if certificates[0].DaysRemaining != nil || certificates[0].NotAfter != nil {
+					t.Fatalf("non-expiring state leaked expiry values: %#v", certificates[0])
+				}
+			} else if certificates[0].DaysRemaining == nil || *certificates[0].DaysRemaining != *test.wantDays {
+				t.Fatalf("days remaining=%v, want %d", certificates[0].DaysRemaining, *test.wantDays)
+			}
+		})
+	}
+}
+
+func TestCertificateLatestObservationFailureIsUnknown(t *testing.T) {
+	now := time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC)
+	repository := &serviceRepositoryFake{
+		nodes:     []domain.Node{healthyNode(serviceNodeA)},
+		snapshots: []inventory.Snapshot{{NodeID: serviceNodeA, ObservedAt: now, CollectionStatus: "failed", ErrorCode: "NODE_UNREACHABLE"}},
+	}
 	service := NewService(repository, nil, nil, nil, nil, nil)
-	service.now = func() time.Time { return now }
 	certificates, err := service.Certificates(context.Background(), serviceClusterID)
-	if err != nil || len(certificates) != 1 || certificates[0].State != CertificateCritical || certificates[0].DaysRemaining == nil || *certificates[0].DaysRemaining != 6 {
+	if err != nil || len(certificates) != 1 || certificates[0].State != CertificateUnknown || certificates[0].ObservedAt == nil {
 		t.Fatalf("certificates=%#v err=%v", certificates, err)
 	}
 }
+
+func TestCertificateNotApplicableDoesNotWarnOrCreateEvents(t *testing.T) {
+	now := time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC)
+	document := configuration.Document{ObservedOnly: configuration.ObservedOnly{TLS: configuration.TLSStatus{Enabled: false, NotAfter: "0001-01-01T00:00:00Z"}}}
+	repository := &serviceRepositoryFake{
+		nodes:     []domain.Node{healthyNode(serviceNodeA), healthyNode(serviceNodeB)},
+		probes:    []DNSProbeResult{{NodeID: serviceNodeA, Status: "healthy", ProbedAt: now}, {NodeID: serviceNodeB, Status: "healthy", ProbedAt: now}},
+		snapshots: []inventory.Snapshot{{NodeID: serviceNodeA, ObservedAt: now, CollectionStatus: "succeeded", Document: &document}},
+		settings:  map[string]NodeSettings{},
+	}
+	service := NewService(repository, nil, nil, nil, nil, nil)
+	service.now = func() time.Time { return now }
+	summary, err := service.Summary(context.Background(), serviceClusterID)
+	if err != nil || summary.CertificateWarnings != 0 {
+		t.Fatalf("summary=%#v err=%v", summary, err)
+	}
+	if err := service.recordCertificateTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.recordCertificateTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 0 {
+		t.Fatalf("not-applicable certificate created event/notification trigger: %#v", repository.events)
+	}
+}
+
+func TestCertificateApplicabilityTransitionsDoNotManufactureRecovery(t *testing.T) {
+	now := time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC)
+	disabled := configuration.Document{ObservedOnly: configuration.ObservedOnly{TLS: configuration.TLSStatus{Enabled: false, NotAfter: "0001-01-01T00:00:00Z"}}}
+	healthy := configuration.Document{ObservedOnly: configuration.ObservedOnly{TLS: validCertificateTLS(now.Add(90 * 24 * time.Hour))}}
+	repository := &serviceRepositoryFake{nodes: []domain.Node{healthyNode(serviceNodeA)}, snapshots: []inventory.Snapshot{{NodeID: serviceNodeA, ObservedAt: now, Document: &disabled}}}
+	service := NewService(repository, nil, nil, nil, nil, nil)
+	service.now = func() time.Time { return now }
+	if err := service.recordCertificateTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	repository.snapshots[0].Document = &healthy
+	if err := service.recordCertificateTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	repository.snapshots[0].Document = &disabled
+	if err := service.recordCertificateTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 0 {
+		t.Fatalf("not-applicable applicability changes created events: %#v", repository.events)
+	}
+
+	repository.events = []Event{{ClusterID: serviceClusterID, NodeID: stringPointer(serviceNodeA), EventType: "certificate.expired", OccurredAt: now.Add(-time.Hour)}}
+	repository.monitoringDisabledSince = true
+	repository.snapshots[0].Document = &healthy
+	if err := service.recordCertificateTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("historical false expiry created recovery: %#v", repository.events)
+	}
+
+	repository.snapshots[0].Document = &configuration.Document{ObservedOnly: configuration.ObservedOnly{TLS: validCertificateTLS(now.Add(20 * 24 * time.Hour))}}
+	if err := service.recordCertificateTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 2 || repository.events[1].EventType != "certificate.warning" {
+		t.Fatalf("not-applicable to warning did not create a fresh warning: %#v", repository.events)
+	}
+}
+
+func TestCertificateGenuineWarningAndRecoveryStillCreateEvents(t *testing.T) {
+	now := time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC)
+	warning := configuration.Document{ObservedOnly: configuration.ObservedOnly{TLS: validCertificateTLS(now.Add(20 * 24 * time.Hour))}}
+	healthy := configuration.Document{ObservedOnly: configuration.ObservedOnly{TLS: validCertificateTLS(now.Add(90 * 24 * time.Hour))}}
+	repository := &serviceRepositoryFake{nodes: []domain.Node{healthyNode(serviceNodeA)}, snapshots: []inventory.Snapshot{{NodeID: serviceNodeA, ObservedAt: now, Document: &warning}}}
+	service := NewService(repository, nil, nil, nil, nil, nil)
+	service.now = func() time.Time { return now }
+	if err := service.recordCertificateTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	repository.snapshots[0].Document = &healthy
+	if err := service.recordCertificateTransitions(context.Background(), serviceClusterID); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.events) != 2 || repository.events[0].EventType != "certificate.warning" || repository.events[1].EventType != "certificate.recovered" {
+		t.Fatalf("genuine transitions=%#v", repository.events)
+	}
+}
+
+func validCertificateTLS(notAfter time.Time) configuration.TLSStatus {
+	return configuration.TLSStatus{Enabled: true, ValidCertificate: true, ValidChain: true, ValidKey: true, ValidPair: true, Subject: "DNS certificate", Issuer: "Homelab CA", NotAfter: notAfter.Format(time.RFC3339)}
+}
+
+func testIntPointer(value int) *int { return &value }
 
 func TestUpgradeRejectsUnsupportedInstallation(t *testing.T) {
 	repository := &serviceRepositoryFake{nodes: []domain.Node{healthyNode(serviceNodeA)}, settings: map[string]NodeSettings{serviceNodeA: {NodeID: serviceNodeA, InstallationType: InstallationHomeAssistant}}}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { MetricCard, Pagination } from "../../components/DataDisplay";
+import { HealthSummaryCard, Pagination } from "../../components/DataDisplay";
 import {
   Banner,
   EmptyState,
@@ -7,7 +7,6 @@ import {
   Loading,
 } from "../../components/Feedback";
 import { PageHeader } from "../../components/Page";
-import { Field, SettingsGroup } from "../../components/Settings";
 import { StatusBadge } from "../../components/StatusBadge";
 import { api } from "../../lib/api";
 import type {
@@ -16,10 +15,18 @@ import type {
   HAHistoryItem,
   HASummary,
   Node,
-  NotificationChannel,
   UpgradeOperation,
   VersionHealth,
 } from "../../lib/types";
+import { nodeDetailPath } from "../../routing/routes";
+
+type HASource =
+  | "summary"
+  | "nodes"
+  | "certificates"
+  | "versions"
+  | "history"
+  | "upgrades";
 
 export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
   const [summary, setSummary] = useState<HASummary>();
@@ -31,56 +38,66 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
   const [historyNextCursor, setHistoryNextCursor] = useState("");
   const [historyLoading, setHistoryLoading] = useState(false);
   const [upgrades, setUpgrades] = useState<UpgradeOperation[]>([]);
-  const [channels, setChannels] = useState<NotificationChannel[]>([]);
-  const [error, setError] = useState<unknown>();
-  const [showWebhook, setShowWebhook] = useState(false);
-  const [editingChannel, setEditingChannel] = useState<NotificationChannel>();
-  const [webhookName, setWebhookName] = useState("");
-  const [webhookURL, setWebhookURL] = useState("");
-  const [webhookEnabled, setWebhookEnabled] = useState(true);
-  const [replaceDestination, setReplaceDestination] = useState(false);
-  const [webhookBusy, setWebhookBusy] = useState("");
-  const [webhookFeedback, setWebhookFeedback] = useState<{
-    tone: "success" | "warning";
-    title: string;
-    message: string;
-  }>();
+  const [loading, setLoading] = useState(true);
+  const [loadedSources, setLoadedSources] = useState<
+    Partial<Record<HASource, true>>
+  >({});
+  const [sourceErrors, setSourceErrors] = useState<
+    Partial<Record<HASource, unknown>>
+  >({});
 
   const historyCursor = historyCursorStack.at(-1) ?? "";
   const load = useCallback(async () => {
     setHistoryLoading(true);
-    try {
-      const [
-        ha,
-        nodeResult,
-        certificateResult,
-        versionResult,
-        history,
-        upgradeResult,
-        channelResult,
-      ] = await Promise.all([
-        api.haStatus(cluster.id),
-        api.nodes(cluster.id),
-        api.certificates(cluster.id),
-        api.versions(cluster.id),
-        api.haHistory(cluster.id, { cursor: historyCursor, limit: 50 }),
-        api.upgrades(cluster.id),
-        api.notificationChannels(cluster.id),
-      ]);
-      setSummary(ha);
-      setNodes(nodeResult.items);
-      setCertificates(certificateResult.items);
-      setVersions(versionResult.items);
-      setEvents(history.items);
-      setHistoryNextCursor(history.nextCursor ?? "");
-      setUpgrades(upgradeResult.items);
-      setChannels(channelResult.items);
-      setError(undefined);
-    } catch (caught) {
-      setError(caught);
-    } finally {
-      setHistoryLoading(false);
-    }
+    const results = await Promise.allSettled([
+      api.haStatus(cluster.id),
+      api.nodes(cluster.id),
+      api.certificates(cluster.id),
+      api.versions(cluster.id),
+      api.haHistory(cluster.id, { cursor: historyCursor, limit: 50 }),
+      api.upgrades(cluster.id),
+    ] as const);
+    const errors: Partial<Record<HASource, unknown>> = {};
+    const loaded: Partial<Record<HASource, true>> = {};
+    const [
+      ha,
+      nodeResult,
+      certificateResult,
+      versionResult,
+      history,
+      upgradeResult,
+    ] = results;
+
+    if (ha.status === "fulfilled") {
+      setSummary(ha.value);
+      loaded.summary = true;
+    } else errors.summary = ha.reason;
+    if (nodeResult.status === "fulfilled") {
+      setNodes(nodeResult.value.items);
+      loaded.nodes = true;
+    } else errors.nodes = nodeResult.reason;
+    if (certificateResult.status === "fulfilled") {
+      setCertificates(certificateResult.value.items);
+      loaded.certificates = true;
+    } else errors.certificates = certificateResult.reason;
+    if (versionResult.status === "fulfilled") {
+      setVersions(versionResult.value.items);
+      loaded.versions = true;
+    } else errors.versions = versionResult.reason;
+    if (history.status === "fulfilled") {
+      setEvents(history.value.items);
+      setHistoryNextCursor(history.value.nextCursor ?? "");
+      loaded.history = true;
+    } else errors.history = history.reason;
+    if (upgradeResult.status === "fulfilled") {
+      setUpgrades(upgradeResult.value.items);
+      loaded.upgrades = true;
+    } else errors.upgrades = upgradeResult.reason;
+
+    setLoadedSources((current) => ({ ...current, ...loaded }));
+    setSourceErrors(errors);
+    setLoading(false);
+    setHistoryLoading(false);
   }, [cluster.id, historyCursor]);
 
   useEffect(() => {
@@ -94,10 +111,16 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
     return () => window.clearInterval(timer);
   }, [load]);
 
-  if (summary === undefined && error === undefined)
+  const hasLoadedSource = Object.keys(loadedSources).length > 0;
+  if (loading && !hasLoadedSource)
     return <Loading label="Loading HA operations…" />;
-  if (summary === undefined)
-    return <ErrorState error={error} retry={() => void load()} />;
+  if (!hasLoadedSource)
+    return (
+      <ErrorState
+        error={Object.values(sourceErrors)[0]}
+        retry={() => void load()}
+      />
+    );
   const nodeName = new Map(nodes.map((node) => [node.id, node.name]));
 
   return (
@@ -107,155 +130,210 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
         title="HA Operations"
         description="DNS redundancy, lifecycle work, certificates, software, and operational history."
         primaryAction={
-          <StatusBadge
-            status={summary.state === "at_risk" ? "failed" : summary.state}
-            label={summary.state === "at_risk" ? "At Risk" : undefined}
-          />
+          summary && (
+            <StatusBadge
+              status={summary.state === "at_risk" ? "failed" : summary.state}
+              label={summary.state === "at_risk" ? "At Risk" : undefined}
+            />
+          )
         }
       />
-      {error !== undefined && (
-        <Banner tone="warning" title="Refresh failed">
-          Showing the last complete HA snapshot.
-        </Banner>
-      )}
-      {summary.state !== "healthy" && (
+      <SourceWarning
+        label="HA summary"
+        error={sourceErrors.summary}
+        stale={loadedSources.summary === true}
+        retry={load}
+      />
+      {summary?.state !== undefined && summary.state !== "healthy" && (
         <Banner tone="warning" title="HA capacity needs attention">
           {summary.message}
         </Banner>
       )}
 
-      <section className="metrics" aria-label="HA redundancy summary">
-        <MetricCard
-          label="DNS serving"
-          value={`${summary.servingDnsNodes} / ${summary.totalNodes}`}
-        />
-        <MetricCard
-          label="API reachable"
-          value={`${summary.apiReachableNodes} / ${summary.totalNodes}`}
-        />
-        <MetricCard
-          label="Converged"
-          value={`${summary.convergedNodes} / ${summary.totalNodes}`}
-        />
-        <MetricCard
-          label="Maintenance"
-          value={String(summary.maintenanceNodes)}
-        />
-      </section>
+      {summary && (
+        <section
+          className="health-summary-grid health-summary-grid--four"
+          aria-label="HA redundancy summary"
+        >
+          <HealthSummaryCard
+            icon="dns"
+            label="DNS serving"
+            value={`${summary.servingDnsNodes} / ${summary.totalNodes}`}
+            status={coverageStatus(summary.servingDnsNodes, summary.totalNodes)}
+            detail="nodes serving DNS"
+          />
+          <HealthSummaryCard
+            icon="nodes"
+            label="API reachable"
+            value={`${summary.apiReachableNodes} / ${summary.totalNodes}`}
+            status={coverageStatus(
+              summary.apiReachableNodes,
+              summary.totalNodes,
+            )}
+            detail="management APIs responding"
+          />
+          <HealthSummaryCard
+            icon="revisions"
+            label="Converged"
+            value={`${summary.convergedNodes} / ${summary.totalNodes}`}
+            status={coverageStatus(summary.convergedNodes, summary.totalNodes)}
+            detail="nodes on desired revision"
+          />
+          <HealthSummaryCard
+            icon="system"
+            label="Maintenance"
+            value={String(summary.maintenanceNodes)}
+            status={summary.maintenanceNodes === 0 ? "healthy" : "maintenance"}
+            detail="nodes out of service"
+          />
+        </section>
+      )}
 
       <section className="section-block">
         <div className="section-heading">
-          <div>
-            <h2>Node lifecycle</h2>
-            <small>
-              Open a node for maintenance, DNS probe, TLS, and guided upgrade
-              workflows.
-            </small>
+          <h2>Node lifecycle</h2>
+        </div>
+        <SourceWarning
+          label="Node inventory"
+          error={sourceErrors.nodes}
+          stale={loadedSources.nodes === true}
+          retry={load}
+        />
+        <SourceWarning
+          label="Version status"
+          error={sourceErrors.versions}
+          stale={loadedSources.versions === true}
+          retry={load}
+        />
+        {loadedSources.nodes === true && nodes.length === 0 ? (
+          <EmptyState title="No managed nodes" />
+        ) : loadedSources.nodes === true ? (
+          <div className="table-wrap">
+            <table>
+              <caption>
+                Open a node for maintenance, DNS probe, TLS, and guided upgrade
+                workflows.
+              </caption>
+              <thead>
+                <tr>
+                  <th>Node</th>
+                  <th>API</th>
+                  <th>DNS</th>
+                  <th>Maintenance</th>
+                  <th>Version</th>
+                  <th>Update</th>
+                </tr>
+              </thead>
+              <tbody>
+                {nodes.map((node) => {
+                  const version = versions.find(
+                    (item) => item.nodeId === node.id,
+                  );
+                  const dns = summary?.nodes.find(
+                    (item) => item.nodeId === node.id,
+                  );
+                  return (
+                    <tr key={node.id}>
+                      <td>
+                        <a href={nodeDetailPath(node.id)}>
+                          <strong>{node.name}</strong>
+                        </a>
+                      </td>
+                      <td>
+                        <StatusBadge status={node.healthStatus} />
+                      </td>
+                      <td>
+                        <a href={nodeDetailPath(node.id)}>
+                          <StatusBadge status={dns?.dnsStatus ?? "unknown"} />
+                        </a>
+                      </td>
+                      <td>
+                        {node.maintenanceMode ? (
+                          <StatusBadge status="maintenance" />
+                        ) : (
+                          "In service"
+                        )}
+                      </td>
+                      <td>{node.version ?? "Unknown"}</td>
+                      <td>
+                        {loadedSources.versions !== true ? (
+                          "Unavailable"
+                        ) : version?.updateAvailable ? (
+                          <StatusBadge status="warning" label="Available" />
+                        ) : version?.releaseCheckStale ? (
+                          "Check unavailable"
+                        ) : (
+                          "Current"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Node</th>
-                <th>API</th>
-                <th>DNS</th>
-                <th>Maintenance</th>
-                <th>Version</th>
-                <th>Update</th>
-              </tr>
-            </thead>
-            <tbody>
-              {nodes.map((node) => {
-                const version = versions.find(
-                  (item) => item.nodeId === node.id,
-                );
-                const dns = summary.nodes.find(
-                  (item) => item.nodeId === node.id,
-                );
-                return (
-                  <tr key={node.id}>
-                    <td>
-                      <a href={`/ha/nodes/${node.id}`}>
-                        <strong>{node.name}</strong>
-                      </a>
-                    </td>
-                    <td>
-                      <StatusBadge status={node.healthStatus} />
-                    </td>
-                    <td>
-                      <a href={`/ha/nodes/${node.id}`}>
-                        <StatusBadge status={dns?.dnsStatus ?? "unknown"} />
-                      </a>
-                    </td>
-                    <td>
-                      {node.maintenanceMode ? (
-                        <StatusBadge status="maintenance" />
-                      ) : (
-                        "In service"
-                      )}
-                    </td>
-                    <td>{node.version ?? "Unknown"}</td>
-                    <td>
-                      {version?.updateAvailable ? (
-                        <StatusBadge status="warning" label="Available" />
-                      ) : version?.releaseCheckStale ? (
-                        "Check unavailable"
-                      ) : (
-                        "Current"
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        ) : null}
       </section>
 
       <section className="section-block">
         <div className="section-heading">
           <h2>Certificate expiry</h2>
-          <span>{summary.certificateWarnings} warnings</span>
+          {summary && <span>{summary.certificateWarnings} warnings</span>}
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Node</th>
-                <th>Certificate</th>
-                <th>Expiry</th>
-                <th>Remaining</th>
-                <th>State</th>
-              </tr>
-            </thead>
-            <tbody>
-              {certificates.map((certificate) => (
-                <tr key={certificate.nodeId}>
-                  <td>{certificate.nodeName}</td>
-                  <td>{certificate.subject || "Not reported"}</td>
-                  <td>{formatTime(certificate.notAfter)}</td>
-                  <td>
-                    {certificate.daysRemaining === undefined
-                      ? "—"
-                      : `${certificate.daysRemaining} days`}
-                  </td>
-                  <td>
-                    <StatusBadge
-                      status={
-                        certificate.state === "critical" ||
-                        certificate.state === "expired"
-                          ? "failed"
-                          : certificate.state
-                      }
-                      label={certificate.state.replaceAll("_", " ")}
-                    />
-                  </td>
+        <SourceWarning
+          label="Certificate status"
+          error={sourceErrors.certificates}
+          stale={loadedSources.certificates === true}
+          retry={load}
+        />
+        {loadedSources.certificates === true && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Node</th>
+                  <th>Certificate</th>
+                  <th>Expiry</th>
+                  <th>Remaining</th>
+                  <th>State</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {certificates.map((certificate) => (
+                  <tr key={certificate.nodeId}>
+                    <td>{certificate.nodeName}</td>
+                    <td>
+                      {certificate.state === "not_applicable"
+                        ? "Not configured"
+                        : certificate.subject || "Not reported"}
+                    </td>
+                    <td>
+                      {certificate.state === "not_applicable"
+                        ? "Not applicable"
+                        : formatTime(certificate.notAfter)}
+                    </td>
+                    <td>
+                      {certificate.daysRemaining === undefined
+                        ? "—"
+                        : `${certificate.daysRemaining} days`}
+                    </td>
+                    <td>
+                      <StatusBadge
+                        status={
+                          certificate.state === "critical" ||
+                          certificate.state === "expired"
+                            ? "failed"
+                            : certificate.state
+                        }
+                        label={certificate.state.replaceAll("_", " ")}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section className="section-block">
@@ -266,7 +344,13 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
             shell.
           </small>
         </div>
-        {upgrades.length === 0 ? (
+        <SourceWarning
+          label="Guided upgrade history"
+          error={sourceErrors.upgrades}
+          stale={loadedSources.upgrades === true}
+          retry={load}
+        />
+        {loadedSources.upgrades !== true ? null : upgrades.length === 0 ? (
           <EmptyState title="No upgrade history">
             <p>Start a supported guided upgrade from Node Detail.</p>
           </EmptyState>
@@ -310,203 +394,31 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
           </div>
         )}
       </section>
-
-      <SettingsGroup
-        title="Notifications"
-        description="Meaningful HA transitions and recoveries. Expected DNS failures during maintenance are suppressed."
-        bodySpacing="padded"
+      <Banner
+        tone="info"
+        title="Notification management"
         actions={
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => {
-              if (showWebhook && editingChannel === undefined) closeWebhook();
-              else openWebhook();
-            }}
-          >
-            {showWebhook && editingChannel === undefined
-              ? "Cancel"
-              : "Add webhook"}
-          </button>
+          <a className="button button--secondary" href="/ha/notifications">
+            Manage Notifications
+          </a>
         }
       >
-        {webhookFeedback !== undefined && (
-          <Banner tone={webhookFeedback.tone} title={webhookFeedback.title}>
-            {webhookFeedback.message}
-          </Banner>
-        )}
-        {showWebhook && (
-          <form
-            className="card form-stack panel-form"
-            aria-label={editingChannel ? "Edit webhook" : "Add webhook"}
-            onSubmit={(event) => void saveWebhook(event)}
-          >
-            <h3>
-              {editingChannel ? `Edit ${editingChannel.name}` : "Add webhook"}
-            </h3>
-            <Field label="Channel name" htmlFor="webhook-name" required>
-              <input
-                id="webhook-name"
-                value={webhookName}
-                onChange={(event) => setWebhookName(event.target.value)}
-                required
-                maxLength={120}
-              />
-            </Field>
-            {editingChannel !== undefined && (
-              <label>
-                <input
-                  type="checkbox"
-                  checked={replaceDestination}
-                  onChange={(event) => {
-                    setReplaceDestination(event.target.checked);
-                    if (!event.target.checked) setWebhookURL("");
-                  }}
-                />{" "}
-                Replace destination secret
-              </label>
-            )}
-            {(editingChannel === undefined || replaceDestination) && (
-              <Field
-                label="HTTPS webhook URL"
-                htmlFor="webhook-url"
-                required
-                help="The full URL is encrypted and is never returned by the API."
-              >
-                <input
-                  id="webhook-url"
-                  type="url"
-                  value={webhookURL}
-                  onChange={(event) => setWebhookURL(event.target.value)}
-                  required
-                  autoComplete="off"
-                />
-              </Field>
-            )}
-            <label>
-              <input
-                type="checkbox"
-                checked={webhookEnabled}
-                onChange={(event) => setWebhookEnabled(event.target.checked)}
-              />{" "}
-              Enabled
-            </label>
-            <div className="row-actions row-actions--start">
-              <button
-                className="button"
-                type="submit"
-                disabled={webhookBusy !== ""}
-              >
-                {webhookBusy === "save"
-                  ? "Saving…"
-                  : editingChannel
-                    ? "Save webhook"
-                    : "Add encrypted webhook"}
-              </button>
-              {editingChannel !== undefined && (
-                <button
-                  className="button button--secondary"
-                  type="button"
-                  disabled={webhookBusy !== ""}
-                  onClick={closeWebhook}
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </form>
-        )}
-        {channels.length === 0 && !showWebhook ? (
-          <EmptyState title="No notification webhooks">
-            <p>Add an HTTPS destination for HA lifecycle transitions.</p>
-          </EmptyState>
-        ) : channels.length > 0 ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Webhook</th>
-                  <th>Destination</th>
-                  <th>State</th>
-                  <th>Events</th>
-                  <th>Updated</th>
-                  <th>
-                    <span className="visually-hidden">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {channels.map((channel) => (
-                  <tr key={channel.id}>
-                    <td>
-                      <strong>{channel.name}</strong>
-                      <span className="table-subtitle">
-                        Created {formatTime(channel.createdAt)}
-                      </span>
-                    </td>
-                    <td>
-                      {channel.destinationSummary || "Encrypted destination"}
-                    </td>
-                    <td>
-                      <StatusBadge
-                        status={channel.enabled ? "success" : "disabled"}
-                        label={channel.enabled ? "Enabled" : "Disabled"}
-                      />
-                    </td>
-                    <td>All HA transitions</td>
-                    <td>{formatTime(channel.updatedAt)}</td>
-                    <td>
-                      <div className="row-actions">
-                        <button
-                          className="button button--quiet"
-                          type="button"
-                          disabled={webhookBusy !== ""}
-                          onClick={() => editWebhook(channel)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="button button--quiet"
-                          type="button"
-                          disabled={webhookBusy !== ""}
-                          onClick={() => void toggleWebhook(channel)}
-                        >
-                          {channel.enabled ? "Disable" : "Enable"}
-                        </button>
-                        <button
-                          className="button button--quiet"
-                          type="button"
-                          disabled={webhookBusy !== ""}
-                          onClick={() => void testWebhook(channel)}
-                        >
-                          {webhookBusy === `test-${channel.id}`
-                            ? "Testing…"
-                            : "Test"}
-                        </button>
-                        <button
-                          className="button button--danger"
-                          type="button"
-                          disabled={webhookBusy !== ""}
-                          onClick={() => void deleteWebhook(channel)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-      </SettingsGroup>
+        Notification channels and event policy are managed on Notifications.
+        Delivery and webhook-test evidence remains in Operational History.
+      </Banner>
 
       <section className="section-block">
         <div className="section-heading">
           <h2>Operational history</h2>
           <small>State transitions, not every successful probe.</small>
         </div>
-        {events.length === 0 ? (
+        <SourceWarning
+          label="Operational History"
+          error={sourceErrors.history}
+          stale={loadedSources.history === true}
+          retry={load}
+        />
+        {loadedSources.history !== true ? null : events.length === 0 ? (
           <EmptyState title="No HA transitions recorded" />
         ) : (
           <div className="table-wrap">
@@ -591,153 +503,47 @@ export function HAOperationsPage({ cluster }: { cluster: Cluster }) {
       </section>
     </>
   );
+}
 
-  async function saveWebhook(event: React.FormEvent) {
-    event.preventDefault();
-    setWebhookBusy("save");
-    try {
-      if (editingChannel === undefined) {
-        await api.createNotificationChannel(cluster.id, {
-          name: webhookName,
-          destination: webhookURL,
-          enabled: webhookEnabled,
-        });
-      } else {
-        await api.updateNotificationChannel(editingChannel.id, {
-          name: webhookName,
-          enabled: webhookEnabled,
-          recordVersion: editingChannel.recordVersion,
-          ...(replaceDestination
-            ? { destination: webhookURL, replaceDestination: true }
-            : {}),
-        });
+function coverageStatus(current: number, expected: number) {
+  if (expected === 0) return "unknown" as const;
+  if (current >= expected) return "healthy" as const;
+  return current === 0 ? ("failed" as const) : ("degraded" as const);
+}
+
+function SourceWarning({
+  label,
+  error,
+  stale,
+  retry,
+}: {
+  label: string;
+  error?: unknown;
+  stale: boolean;
+  retry: () => Promise<void>;
+}) {
+  if (error === undefined) return null;
+  return (
+    <Banner
+      tone="warning"
+      title={`${label} ${stale ? "refresh failed" : "unavailable"}`}
+      actions={
+        <button
+          className="button button--secondary"
+          type="button"
+          onClick={() => void retry()}
+        >
+          Try again
+        </button>
       }
-      setWebhookFeedback({
-        tone: "success",
-        title: "Webhook saved",
-        message: "The encrypted notification channel is ready.",
-      });
-      closeWebhook();
-      await load();
-    } catch (caught) {
-      setWebhookFailure(caught);
-    } finally {
-      setWebhookBusy("");
-    }
-  }
-
-  function openWebhook() {
-    setEditingChannel(undefined);
-    setWebhookName("");
-    setWebhookURL("");
-    setWebhookEnabled(true);
-    setReplaceDestination(false);
-    setShowWebhook(true);
-  }
-
-  function editWebhook(channel: NotificationChannel) {
-    setEditingChannel(channel);
-    setWebhookName(channel.name);
-    setWebhookURL("");
-    setWebhookEnabled(channel.enabled);
-    setReplaceDestination(false);
-    setShowWebhook(true);
-  }
-
-  function closeWebhook() {
-    setShowWebhook(false);
-    setEditingChannel(undefined);
-    setWebhookName("");
-    setWebhookURL("");
-    setReplaceDestination(false);
-  }
-
-  async function toggleWebhook(channel: NotificationChannel) {
-    setWebhookBusy(`toggle-${channel.id}`);
-    try {
-      await api.updateNotificationChannel(channel.id, {
-        name: channel.name,
-        enabled: !channel.enabled,
-        recordVersion: channel.recordVersion,
-      });
-      setWebhookFeedback({
-        tone: "success",
-        title: channel.enabled ? "Webhook disabled" : "Webhook enabled",
-        message: channel.enabled
-          ? "New HA notifications will not be queued for this channel. Its configuration and history are retained."
-          : "New HA notifications will be queued for this channel.",
-      });
-      await load();
-    } catch (caught) {
-      setWebhookFailure(caught);
-    } finally {
-      setWebhookBusy("");
-    }
-  }
-
-  async function testWebhook(channel: NotificationChannel) {
-    setWebhookBusy(`test-${channel.id}`);
-    try {
-      const result = await api.testNotificationChannel(channel.id);
-      setWebhookFeedback(
-        result.success
-          ? {
-              tone: "success",
-              title: "Webhook test succeeded",
-              message: `The endpoint accepted the bounded test at ${formatTime(result.testedAt)}.`,
-            }
-          : {
-              tone: "warning",
-              title: "Webhook test failed",
-              message: `The endpoint did not accept the test (${result.errorCode ?? "NOTIFICATION_TEST_FAILED"}). No destination details were exposed.`,
-            },
-      );
-      if (historyCursorStack.length > 1) setHistoryCursorStack([""]);
-      else await load();
-    } catch (caught) {
-      setWebhookFailure(caught);
-    } finally {
-      setWebhookBusy("");
-    }
-  }
-
-  async function deleteWebhook(channel: NotificationChannel) {
-    const confirmation = window.prompt(
-      `Type ${channel.name} to delete this webhook. Historical HA events and delivery evidence will be retained.`,
-    );
-    if (confirmation === null) return;
-    setWebhookBusy(`delete-${channel.id}`);
-    try {
-      await api.deleteNotificationChannel(
-        channel.id,
-        channel.recordVersion,
-        confirmation,
-      );
-      setWebhookFeedback({
-        tone: "success",
-        title: "Webhook deleted",
-        message:
-          "The encrypted destination was destroyed. Historical operational evidence remains available.",
-      });
-      if (editingChannel?.id === channel.id) closeWebhook();
-      await load();
-    } catch (caught) {
-      setWebhookFailure(caught);
-    } finally {
-      setWebhookBusy("");
-    }
-  }
-
-  function setWebhookFailure(caught: unknown) {
-    setWebhookFeedback({
-      tone: "warning",
-      title: "Webhook action failed",
-      message:
-        caught instanceof Error
-          ? caught.message
-          : "The webhook action could not be completed.",
-    });
-  }
+    >
+      {stale
+        ? `The last successful ${label.toLowerCase()} data remains visible and may be stale.`
+        : error instanceof Error
+          ? error.message
+          : `Atlas could not load ${label.toLowerCase()}.`}
+    </Banner>
+  );
 }
 
 function notificationTone(status: string) {

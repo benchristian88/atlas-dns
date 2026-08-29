@@ -37,7 +37,8 @@ if Atlas DNS Controller or PostgreSQL is unavailable.
 - Operational Status, audit history, encrypted webhook administration, and
   bounded data retention.
 - Multiple local administrators, encrypted credentials, passphrase-encrypted
-  backups, offline recovery, update awareness, and first-run guidance.
+  backups, offline recovery, update awareness, and resumable guided onboarding
+  through the normal schema-v2 immutable revision workflow.
 - Accessible responsive System/Light/Dark interface and installable PWA
   metadata.
 
@@ -131,9 +132,11 @@ who intentionally build locally use `compose.dev.yaml`.
 
 ## Supported baseline
 
-- AdGuard Home v0.107.52 and later patches in the v0.107 API generation,
-  subject to explicit capabilities. v0.107.78 and v0.107.79 are release-tested;
+- AdGuard Home v0.107.78 and later patches in the v0.107 API generation.
+  v0.107.78 and v0.107.79 are release-tested;
   newer v0.107 patches are provisionally compatible after contract validation.
+- Earlier AdGuard Home versions are unsupported and blocked before managed
+  configuration reads or writes.
 - PostgreSQL 17.
 - Debian 13 with systemd.
 - Docker Engine with Compose v2 and Portainer Stack deployment.
@@ -157,7 +160,9 @@ passphrase. Restore is offline into a new empty database. See [backup and restor
 ## Upgrades and support
 
 Release 1.0.0 is the stable database baseline for supported 1.x upgrades. The
-1.0.1 patch is schema-neutral; 1.0.2 appends the notification-history migration.
+1.0.1 patch is schema-neutral; 1.0.2 appends the notification-history migration;
+1.1 appends onboarding plus runtime settings, notification policy, and history
+retention state. See the [1.1 upgrade notes](docs/operations/release-1.1.0.md).
 Database migrations are ordered, checksum-verified, append-only, and
 forward-only unless a release explicitly documents otherwise.
 
@@ -187,5 +192,5 @@ handling, and documented failure behavior.
 Atlas DNS Controller is licensed under the Business Source License 1.1
 (`BUSL-1.1`). Non-commercial personal and homelab use is granted; commercial
 hosting or resale is prohibited. Each version changes to Apache License 2.0 on
-August 12, 2032 or its earlier fourth-anniversary trigger under BUSL-1.1. See
+August 12, 2032 or its earlier sixth-anniversary trigger under BUSL-1.1. See
 [LICENSE](LICENSE) for the controlling terms.

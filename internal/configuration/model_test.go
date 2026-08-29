@@ -1,7 +1,6 @@
 package configuration
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -33,7 +32,7 @@ func TestDiffPreservesOrderedUpstreamsAndGroupsScope(t *testing.T) {
 
 func TestDesiredDocumentBuildsNodeEffectiveState(t *testing.T) {
 	desired := DesiredDocument{
-		SchemaVersion: 1,
+		SchemaVersion: SchemaVersion,
 		Shared:        Shared{DNS: DNS{UpstreamDNS: []string{"https://dns.example/dns-query"}}, Filtering: Filtering{UpdateInterval: 24}},
 		NodeOverrides: map[string]NodeSpecific{
 			"node-a": {BindHosts: []string{"192.0.2.10"}, DNSPort: 53},
@@ -54,7 +53,7 @@ func TestDesiredDocumentBuildsNodeEffectiveState(t *testing.T) {
 }
 
 func TestValidateDesiredRequiresEveryNodeOverrideAndValidListener(t *testing.T) {
-	desired := DesiredDocument{SchemaVersion: 1, Shared: Shared{Filtering: Filtering{UpdateInterval: 24}}, NodeOverrides: map[string]NodeSpecific{
+	desired := DesiredDocument{SchemaVersion: SchemaVersion, Shared: Shared{Filtering: Filtering{UpdateInterval: 24}}, NodeOverrides: map[string]NodeSpecific{
 		"node-a": {BindHosts: []string{"not-an-ip"}, DNSPort: 0},
 	}}
 	issues := ValidateDesired(desired, []string{"node-a", "node-b"})
@@ -63,24 +62,13 @@ func TestValidateDesiredRequiresEveryNodeOverrideAndValidListener(t *testing.T) 
 	}
 }
 
-func TestLegacyMarshalAndProjectionKeepSchemaV1Frozen(t *testing.T) {
-	document := Document{SchemaVersion: SchemaVersion, Shared: Shared{DNS: DNS{UpstreamDNS: []string{"1.1.1.1"}, ProtectionEnabled: true}, Clients: []PersistentClient{{Name: "new"}}}, NodeSpecific: NodeSpecific{BindHosts: []string{"0.0.0.0"}, DNSPort: 53, DHCP: &DHCPConfig{Enabled: true}}, ObservedOnly: ObservedOnly{ProductVersion: "v0.107.65", TLS: TLSStatus{Enabled: true}}}
-	projected := ProjectDocument(document, LegacySchemaVersion)
-	body, _, err := Marshal(projected)
-	if err != nil {
-		t.Fatal(err)
+func TestLegacyRecordConversionIsSchemaV2AndNotDeployable(t *testing.T) {
+	converted := ConvertLegacyDesired(DesiredDocument{SchemaVersion: LegacySchemaVersion, Shared: Shared{Filtering: Filtering{UpdateInterval: 24}}})
+	if converted.SchemaVersion != SchemaVersion || !IsLegacyConverted(converted.Unsupported) {
+		t.Fatalf("converted = %#v", converted)
 	}
-	for _, forbidden := range []string{"protectionEnabled", "clients", "dhcp", "tls"} {
-		if strings.Contains(string(body), forbidden) {
-			t.Fatalf("legacy document contains schema-v2 field %q: %s", forbidden, body)
-		}
-	}
-	var decoded map[string]any
-	if err := json.Unmarshal(body, &decoded); err != nil {
-		t.Fatal(err)
-	}
-	if decoded["schemaVersion"] != float64(LegacySchemaVersion) {
-		t.Fatalf("schemaVersion = %#v", decoded["schemaVersion"])
+	if issues := ValidateDesired(converted, nil); len(issues) != 1 || !strings.Contains(issues[0].Message, "legacy") {
+		t.Fatalf("issues = %#v", issues)
 	}
 }
 

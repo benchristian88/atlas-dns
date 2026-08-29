@@ -24,6 +24,16 @@ describe("AboutPage", () => {
     expect(await screen.findByText("0.9.0-dev")).toBeTruthy();
     expect(screen.getByText("13")).toBeTruthy();
     expect(screen.getByText(/independent project/)).toBeTruthy();
+    const sections = screen.getAllByRole("heading", { level: 2 });
+    expect(sections.map((heading) => heading.textContent)).toEqual([
+      "About Atlas Project",
+      "Installation / Build Information",
+      "Licensing / Attribution",
+    ]);
+    expect(container.querySelector(".about-metadata")).toBeTruthy();
+    expect(
+      screen.getByText("Administration", { selector: ".eyebrow" }),
+    ).toBeTruthy();
     const result = await axe.run(container, {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] },
       rules: { "color-contrast": { enabled: false } },

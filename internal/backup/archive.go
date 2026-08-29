@@ -113,8 +113,11 @@ func (s *Service) Create(ctx context.Context, backupType Type, passphrase string
 
 	dumpPath := filepath.Join(temporary, "database.dump")
 	args := []string{"--format=custom", "--compress=6", "--no-owner", "--no-acl", "--file", dumpPath}
+	for _, table := range alwaysExcludedTables {
+		args = append(args, "--exclude-table-data="+table)
+	}
 	if backupType == Standard {
-		for _, table := range optionalTables {
+		for _, table := range standardExcludedTables {
 			args = append(args, "--exclude-table-data="+table)
 		}
 	}
@@ -149,8 +152,8 @@ func (s *Service) Create(ctx context.Context, backupType Type, passphrase string
 	if err != nil {
 		return Result{}, err
 	}
-	components := []string{"control_plane", "users", "encrypted_credentials", "audit", "lifecycle", "credential_key"}
-	excluded := []string{"sessions", "release_cache"}
+	components := []string{"control_plane", "users", "encrypted_credentials", "mfa_encrypted_secrets", "mfa_recovery_hashes", "audit", "lifecycle", "credential_key"}
+	excluded := []string{"sessions", "mfa_challenges", "release_cache"}
 	if backupType == Full {
 		components = append(components, "statistics", "query_log", "dns_probe_history", "ha_operational_history")
 	} else {
@@ -570,7 +573,11 @@ func backupEvent(actor domain.Actor, action string, metadata map[string]any, at 
 	return event, nil
 }
 
-var optionalTables = []string{
-	"sessions", "upstream_release_cache", "controller_release_cache", "statistics_poll_attempts", "statistics_snapshots", "statistics_buckets",
+var alwaysExcludedTables = []string{
+	"sessions", "mfa_challenges", "upstream_release_cache", "controller_release_cache",
+}
+
+var standardExcludedTables = []string{
+	"statistics_poll_attempts", "statistics_snapshots", "statistics_buckets",
 	"query_ingestion_checkpoints", "query_ingestion_attempts", "query_events", "dns_probe_results", "ha_operational_events", "notification_deliveries",
 }

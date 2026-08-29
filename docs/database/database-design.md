@@ -52,6 +52,11 @@ Migration `000004_release_0_4` widens the existing schema-version checks on capa
 
 Release 0.1 mutable cluster and node records use integer optimistic versions. Node health updates do not increment the operator-facing `record_version`, so polling cannot create false edit conflicts.
 
+Migration `000019_release_1_1_totp_mfa` adds one optional `user_mfa` envelope
+per user, one-time `user_mfa_recovery_codes`, and transient `mfa_challenges`.
+User deletion cascades through all three. Challenge and recovery consumption use
+transactions and conditional updates so concurrent reuse cannot succeed.
+
 ### users
 
 - id
@@ -75,6 +80,35 @@ Release 0.1 mutable cluster and node records use integer optimistic versions. No
 - revoked_at
 - ip_metadata
 - user_agent
+
+### user_mfa
+
+- user_id
+- encrypted_secret / secret_nonce / secret_key_version / secret_algorithm
+- enrollment_started_at / enrollment_expires_at
+- enabled_at
+
+### user_mfa_recovery_codes
+
+- id
+- user_id
+- code_hash
+- created_at
+- used_at
+
+### mfa_challenges
+
+- id
+- user_id
+- token_hash
+- created_at / expires_at / consumed_at
+- failed_attempts
+- ip_metadata / user_agent
+
+The TOTP seed is AES-256-GCM encrypted with the existing credential key and
+user-specific associated data. Recovery and challenge values are never stored
+in plaintext. MFA challenges are not authenticated sessions and are excluded
+from backups; cleanup deletes expired or old consumed rows.
 
 ### clusters
 
@@ -259,7 +293,8 @@ Initial indexes:
 - deployments: cluster_id plus requested_at descending.
 - deployment_nodes: deployment_id, node_id.
 - drift: node_id plus detected_at descending, unresolved status.
-- audit: created_at descending, resource lookup.
+- audit: `(created_at, id)` descending for stable cursor paging, plus resource
+  and actor lookup.
 - query_events: node_id and source_timestamp.
 - query_events: domain and source_timestamp.
 - query_events: client address and source timestamp.
@@ -312,3 +347,9 @@ contains the optimistic `update_checks_enabled` setting, record version, and
 safe updater attribution; it is required control-plane recovery state. Existing
 users remain the only authentication principals, and sessions remain transient
 and are excluded from both Standard and Full portable recovery.
+
+Release 1.1 migration `000017_release_1_1_runtime_policy_history` completes the
+typed singleton runtime settings and adds `notification_policy`. Both are
+required control-plane recovery state and are included in Standard Backup.
+Operational History retention prunes only `ha_operational_events` and cascading
+delivery rows; Audit Log and other durable domains remain independent.

@@ -11,6 +11,7 @@ export type RouteResolution =
   | { kind: "dashboard" }
   | { kind: "nodes" }
   | { kind: "ha-operations" }
+  | { kind: "notifications" }
   | { kind: "node-lifecycle"; nodeId: string }
   | { kind: "statistics" }
   | { kind: "query-log" }
@@ -32,8 +33,11 @@ export type RouteResolution =
   | { kind: "backups" }
   | { kind: "updates" }
   | { kind: "setup-guide" }
+  | { kind: "onboarding" }
   | { kind: "system-settings" }
   | { kind: "about" }
+  | { kind: "account" }
+  | { kind: "preferences" }
   | { kind: "redirect"; to: string }
   | { kind: "not-found" };
 
@@ -55,11 +59,13 @@ export const CANONICAL_PATHS = [
   "/query-log",
   "/ha/nodes",
   "/ha/operations",
+  "/ha/notifications",
   "/ha/configuration",
   "/ha/revisions",
   "/ha/deployments",
   "/ha/drift",
   "/setup-guide",
+  "/onboarding",
   "/system/users",
   "/system/audit",
   "/system/operational-status",
@@ -67,6 +73,8 @@ export const CANONICAL_PATHS = [
   "/system/backups",
   "/system/updates",
   "/system/about",
+  "/account",
+  "/account/preferences",
 ] as const;
 
 export const LEGACY_REDIRECTS: Readonly<Record<string, string>> = {
@@ -158,6 +166,8 @@ export function resolveRoute(pathname: string): RouteResolution {
       return { kind: "nodes" };
     case "/ha/operations":
       return { kind: "ha-operations" };
+    case "/ha/notifications":
+      return { kind: "notifications" };
     case "/ha/configuration":
       return { kind: "configuration" };
     case "/ha/deployments":
@@ -184,10 +194,16 @@ export function resolveRoute(pathname: string): RouteResolution {
       return { kind: "updates" };
     case "/setup-guide":
       return { kind: "setup-guide" };
+    case "/onboarding":
+      return { kind: "onboarding" };
     case "/system/settings":
       return { kind: "system-settings" };
     case "/system/about":
       return { kind: "about" };
+    case "/account":
+      return { kind: "account" };
+    case "/account/preferences":
+      return { kind: "preferences" };
     default:
       return { kind: "not-found" };
   }
@@ -195,15 +211,6 @@ export function resolveRoute(pathname: string): RouteResolution {
 
 export function routePageWidth(route: RouteResolution): RoutePageWidth {
   switch (route.kind) {
-    case "audit":
-    case "operational-status":
-    case "setup-guide":
-    case "users":
-    case "backups":
-    case "updates":
-    case "system-settings":
-    case "about":
-      return "standard";
     case "not-found":
     case "redirect":
       return "narrow";
@@ -218,4 +225,8 @@ export function preserveRouteState(
   hash: string,
 ): string {
   return `${pathname}${search}${hash}`;
+}
+
+export function nodeDetailPath(nodeId: string): string {
+  return `/ha/nodes/${encodeURIComponent(nodeId)}`;
 }

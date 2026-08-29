@@ -31,14 +31,33 @@ func TestLoad(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsUnsafeQueryLogBounds(t *testing.T) {
+func TestLoadIgnoresUnsafeLegacyQueryLogSeed(t *testing.T) {
 	t.Setenv("PUBLIC_BASE_URL", "http://localhost:8080")
 	t.Setenv("DATABASE_URL", "postgres://example.invalid/test")
 	t.Setenv("SESSION_SECRET", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("s", 48))))
 	t.Setenv("CREDENTIAL_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString([]byte("12345678901234567890123456789012")))
 	t.Setenv("QUERY_LOG_RETENTION", "2400h")
-	if _, err := Load(); err == nil {
-		t.Fatal("Load accepted excessive query-log retention")
+	loaded, err := Load()
+	if err != nil || loaded.QueryLogRetention != 7*24*time.Hour {
+		t.Fatalf("unsafe legacy seed was not replaced by recommended default: %#v %v", loaded, err)
+	}
+}
+
+func TestLoadIgnoresUnsafeLegacyMonitoringSeed(t *testing.T) {
+	for name, value := range map[string]string{
+		"NODE_HEALTH_INTERVAL":     "2s",
+		"STATISTICS_POLL_INTERVAL": "25h",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("PUBLIC_BASE_URL", "http://localhost:8080")
+			t.Setenv("DATABASE_URL", "postgres://example.invalid/test")
+			t.Setenv("SESSION_SECRET", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("s", 48))))
+			t.Setenv("CREDENTIAL_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString([]byte("12345678901234567890123456789012")))
+			t.Setenv(name, value)
+			if _, err := Load(); err != nil {
+				t.Fatalf("stale legacy seed blocked startup %s=%s: %v", name, value, err)
+			}
+		})
 	}
 }
 

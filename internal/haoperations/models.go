@@ -66,6 +66,15 @@ type DNSProbeResult struct {
 	AddressFamily string    `json:"addressFamily,omitempty"`
 	ErrorCode     string    `json:"errorCode,omitempty"`
 	ProbedAt      time.Time `json:"probedAt"`
+
+	// Confirmation diagnostics remain process-local. Durable probe rows retain
+	// the existing schema; confirmed transition events and structured logs copy
+	// only the bounded, non-sensitive evidence they need.
+	dnsProbeAttempts            int
+	dnsProbeElapsed             time.Duration
+	dnsProbeRecoveredAfterRetry bool
+	dnsProbePriorErrorCode      string
+	dnsProbePriorProtocols      []string
 }
 
 type Event struct {
@@ -128,11 +137,12 @@ type HistoryPage struct {
 type CertificateState string
 
 const (
-	CertificateHealthy  CertificateState = "healthy"
-	CertificateWarning  CertificateState = "warning"
-	CertificateCritical CertificateState = "critical"
-	CertificateExpired  CertificateState = "expired"
-	CertificateUnknown  CertificateState = "unknown"
+	CertificateHealthy       CertificateState = "healthy"
+	CertificateWarning       CertificateState = "warning"
+	CertificateCritical      CertificateState = "critical"
+	CertificateExpired       CertificateState = "expired"
+	CertificateNotApplicable CertificateState = "not_applicable"
+	CertificateUnknown       CertificateState = "unknown"
 )
 
 type Certificate struct {
@@ -244,22 +254,40 @@ type ReleaseCache struct {
 }
 
 type NotificationChannel struct {
-	ID                 string    `json:"id"`
-	ClusterID          string    `json:"clusterId"`
-	Name               string    `json:"name"`
-	ChannelType        string    `json:"channelType"`
-	Enabled            bool      `json:"enabled"`
-	DestinationSet     bool      `json:"destinationSet"`
-	DestinationSummary string    `json:"destinationSummary"`
-	SubscribedEvents   []string  `json:"subscribedEvents"`
-	RecordVersion      int       `json:"recordVersion"`
-	CreatedAt          time.Time `json:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt"`
+	ID                   string    `json:"id"`
+	ClusterID            string    `json:"clusterId"`
+	Name                 string    `json:"name"`
+	ChannelType          string    `json:"channelType"`
+	Enabled              bool      `json:"enabled"`
+	DestinationSet       bool      `json:"destinationSet"`
+	DestinationSummary   string    `json:"destinationSummary"`
+	SubscribedCategories []string  `json:"subscribedCategories"`
+	RecordVersion        int       `json:"recordVersion"`
+	CreatedAt            time.Time `json:"createdAt"`
+	UpdatedAt            time.Time `json:"updatedAt"`
 }
 
 type NotificationChannelRecord struct {
 	Channel     NotificationChannel
 	Destination domain.EncryptedPayload
+}
+
+type NotificationPolicyEvent struct {
+	EventType      string `json:"eventType"`
+	Label          string `json:"label"`
+	DefaultEnabled bool   `json:"defaultEnabled"`
+}
+
+type NotificationPolicyGroup struct {
+	ID     string                    `json:"id"`
+	Label  string                    `json:"label"`
+	Events []NotificationPolicyEvent `json:"events"`
+}
+
+type NotificationPolicy struct {
+	EnabledEventTypes []string                  `json:"enabledEventTypes"`
+	RecordVersion     int                       `json:"recordVersion"`
+	Groups            []NotificationPolicyGroup `json:"groups"`
 }
 
 type NotificationDelivery struct {

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	auditservice "github.com/benchristian88/atlas-dns/internal/audit"
 	"github.com/benchristian88/atlas-dns/internal/domain"
 )
 
@@ -41,7 +42,7 @@ func (s *Store) Close()                         { s.pool.Close() }
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
 
 func audit(ctx context.Context, tx pgx.Tx, event domain.AuditEvent) error {
-	metadata, err := json.Marshal(event.Metadata)
+	metadata, err := json.Marshal(auditservice.SafeMetadata(event.Metadata))
 	if err != nil {
 		return fmt.Errorf("encode audit metadata: %w", err)
 	}

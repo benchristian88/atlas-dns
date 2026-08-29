@@ -4,14 +4,19 @@ All current users are local administrators. The server authorizes every
 mutation, applies CSRF protection to browser requests, and records security- and
 control-plane-sensitive actions in Audit.
 
-## Initial setup and Setup Guide
+## Initial setup, onboarding, and Setup Guide
 
 When no user exists, the application offers **Create your administrator**. The
 setup transaction creates the first administrator and session; subsequent setup
-attempts are rejected. Create a cluster, register nodes, test connectivity,
-import desired configuration, publish a revision, and verify the first
-deployment. Setup Guide derives its steps from actual controller state and can
-be revisited at any time.
+attempts are rejected. Atlas then offers `/onboarding`, which guides cluster
+identity, compatible node registration, topology observation, explicit initial
+source selection, immutable revision publication, monitoring settings, and
+optional notifications. See [Guided Onboarding](../getting-started/onboarding.md).
+
+Onboarding and Setup Guide consume the same server-derived status. Onboarding
+performs the work with the operator; Setup Guide remains reference and follow-up
+guidance. Either can be revisited. Exiting the wizard preserves completed valid
+work and a completed installation opens in non-destructive review mode.
 
 A cluster with no nodes is a valid first-run state. Setup Guide renders its
 checklist, marks node-dependent work incomplete, and links to Add first node;
@@ -24,12 +29,34 @@ account, and resets credentials. Disabling or resetting revokes existing
 sessions. The controller prevents self-disable and prevents disabling the final
 enabled administrator. User hard deletion and additional roles are not
 available, preserving audit attribution and the current authorization boundary.
+Each row shows only `2FA: Enabled` or `2FA: Not enabled`. Administrators cannot
+view seeds/codes or reset another user's MFA through the browser in v1.1.
+
+The bottom-rail account menu is separate from Users. My Account changes only
+the authenticated user's own password after current-password verification; the
+server derives the user and current session rather than accepting a target user
+ID. A successful change revokes other sessions, retains the current session,
+and records `user.password_changed` without password material. If MFA is
+enabled, password change also requires current TOTP. MFA enrollment,
+recovery-code regeneration, and disable are owned by My Account → Security;
+these flows never accept a target user ID. Preferences is
+browser-local and contains only System, Light, and Dark appearance; appearance
+changes are not security audit events.
 
 ## Webhooks and notifications
 
-HA → HA Operations owns the single notification-channel subsystem.
+HA Controller → Notifications owns the single permanent notification-channel
+management surface. HA Operations shows delivery/test evidence only and links
+back here.
 
-- **Add webhook** accepts a unique name, enabled state, and HTTPS destination.
+HA Controller → Notifications also owns the controller-wide exact-event
+policy. Event toggles are grouped by DNS, HA, certificates, node lifecycle, and
+updates. Policy, channel enablement, category subscription, and encrypted
+destination are independent controls; suppressed policy events are not failed
+deliveries.
+
+- **Add webhook** accepts a unique name, enabled state, HTTPS destination, and
+  one or more event categories.
 - **Edit webhook** can rename or change enabled state while retaining the hidden
   destination. Select **Replace destination secret** only for a deliberate
   replacement.
@@ -83,8 +110,8 @@ history. Sessions and release caches are excluded.
 
 Actual restore is offline through `atlas-dns-backup restore`, with the controller
 stopped and a new empty database. See the [backup procedure](../operations/backup-and-restore.md)
-and [format reference](../operations/backup-format.md). Store runtime settings
-such as session secret, database URL, public origin, and TLS separately.
+and [format reference](../operations/backup-format.md). Store bootstrap values
+such as the session secret, database URL, public origin, and TLS separately.
 
 ## Updates
 
@@ -95,15 +122,27 @@ untrusted display data. Back up and preflight before following host instructions
 
 ## System Settings
 
-System → Settings controls supported persistent controller settings such as
-release checks. Collector intervals, retention, database connectivity, secrets,
-and listener settings remain deployment configuration unless the UI explicitly
-states otherwise. Use Operational Status to verify effective worker behavior.
+Administration → System Settings controls session duration, node-health cadence and request
+timeout, Statistics cadence, Query Log collection/cadence/retention, log level,
+and Operational History retention. Changes use optimistic concurrency, are
+audited, and update runtime consumers without restart. Existing sessions retain
+their issued expiry; new sessions use the new duration. Database connectivity,
+secrets, listener settings, and the public origin remain protected deployment
+configuration. Operational History supports 7/14/30/90/180/365 days (90-day
+default) and an exact-confirmation clear; Audit Log and other durable domains
+are unaffected. Use Operational Status to verify effective worker behavior.
+The page contains settings rather than large navigation-only cards: runtime
+configuration and the release-check control remain, while General, Backup &
+Restore, Operations, and Security cross-link/status cards are omitted. Backup,
+operational diagnostics, and security boundaries remain on their canonical
+pages and documentation.
 
 ## About
 
-System → About shows application version, commit, build time, environment,
-schema compatibility, project attribution, documentation, and licensing status.
+Administration → About presents About Atlas Project first, followed by a compact
+Installation / Build Information definition list and Licensing / Attribution.
+It includes application version, commit, build time, schema, supported AdGuard
+Home range, reference platforms, project links, and licensing status.
 Use these values in a support report, but never include credentials, backup
 passphrases, Query Log records, or raw node responses.
 
@@ -114,6 +153,26 @@ metadata. It covers authentication, users, nodes, configuration publication,
 deployments/rollback, drift, maintenance/upgrades, webhook lifecycle/test,
 backup/preflight, and lifecycle archive/delete actions. Audit is evidence, not a
 substitute for deployment per-node results or webhook delivery history.
+
+Events are newest-first and use opaque cursor pagination. Opening a row keeps
+the evidence inline and records only its audit event UUID in
+`?auditEventId=…`, so a copied link or refresh reopens the exact event even when
+it is older than the visible page. Previous/Next retain a stable page while it
+is inspected; **Show newest** returns from an older page.
+
+The collapsed Actor value is the best current safe label. Expanded evidence
+always shows the immutable actor user UUID when the event has one. A current
+display name is not a historical name snapshot, and deleting or renaming a
+current identity must not make the audit record unreadable. Supported resources
+link to their canonical Node, Revision, Deployment, Drift, Users, Settings, or
+HA page without inventing unsupported detail routes.
+
+Known actions present allowlisted, human-readable recorded fields. A
+previous/new transition is shown only when the producer recorded both values;
+otherwise the detail says that it is showing resulting values. Unknown fields
+use a bounded redacted fallback. Passwords, tokens, credentials, private keys,
+certificate bodies, query/client content, rules, raw errors, response bodies,
+and secret-bearing destinations are never valid Audit Log evidence.
 
 ## Routine administrative checklist
 

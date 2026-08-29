@@ -73,22 +73,29 @@ without changing the corresponding desired policy.
 
 ## Shell
 
-The shell uses `ThemeProvider`, `ThemeControl`, and the shared `AtlasBrand`
-renderer. Desktop navigation dropdowns and Administration use one controlled
-open-menu state with centralized delayed leave, peer switching, outside click,
-keyboard focus movement, and Escape return. Mobile groups are controlled peer
-disclosures. Theme and asset behavior is documented in
-`theme-brand-and-pwa.md`.
+The shell uses `ThemeProvider`, `ThemeControl`, the shared `AtlasBrand`
+renderer, and one project-owned `Icon` renderer. Desktop navigation is a
+collapsible left rail with controlled group disclosures, active/open ancestry,
+labelled collapsed icons, and arrow-key entry into child links. Mobile adds a
+minimal sticky shell header for shared branding and the drawer trigger, then
+uses the same hierarchy in a controlled modal drawer. Theme and asset behavior
+is documented in `theme-brand-and-pwa.md`. The account menu is the final
+desktop-rail/mobile-drawer item. Page-specific
+controls and context stay with their owning page, and there is no global top
+utility bar or cluster picker. Cluster-scoped backend/domain capability remains
+even though v1.1 exposes only the current cluster.
 
-- `AppHeader`
+- `ApplicationShell`
+- `SidebarNavigation`
+- `SidebarLink`
 - `PrimaryNavigation`
-- `NavigationDropdown`
-- `MobileNavigationDrawer`
-- `ContextBar`
-- `ClusterSelector`
-- `ScopeSelector`
-- `ActiveRevisionIndicator`
-- `ActiveDeploymentIndicator`
+- `NavigationGroup`
+- `MobileGroup`
+- `AccountMenu`
+- `ThemeProvider`
+- `ThemeControl`
+- `AtlasBrand`
+- `Icon`
 - `PageContainer`
 - `PageHeader`
 - `NotFoundPage`
@@ -125,6 +132,7 @@ disclosures. Theme and asset behavior is documented in
 
 ## HA display
 
+- `HealthSummaryCard`
 - `MetricCard`
 - `SummaryTileGrid`
 - `StatusBadge`
@@ -135,10 +143,16 @@ disclosures. Theme and asset behavior is documented in
 - `ProgressTimeline`
 - `PartialSuccessPanel`
 
-`MetricCard` is the single summary/stat tile for Dashboard, Statistics,
-Operational Status, HA Operations, and Node Lifecycle. It owns the primary
-surface, label/value gap, optional supporting detail, and responsive wrapping;
-feature pages provide content only.
+`HealthSummaryCard` is the dense icon/value/status/detail tile used by
+Operational Status, HA Operations, Nodes, and Node Detail. Its six-, five-, and
+four-card grid variants share three-, two-, and one-column responsive fallbacks.
+Dashboard uses the same visual anatomy with linked cards. Each feature supplies
+its own evidence-specific status rather than inheriting an unrelated overall
+health state.
+
+`MetricCard` remains the general-purpose statistic tile for Statistics. It owns
+the primary surface, label/value gap, optional supporting detail, and responsive
+wrapping; feature pages provide content only.
 
 `SummaryTileGrid` is the shared definition-list treatment for two-by-two inset
 status/value summaries. Dashboard controller/DNS summaries and Operational
@@ -150,11 +164,10 @@ rows retain their own vertical rhythm; ordinary panel content, tables, nested
 forms, and action groups use the padded mode. `panel-form` bounds nested forms,
 and the shared `row-actions` treatment wraps actions with token spacing.
 
-Dashboard's two larger summary panels remain feature compositions because they
-combine headings, aggregate status, descriptive failure/partial-state copy,
-four inset definition-list values, and route-specific actions. They use the
-shared card, eyebrow, heading, status, and button treatments and one symmetric
-layout; they are not replacements for `MetricCard` or `StatusBadge`.
+Dashboard's five health cards, DNS activity chart/KPIs, attention and recent
+change lists, node table, and domain rankings remain feature compositions. They
+reuse shared cards, feedback, status, table, heading, icon, and button
+treatments while preserving the semantics and failure state of each source.
 
 `DataTable` optionally renders one expanded record as an adjacent table row.
 Feature code owns the record-specific disclosure button and operational detail;

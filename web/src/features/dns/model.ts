@@ -1,9 +1,9 @@
 import { validateNetwork } from "../../components/StructuredInputs";
 
-export const SECOND = 1;
-export const MINUTE = 60 * SECOND;
-export const HOUR = 60 * MINUTE;
-export const DAY = 24 * HOUR;
+const SECOND = 1;
+const MINUTE = 60 * SECOND;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
 
 export const DNS_DURATION_UNITS = [
   { label: "seconds", multiplier: SECOND },

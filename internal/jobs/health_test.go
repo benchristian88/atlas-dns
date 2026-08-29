@@ -52,12 +52,12 @@ func TestHealthPollerRecordsSupportedNode(t *testing.T) {
 	t.Parallel()
 	store := &healthStoreFake{records: []domain.NodeRecord{{Node: domain.Node{ID: "node"}}}}
 	poller := NewHealthPoller(store, decrypterFake{}, probeFake{result: domain.NodeProbeResult{
-		Version: "v0.107.65", Compatibility: domain.CompatibilitySupported, Running: true,
+		Version: "v0.107.78", Compatibility: domain.CompatibilitySupported, Running: true,
 	}}, time.Minute, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err := poller.PollNow(context.Background(), "node"); err != nil {
 		t.Fatalf("PollNow() error = %v", err)
 	}
-	if store.health != domain.NodeHealthy || !store.seen || store.version != "v0.107.65" {
+	if store.health != domain.NodeHealthy || !store.seen || store.version != "v0.107.78" {
 		t.Fatalf("recorded health = %q, seen = %v, version = %q", store.health, store.seen, store.version)
 	}
 }

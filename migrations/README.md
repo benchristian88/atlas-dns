@@ -51,3 +51,7 @@ Released schema milestones:
 - `000013_release_0_9_productisation`: controller release cache and optimistic system settings.
 - `000014_release_0_9_2_lifecycle_polish`: revision/deployment archive state and retained webhook delivery identity.
 - `000015_release_1_0_2_notification_history`: bounded webhook HTTP/failure diagnostics and delivery-history query indexing.
+- `000016_release_1_1_onboarding`: durable onboarding acknowledgement and completion state.
+- `000017_release_1_1_runtime_policy_history`: database-owned runtime settings, notification policy, and Operational History retention.
+- `000018_release_1_1_audit_keyset`: stable `(created_at DESC, id DESC)` Audit Log keyset paging.
+- `000019_release_1_1_totp_mfa`: encrypted per-user TOTP enrollment, hashed one-time recovery codes, and short-lived single-use MFA challenges.

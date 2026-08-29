@@ -1,9 +1,17 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { EmptyState, ErrorState, Loading } from "./components/Feedback";
+import { Banner, EmptyState, ErrorState, Loading } from "./components/Feedback";
 import { PageContainer } from "./components/Page";
+import {
+  MyAccountPage,
+  PreferencesPage,
+} from "./features/account/AccountPages";
 import { AllowlistsPage } from "./features/allowlists/AllowlistsPage";
 import { AuditPage } from "./features/audit/AuditPage";
-import { LoginPage, SetupPage } from "./features/auth/AuthPages";
+import {
+  LoginPage,
+  MFAChallengePage,
+  SetupPage,
+} from "./features/auth/AuthPages";
 import { BlockedServicesPage } from "./features/blockedservices/BlockedServicesPage";
 import { BlocklistsPage } from "./features/blocklists/BlocklistsPage";
 import { ClientsPage } from "./features/clients/ClientsPage";
@@ -21,6 +29,8 @@ import { HAOperationsPage } from "./features/ha-operations/HAOperationsPage";
 import { NodeLifecyclePage } from "./features/ha-operations/NodeLifecyclePage";
 import { RevisionsPage } from "./features/history/HistoryPage";
 import { NodesPage } from "./features/nodes/NodesPage";
+import { NotificationsPage } from "./features/notifications/NotificationsPage";
+import { OnboardingPage } from "./features/onboarding/OnboardingPage";
 import { OperationalStatusPage } from "./features/operational-status/OperationalStatusPage";
 import { QueryLogPage } from "./features/query-log/QueryLogPage";
 import { RewritesPage } from "./features/rewrites/RewritesPage";
@@ -50,6 +60,7 @@ type BootState =
       secureCookies: boolean;
     }
   | { kind: "login" }
+  | { kind: "mfa"; challenge: string; expiresAt: string }
   | { kind: "authenticated"; user: User }
   | { kind: "error"; error: unknown };
 
@@ -106,6 +117,18 @@ export function App() {
       return (
         <LoginPage
           onAuthenticated={(user) => setState({ kind: "authenticated", user })}
+          onMFARequired={(challenge, expiresAt) =>
+            setState({ kind: "mfa", challenge, expiresAt })
+          }
+        />
+      );
+    case "mfa":
+      return (
+        <MFAChallengePage
+          challenge={state.challenge}
+          expiresAt={state.expiresAt}
+          onAuthenticated={(user) => setState({ kind: "authenticated", user })}
+          onCancel={() => setState({ kind: "login" })}
         />
       );
     case "authenticated":
@@ -175,7 +198,16 @@ function Application({ user, onLogout }: { user: User; onLogout: () => void }) {
   else if (route.kind === "backups") content = <BackupPage />;
   else if (route.kind === "updates") content = <UpdatesPage />;
   else if (route.kind === "about") content = <AboutPage />;
-  else if (route.kind === "system-settings") content = <SystemSettingsPage />;
+  else if (route.kind === "account") content = <MyAccountPage user={user} />;
+  else if (route.kind === "preferences") content = <PreferencesPage />;
+  else if (route.kind === "system-settings")
+    content = <SystemSettingsPage cluster={selected} />;
+  else if (selected === undefined && route.kind === "onboarding")
+    content = (
+      <OnboardingPage
+        onClusterCreated={(cluster) => void loadClusters(cluster.id)}
+      />
+    );
   else if (selected === undefined)
     content = (
       <EmptyState title="Create your first cluster">
@@ -184,6 +216,11 @@ function Application({ user, onLogout }: { user: User; onLogout: () => void }) {
           service.
         </p>
         <ClusterCreate onCreated={(cluster) => void loadClusters(cluster.id)} />
+        <p>
+          <a className="button" href="/onboarding">
+            Start guided onboarding
+          </a>
+        </p>
       </EmptyState>
     );
   else {
@@ -196,6 +233,9 @@ function Application({ user, onLogout }: { user: User; onLogout: () => void }) {
         break;
       case "ha-operations":
         content = <HAOperationsPage cluster={selected} />;
+        break;
+      case "notifications":
+        content = <NotificationsPage cluster={selected} />;
         break;
       case "node-lifecycle":
         content = (
@@ -225,6 +265,9 @@ function Application({ user, onLogout }: { user: User; onLogout: () => void }) {
         break;
       case "setup-guide":
         content = <SetupGuidePage cluster={selected} />;
+        break;
+      case "onboarding":
+        content = <OnboardingPage cluster={selected} />;
         break;
       case "blocked-services":
         content = <BlockedServicesPage cluster={selected} />;
@@ -261,14 +304,55 @@ function Application({ user, onLogout }: { user: User; onLogout: () => void }) {
   return (
     <ApplicationShell
       user={user}
-      clusters={clusters ?? []}
-      selected={selected}
       pathname={path}
-      onSelectCluster={setSelectedID}
       onLogout={() => void logout()}
     >
-      <PageContainer size={routePageWidth(route)}>{content}</PageContainer>
+      <PageContainer size={routePageWidth(route)}>
+        {selected && route.kind !== "onboarding" && (
+          <OnboardingOffer cluster={selected} />
+        )}
+        {content}
+      </PageContainer>
     </ApplicationShell>
+  );
+}
+
+export function OnboardingOffer({ cluster }: { cluster: Cluster }) {
+  const key = `atlas-dns.onboarding-dismissed.${cluster.id}`;
+  const [required, setRequired] = useState(false);
+  const [dismissed, setDismissed] = useState(
+    () => sessionStorage.getItem(key) === "true",
+  );
+  useEffect(() => {
+    let active = true;
+    void api
+      .onboardingStatus(cluster.id)
+      .then((status) => {
+        if (active) setRequired(status.setupRequired);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [cluster.id]);
+  if (!required || dismissed) return null;
+  return (
+    <Banner tone="info" title="Atlas setup is incomplete">
+      <span>
+        Continue guided onboarding from your current controller state.{" "}
+      </span>
+      <a href="/onboarding">Continue setup</a>{" "}
+      <button
+        className="button button--quiet"
+        type="button"
+        onClick={() => {
+          sessionStorage.setItem(key, "true");
+          setDismissed(true);
+        }}
+      >
+        Not now
+      </button>
+    </Banner>
   );
 }
 

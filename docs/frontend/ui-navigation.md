@@ -1,55 +1,49 @@
 # UI Navigation
 
-This is the canonical route and route-ownership reference. Visual shell and
-menu interaction details are defined in
+This is the canonical route and route-ownership reference. Visual behavior,
+responsive presentation, and keyboard interaction are defined in
 [Navigation and Application Shell](navigation-and-shell.md).
 
 ## Current route map
 
-| Route | Owner |
-|---|---|
-| `/` | Dashboard |
-| `/statistics` | Statistics |
-| `/settings/general` | General settings |
-| `/settings/dns` | DNS settings |
-| `/settings/encryption` | Encryption status and node-local guidance |
-| `/settings/clients` | Persistent clients |
-| `/settings/dhcp` | DHCP configuration and static leases |
-| `/filters/blocklists` | DNS blocklists |
-| `/filters/allowlists` | DNS allowlists |
-| `/filters/rewrites` | DNS rewrites |
-| `/filters/blocked-services` | Blocked services |
-| `/filters/custom-rules` | Custom filter rules |
-| `/query-log` | Combined node-attributed Query Log |
-| `/ha/nodes` | Managed node inventory |
-| `/ha/nodes/{nodeId}` | Node lifecycle detail |
-| `/ha/operations` | Fleet HA operations |
-| `/ha/configuration` | Configuration Control |
-| `/ha/revisions` | Immutable configuration revisions |
-| `/ha/deployments` | Deployment execution and per-node results |
-| `/ha/drift` | Current convergence and drift resolution |
-| `/setup-guide` | State-derived setup guidance |
-| `/system/users` | Administrator accounts |
-| `/system/audit` | Audit log |
-| `/system/operational-status` | Controller operational status |
-| `/system/settings` | System settings and update awareness |
-| `/system/backups` | Backup and restore |
-| `/system/updates` | Controller update awareness and host guidance |
-| `/system/about` | Build and product information |
+| Route | Owner | Navigation group |
+|---|---|---|
+| `/` | Cluster dashboard | Dashboard |
+| `/statistics` | Aggregated exact node Statistics | Monitoring |
+| `/query-log` | Combined node-attributed Query Log | Monitoring |
+| `/system/operational-status` | Controller and collector diagnostics | Monitoring |
+| `/settings/general` | General settings | Settings / AdGuard Home |
+| `/settings/dns` | DNS settings | Settings / AdGuard Home |
+| `/settings/encryption` | Encryption inventory and guidance | Settings / AdGuard Home |
+| `/settings/clients` | Persistent clients | Settings / AdGuard Home |
+| `/settings/dhcp` | DHCP configuration and leases | Settings / AdGuard Home |
+| `/filters/blocklists` | DNS blocklists | Filters / AdGuard Home |
+| `/filters/allowlists` | DNS allowlists | Filters / AdGuard Home |
+| `/filters/rewrites` | DNS rewrites | Filters / AdGuard Home |
+| `/filters/blocked-services` | Blocked services | Filters / AdGuard Home |
+| `/filters/custom-rules` | Custom filter rules | Filters / AdGuard Home |
+| `/ha/nodes` | Managed node inventory | HA Controller / Atlas |
+| `/ha/nodes/{nodeId}` | Node lifecycle detail | HA Controller / Nodes |
+| `/ha/operations` | Fleet HA lifecycle and history | HA Controller / Atlas |
+| `/ha/notifications` | HA lifecycle webhook delivery | HA Controller / Atlas |
+| `/ha/configuration` | Configuration Control | HA Controller / Atlas |
+| `/ha/revisions` | Immutable configuration revisions | HA Controller / Atlas |
+| `/ha/deployments` | Deployment execution and node results | HA Controller / Atlas |
+| `/ha/drift` | Convergence and drift resolution | HA Controller / Atlas |
+| `/system/users` | Administrator accounts | Administration |
+| `/system/audit` | Audit log | Administration |
+| `/system/settings` | Controller runtime settings | Administration |
+| `/system/backups` | Backup and restore | Administration |
+| `/system/updates` | Controller update awareness | Administration |
+| `/system/about` | Build and product information | Administration |
+| `/setup-guide` | State-derived setup reference | Help utility |
 
-## Menu ownership
-
-- Dashboard, Statistics, Query Log, and Setup Guide are primary destinations.
-- Settings owns General, DNS, Encryption, Clients, and DHCP.
-- Filters owns Blocklists, Allowlists, Rewrites, Blocked Services, and Custom
-  Filter Rules.
-- HA Controller owns Nodes, Configuration Control, Revisions, Deployments, and
-  Drift.
-- The administration menu owns Users, Operational Status, HA Operations, Audit
-  Log, System Settings, Backups, About, and Sign Out.
-
-Desktop and mobile use the same labels, ordering, and parent/child relationships.
-An active child highlights its owning menu.
+Settings and Filters author managed AdGuard Home desired state. HA Controller
+owns Atlas-specific orchestration and delivery behavior, including
+Notifications. Administration owns users and controller/system operations.
+Operational Status is an observe experience and therefore appears in
+Monitoring even though its stable route remains under `/system`. Setup Guide is
+reference/help, not first-run onboarding. No Integrations route exists.
 
 ## Compatibility redirects
 
@@ -65,26 +59,40 @@ The browser retains query strings and fragments while redirecting.
 | `/ha/history` | `/ha/revisions` |
 | Any canonical path with a trailing slash | The same path without the trailing slash |
 
-## Configuration Control
+## Route behavior
 
-`/ha/configuration` is lifecycle control, not a duplicate settings editor. It
-contains the complete read-only draft/change summary, validation, advanced
-observation and import/adoption, and immutable publication. Revision comparison
-and rollback belong to `/ha/revisions`; execution belongs to `/ha/deployments`;
-continuing divergence belongs to `/ha/drift`.
-
-## Navigation behavior
-
-- Routes are stable and bookmarkable.
+- Routes are stable, guarded, refreshable, and bookmarkable.
+- Unknown paths render an explicit Not Found page and never Dashboard.
 - Cluster and selected-node scope remain application context; secrets never
   appear in URLs.
 - Revision, deployment, and drift selection use `revisionId`, `deploymentId`,
   and `driftId` query parameters and preserve unrelated query state.
-- Unknown routes render an explicit Not Found page and never Dashboard.
-- Desktop menus support pointer and keyboard operation; mobile disclosures do
-  not depend on hover.
-- Escape closes an open menu or drawer and restores focus to its trigger.
-- Breadcrumbs are reserved for detail views rather than top-level pages.
+- Node lifecycle detail keeps the Nodes parent and link active.
+- Desktop and mobile use the same route hierarchy.
+- Breadcrumbs remain reserved for detail views rather than top-level pages.
 
-Historical route migration and phase evidence is retained in the
+## Configuration lifecycle ownership
+
+`/ha/configuration` is lifecycle control, not a duplicate settings editor. It
+contains the read-only draft/change summary, validation, advanced observation
+and import/adoption, and immutable publication. Revision comparison and
+rollback belong to `/ha/revisions`; execution belongs to `/ha/deployments`;
+continuing divergence belongs to `/ha/drift`.
+
+Historical route migration evidence remains in the
 [pre-1.0 frontend implementation archive](../archive/pre-1.0/frontend/implementation/).
+
+## Operational action ownership
+
+- **Nodes** owns inventory, identity, create/edit/delete, and candidate
+  validation. Existing-node tests and maintenance decisions link to exact Node
+  Detail routes.
+- **Node Detail** owns connection tests, DNS probes, maintenance entry/return,
+  lifecycle settings, and guided upgrade decisions for one node.
+- **Drift** owns divergence evidence, restore/adopt, and reconciliation policy.
+  Maintenance remains visible context but is changed only from Node Detail.
+- **Notifications** is the sole permanent webhook and event-policy management
+  surface. HA Operations retains delivery/test/transition evidence and links to
+  Notifications without recreating controls.
+
+Duplicate read-only status is intentional; duplicate mutable management is not.

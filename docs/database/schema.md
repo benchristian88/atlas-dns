@@ -19,6 +19,9 @@ never audit metadata.
 ### Cluster, node, and capability
 
 - `clusters` — desired-state/reconciliation scope and active revision pointer.
+- `cluster_onboarding_state` — optimistic single-node/monitoring/notification
+  acknowledgements plus audited onboarding completion attribution. It never
+  copies node, observation, draft, or revision state.
 - `nodes` — node identity, encrypted credentials, maintenance, observation,
   applied revision, and convergence state.
 - `node_capability_profiles` — version/schema-aware supported feature evidence.
@@ -70,7 +73,8 @@ stored. Operational-history retention is independent from configuration history.
 - `upgrade_operations` — durable operator-guided upgrade lifecycle.
 - `upstream_release_cache` — bounded AdGuard Home release awareness.
 - `notification_channels` — encrypted HTTPS destination, safe
-  `destination_summary`, name, and enabled state.
+  `destination_summary`, name, enabled state, and explicit event-category
+  subscriptions.
 - `notification_deliveries` — HA event delivery attempts with nullable channel
   reference, durable safe `channel_name` snapshot, bounded HTTP/failure
   diagnostics, and per-destination Test/real evidence.
@@ -82,7 +86,12 @@ than cascading operational history. HA event and audit records are unaffected.
 
 - `controller_release_cache` — bounded controller release-awareness cache;
   excluded from portable restore.
-- `system_settings` — singleton optimistic persistent product settings.
+- `system_settings` — singleton optimistic release-check and runtime monitoring
+  settings. A one-time initialization marker distinguishes upgraded environment
+  defaults from deliberate persisted values.
+- `notification_policy` — singleton optimistic exact-event notification
+  allowlist. Runtime settings also include session duration, node request
+  timeout, log level, and Operational History retention.
 
 Portable backup metadata is produced outside persistent product tables. Standard
 backup retains control-plane rows, including archive status; Full also retains
@@ -100,6 +109,13 @@ Indexes support cluster/time listing, revision numbering/archive filters,
 deployment status/archive filters, drift deduplication, retained-time cleanup,
 Query Log keyset/trigram search, and worker claims. High-volume cleanup is
 bounded to avoid long uninterruptible transactions.
+
+Audit Log paging uses the append-only `audit_events_created_at_id_idx` composite
+index on `(created_at DESC, id DESC)`. Cluster-specific Recent Changes audit
+reads use durable resource relations and the safe recorded `clusterId`; they do
+not denormalize cluster ownership into mutable browser state. Audit metadata is
+sanitized before insert and defensively sanitized again on read so older rows
+cannot bypass the current representation boundary.
 
 ## Migration ledger
 
@@ -124,11 +140,16 @@ bootstrap, and recorded by version/name/SHA-256 in `schema_migrations`.
 | `000013_release_0_9_productisation` | Product settings and controller release cache. | Retain; bootstrap dependency and released checksum. |
 | `000014_release_0_9_2_lifecycle_polish` | Revision/deployment archive metadata and retained webhook delivery identity. | Retain; final v1.0.0 schema and released checksum. |
 | `000015_release_1_0_2_notification_history` | Bounded webhook HTTP/failure diagnostics and delivery-history query index. | Append-only v1.0.2 upgrade. |
+| `000016_release_1_1_onboarding` | Canonical onboarding acknowledgements/completion, persisted runtime monitoring values, and notification category subscriptions. | Append-only v1.1 upgrade; established node+revision clusters are marked complete. |
+| `000017_release_1_1_runtime_policy_history` | Completes typed runtime settings, exact-event notification policy, and Operational History retention. | Append-only v1.1 upgrade; legacy environment values seed nullable settings once. |
+| `000018_release_1_1_audit_keyset` | Stable Audit Log `(created_at, id)` keyset index. | Append-only v1.1 upgrade; no audit rows are rewritten. |
+| `000019_release_1_1_totp_mfa` | Encrypted per-user TOTP state, hashed recovery codes, and short-lived MFA challenges. | Append-only v1.1 upgrade; existing users remain unchanged until they enable MFA. |
 
 The complete chain is the physical v1.0.0 baseline. Pre-1.0 databases are not
 supported for in-place upgrade, but removing or squashing the chain would break
 empty-database creation and v1.0.0 checksum recognition. Release 1.0.1 uses the
-same schema and adds no migration. Release 1.0.2 appends `000015`. Future
+same schema and adds no migration. Release 1.0.2 appends `000015`; release 1.1
+appends `000016`, `000017`, `000018`, and `000019`. Future
 schema-changing 1.x releases append new immutable, never-renumbered forward
 migrations after the current highest version; schema-neutral patches do not add
 placeholders.

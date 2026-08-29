@@ -34,16 +34,16 @@ func TestNormalizeQueryLogItemSupportsOptionalAndLegacyFields(t *testing.T) {
 	}
 }
 
-func TestReadLegacyQueryLogConfigAcceptsFractionalInterval(t *testing.T) {
+func TestReadQueryLogConfigUsesSupportedEndpoint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/control/querylog_info" {
+		if request.URL.Path != "/control/querylog/config" {
 			http.NotFound(response, request)
 			return
 		}
-		_, _ = response.Write([]byte(`{"enabled":true,"interval":0.25,"anonymize_client_ip":true}`))
+		_, _ = response.Write([]byte(`{"enabled":true,"interval":604800000,"anonymize_client_ip":true}`))
 	}))
 	defer server.Close()
-	config, err := NewConfigurationReader(NewProbe(time.Second)).ReadQueryLogConfig(context.Background(), probeRequest(server.URL), "v0.107.52")
+	config, err := NewConfigurationReader(NewProbe(time.Second)).ReadQueryLogConfig(context.Background(), probeRequest(server.URL), "v0.107.78")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,14 +143,6 @@ func TestFilteringStatusMapping(t *testing.T) {
 	} {
 		if got := mapFilteringStatus(reason); got != want {
 			t.Errorf("mapFilteringStatus(%q) = %q, want %q", reason, got, want)
-		}
-	}
-}
-
-func TestSupportsQueryLogBoundaries(t *testing.T) {
-	for version, want := range map[string]bool{"v0.107.51": false, "v0.107.52": true, "v0.107.78": true, "v0.107.79": true, "v0.107.80": true, "v0.108.0": false} {
-		if got := SupportsQueryLog(version); got != want {
-			t.Errorf("SupportsQueryLog(%q) = %v, want %v", version, got, want)
 		}
 	}
 }

@@ -97,7 +97,10 @@ cookies. The session cookie is HTTP-only, Strict SameSite, path `/`, and Secure
 when `PUBLIC_BASE_URL` is HTTPS. The readable CSRF cookie is also Strict
 SameSite, and mutations require an equal header value whose session-bound hash
 matches. Logout revokes the session. Password reset and account disable revoke
-the affected user's sessions.
+the affected user's sessions. Self-service password change derives the user and
+current session from authentication, verifies the current password, rate-limits
+failures, retains that session, revokes other sessions, and audits success
+without credential material.
 
 Login uses a constant-work dummy password hash for unknown identities and a
 per-process source-IP/email limiter (five failures per 15 minutes). It uses the
@@ -105,7 +108,7 @@ TCP peer address and deliberately does not trust forwarded client-IP headers.
 
 The HTTP route inventory contains seven intentionally public entries:
 `/health`, `/ready`, token-protected `/metrics`, setup status/setup, login, and
-the frontend fallback. All 87 other registered routes use `authenticated` or
+the frontend fallback. All 96 other registered routes use `authenticated` or
 `administrator` middleware. API misses return JSON 404 and never fall through
 to the frontend. Protected mutations require CSRF at the backend boundary.
 

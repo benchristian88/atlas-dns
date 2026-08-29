@@ -20,13 +20,16 @@ separate.
 ## Standard versus Full
 
 - **Standard** contains the control plane: users/password hashes/enabled state,
+  optional MFA enabled state/encrypted TOTP seeds/recovery-code hashes,
   nodes/encrypted credentials, drafts, immutable observations/revisions,
   revision/deployment archive metadata, deployments/results, drift, audit,
-  lifecycle/upgrades, notification channels, and system settings.
+  lifecycle/upgrades, notification channels/category subscriptions, onboarding
+  completion/acknowledgements, and persisted runtime system settings.
 - **Full** includes the same control plane plus retained Statistics, Query Log,
   DNS probes, HA events, and notification delivery history.
 
-Sessions and controller-release cache data are excluded from restore. Safely
+Sessions, short-lived MFA challenges, and controller-release cache data are
+excluded from restore. Safely
 hard-deleted unused revisions/deployments are absent from backups created after
 deletion and do not reappear. Archive status restores as control-plane state.
 
@@ -114,10 +117,12 @@ the deployment differs.
 Keep the old database and archive unchanged until all checks pass:
 
 1. `/ready`, About version/schema, and administrator login.
-2. Disabled accounts and session invalidation expectations.
+2. Disabled accounts, optional MFA/recovery-code counts, MFA login with server
+   clock in sync, and session invalidation expectations.
 3. Node credential decryption, connection test, and fresh observation.
 4. Draft, active/archived revisions, deployments, per-node results, and drift.
-5. Lifecycle settings/upgrades, webhook summaries, system settings, and audit.
+5. Lifecycle settings/upgrades, webhook summaries/categories, onboarding
+   completion, runtime system settings, and audit.
 6. Statistics/Query Log/HA/delivery history expected for the chosen backup type.
 7. New collector records and no unexpected known gaps.
 

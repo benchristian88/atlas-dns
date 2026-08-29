@@ -12,12 +12,12 @@ import (
 	"github.com/benchristian88/atlas-dns/internal/haoperations"
 )
 
-const notificationChannelSelect = `SELECT id,cluster_id,name,channel_type,enabled,destination_summary,record_version,
+const notificationChannelSelect = `SELECT id,cluster_id,name,channel_type,enabled,destination_summary,subscribed_categories,record_version,
 	created_at,updated_at,encrypted_destination,destination_nonce,destination_key_version,destination_algorithm
 	FROM notification_channels`
 
 func (s *Store) ListNotificationChannels(ctx context.Context, clusterID string) ([]haoperations.NotificationChannel, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id,cluster_id,name,channel_type,enabled,destination_summary,record_version,created_at,updated_at
+	rows, err := s.pool.Query(ctx, `SELECT id,cluster_id,name,channel_type,enabled,destination_summary,subscribed_categories,record_version,created_at,updated_at
 		FROM notification_channels WHERE cluster_id=$1 ORDER BY lower(name),id`, clusterID)
 	if err != nil {
 		return nil, fmt.Errorf("list notification channels: %w", err)
@@ -26,7 +26,7 @@ func (s *Store) ListNotificationChannels(ctx context.Context, clusterID string) 
 	result := []haoperations.NotificationChannel{}
 	for rows.Next() {
 		var value haoperations.NotificationChannel
-		if err := rows.Scan(&value.ID, &value.ClusterID, &value.Name, &value.ChannelType, &value.Enabled, &value.DestinationSummary, &value.RecordVersion, &value.CreatedAt, &value.UpdatedAt); err != nil {
+		if err := rows.Scan(&value.ID, &value.ClusterID, &value.Name, &value.ChannelType, &value.Enabled, &value.DestinationSummary, &value.SubscribedCategories, &value.RecordVersion, &value.CreatedAt, &value.UpdatedAt); err != nil {
 			return nil, err
 		}
 		value.DestinationSet = true
@@ -39,7 +39,7 @@ func (s *Store) NotificationChannelRecord(ctx context.Context, id string) (haope
 	var value haoperations.NotificationChannelRecord
 	err := s.pool.QueryRow(ctx, notificationChannelSelect+` WHERE id=$1`, id).Scan(
 		&value.Channel.ID, &value.Channel.ClusterID, &value.Channel.Name, &value.Channel.ChannelType,
-		&value.Channel.Enabled, &value.Channel.DestinationSummary, &value.Channel.RecordVersion, &value.Channel.CreatedAt, &value.Channel.UpdatedAt,
+		&value.Channel.Enabled, &value.Channel.DestinationSummary, &value.Channel.SubscribedCategories, &value.Channel.RecordVersion, &value.Channel.CreatedAt, &value.Channel.UpdatedAt,
 		&value.Destination.Ciphertext, &value.Destination.Nonce, &value.Destination.KeyVersion, &value.Destination.Algorithm)
 	if err != nil {
 		return value, mapDatabaseError(err, "notification channel")
@@ -57,13 +57,13 @@ func (s *Store) SaveNotificationChannel(ctx context.Context, value haoperations.
 	var affected int64
 	if expectedVersion == 0 {
 		tag, execErr := tx.Exec(ctx, `INSERT INTO notification_channels
-			(id,cluster_id,name,channel_type,enabled,destination_summary,encrypted_destination,destination_nonce,destination_key_version,destination_algorithm,record_version,created_at,updated_at)
-			VALUES($1,$2,$3,'webhook',$4,$5,$6,$7,$8,$9,1,$10,$10) ON CONFLICT DO NOTHING`, value.Channel.ID, value.Channel.ClusterID, value.Channel.Name, value.Channel.Enabled, value.Channel.DestinationSummary, value.Destination.Ciphertext, value.Destination.Nonce, value.Destination.KeyVersion, value.Destination.Algorithm, value.Channel.UpdatedAt)
+			(id,cluster_id,name,channel_type,enabled,destination_summary,subscribed_categories,encrypted_destination,destination_nonce,destination_key_version,destination_algorithm,record_version,created_at,updated_at)
+			VALUES($1,$2,$3,'webhook',$4,$5,$6,$7,$8,$9,$10,1,$11,$11) ON CONFLICT DO NOTHING`, value.Channel.ID, value.Channel.ClusterID, value.Channel.Name, value.Channel.Enabled, value.Channel.DestinationSummary, value.Channel.SubscribedCategories, value.Destination.Ciphertext, value.Destination.Nonce, value.Destination.KeyVersion, value.Destination.Algorithm, value.Channel.UpdatedAt)
 		err, affected = execErr, tag.RowsAffected()
 	} else {
-		tag, execErr := tx.Exec(ctx, `UPDATE notification_channels SET name=$2,enabled=$3,destination_summary=$4,encrypted_destination=$5,
-			destination_nonce=$6,destination_key_version=$7,destination_algorithm=$8,record_version=record_version+1,updated_at=$9
-			WHERE id=$1 AND record_version=$10`, value.Channel.ID, value.Channel.Name, value.Channel.Enabled, value.Channel.DestinationSummary, value.Destination.Ciphertext, value.Destination.Nonce, value.Destination.KeyVersion, value.Destination.Algorithm, value.Channel.UpdatedAt, expectedVersion)
+		tag, execErr := tx.Exec(ctx, `UPDATE notification_channels SET name=$2,enabled=$3,destination_summary=$4,subscribed_categories=$5,encrypted_destination=$6,
+			destination_nonce=$7,destination_key_version=$8,destination_algorithm=$9,record_version=record_version+1,updated_at=$10
+			WHERE id=$1 AND record_version=$11`, value.Channel.ID, value.Channel.Name, value.Channel.Enabled, value.Channel.DestinationSummary, value.Channel.SubscribedCategories, value.Destination.Ciphertext, value.Destination.Nonce, value.Destination.KeyVersion, value.Destination.Algorithm, value.Channel.UpdatedAt, expectedVersion)
 		err, affected = execErr, tag.RowsAffected()
 	}
 	if err != nil {
@@ -128,7 +128,7 @@ func (s *Store) ClaimNotificationDelivery(ctx context.Context, now time.Time) (h
 	var channel haoperations.NotificationChannelRecord
 	err = tx.QueryRow(ctx, notificationChannelSelect+` WHERE id=$1`, delivery.ChannelID).Scan(
 		&channel.Channel.ID, &channel.Channel.ClusterID, &channel.Channel.Name, &channel.Channel.ChannelType, &channel.Channel.Enabled,
-		&channel.Channel.DestinationSummary, &channel.Channel.RecordVersion, &channel.Channel.CreatedAt, &channel.Channel.UpdatedAt, &channel.Destination.Ciphertext,
+		&channel.Channel.DestinationSummary, &channel.Channel.SubscribedCategories, &channel.Channel.RecordVersion, &channel.Channel.CreatedAt, &channel.Channel.UpdatedAt, &channel.Destination.Ciphertext,
 		&channel.Destination.Nonce, &channel.Destination.KeyVersion, &channel.Destination.Algorithm)
 	if err != nil {
 		return delivery, channel, err
@@ -173,10 +173,6 @@ func (s *Store) RecordNotificationTest(ctx context.Context, event haoperations.E
 	}
 	if err := audit(ctx, tx, auditEvent); err != nil {
 		return err
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM ha_operational_events WHERE id IN
-		(SELECT id FROM ha_operational_events WHERE occurred_at < $1 ORDER BY occurred_at,id LIMIT 10000)`, event.OccurredAt.Add(-365*24*time.Hour)); err != nil {
-		return fmt.Errorf("clean notification test history: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit notification test history: %w", err)

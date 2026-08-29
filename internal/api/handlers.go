@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	auditservice "github.com/benchristian88/atlas-dns/internal/audit"
 	"github.com/benchristian88/atlas-dns/internal/domain"
 	"github.com/benchristian88/atlas-dns/internal/version"
 )
@@ -21,6 +22,14 @@ type userResponse struct {
 type authResponse struct {
 	User      userResponse `json:"user"`
 	ExpiresAt time.Time    `json:"expiresAt"`
+}
+
+type loginResponse struct {
+	User               *userResponse `json:"user,omitempty"`
+	ExpiresAt          *time.Time    `json:"expiresAt,omitempty"`
+	MFARequired        bool          `json:"mfaRequired,omitempty"`
+	MFAChallenge       string        `json:"mfaChallenge,omitempty"`
+	ChallengeExpiresAt *time.Time    `json:"challengeExpiresAt,omitempty"`
 }
 
 func safeUser(user domain.User) userResponse {
@@ -95,8 +104,15 @@ func (s *Server) handleLogin(response http.ResponseWriter, request *http.Request
 		s.writeError(response, request, err)
 		return
 	}
+	if result.MFARequired {
+		writeJSON(response, http.StatusAccepted, loginResponse{
+			MFARequired: true, MFAChallenge: result.MFAChallenge, ChallengeExpiresAt: &result.ChallengeExpiresAt,
+		})
+		return
+	}
 	s.setAuthCookies(response, result)
-	writeJSON(response, http.StatusOK, authResponse{User: safeUser(result.User), ExpiresAt: result.Session.ExpiresAt})
+	user := safeUser(result.User)
+	writeJSON(response, http.StatusOK, loginResponse{User: &user, ExpiresAt: &result.Session.ExpiresAt})
 }
 
 func (s *Server) handleLogout(response http.ResponseWriter, request *http.Request) {
@@ -191,10 +207,17 @@ func (s *Server) handleListNodes(response http.ResponseWriter, request *http.Req
 		s.writeError(response, request, err)
 		return
 	}
-	staleAfterSeconds := max(int64(s.healthInterval/time.Second)*3, 1)
 	writeJSON(response, http.StatusOK, map[string]any{
-		"items": nodes, "refreshedAt": time.Now().UTC(), "staleAfterSeconds": staleAfterSeconds,
+		"items": nodes, "refreshedAt": time.Now().UTC(), "staleAfterSeconds": s.nodeStaleAfterSeconds(),
 	})
+}
+
+func (s *Server) nodeStaleAfterSeconds() int64 {
+	healthInterval := s.healthInterval
+	if s.runtime != nil {
+		healthInterval = s.runtime.RuntimeSettings().NodeHealthInterval
+	}
+	return max(int64(healthInterval/time.Second)*3, 1)
 }
 
 func (s *Server) handleCreateNode(response http.ResponseWriter, request *http.Request) {
@@ -325,13 +348,33 @@ func (s *Server) handleNodeMaintenance(response http.ResponseWriter, request *ht
 
 func (s *Server) handleAuditEvents(response http.ResponseWriter, request *http.Request) {
 	limit := parseBoundedInt(request.URL.Query().Get("limit"), 50, 1, 100)
-	offset := parseBoundedInt(request.URL.Query().Get("offset"), 0, 0, 100000)
-	events, err := s.audit.ListAuditEvents(request.Context(), limit, offset)
+	includeController := false
+	if value := strings.TrimSpace(request.URL.Query().Get("includeController")); value != "" {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			s.writeError(response, request, domain.Validation("includeController", "must be true or false"))
+			return
+		}
+		includeController = parsed
+	}
+	page, err := s.audit.List(request.Context(), auditservice.ListRequest{
+		Limit: limit, Cursor: strings.TrimSpace(request.URL.Query().Get("cursor")),
+		ClusterID: strings.TrimSpace(request.URL.Query().Get("clusterId")), IncludeController: includeController,
+	})
 	if err != nil {
 		s.writeError(response, request, err)
 		return
 	}
-	writeJSON(response, http.StatusOK, map[string]any{"items": events, "limit": limit, "offset": offset})
+	writeJSON(response, http.StatusOK, page)
+}
+
+func (s *Server) handleAuditEvent(response http.ResponseWriter, request *http.Request) {
+	event, err := s.audit.Detail(request.Context(), request.PathValue("auditEventId"))
+	if err != nil {
+		s.writeError(response, request, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, event)
 }
 
 func (s *Server) handleVersion(response http.ResponseWriter, request *http.Request) {

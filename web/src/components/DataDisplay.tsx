@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 import { EmptyState, ErrorState, LoadingSkeleton } from "./Feedback";
+import { Icon, type IconName } from "./Icon";
 import { StatusBadge, type StatusKind } from "./StatusBadge";
 
 export function MetricCard({
@@ -18,6 +19,40 @@ export function MetricCard({
       <span>{label}</span>
       <strong className={valueClassName}>{value}</strong>
       {detail !== undefined && <small>{detail}</small>}
+    </article>
+  );
+}
+
+export function HealthSummaryCard({
+  icon,
+  label,
+  value,
+  status,
+  statusLabel,
+  detail,
+  valueClassName,
+}: {
+  icon: IconName;
+  label: string;
+  value: ReactNode;
+  status: StatusKind;
+  statusLabel?: ReactNode;
+  detail: string;
+  valueClassName?: string;
+}) {
+  return (
+    <article className="health-summary-card" aria-label={label}>
+      <span className={`health-summary-card__icon status-tone--${status}`}>
+        <Icon name={icon} />
+      </span>
+      <span className="health-summary-card__body">
+        <small>{label}</small>
+        <strong className={valueClassName}>{value}</strong>
+        <span>
+          <StatusBadge status={status} label={statusLabel} />
+          <em title={detail}>{detail}</em>
+        </span>
+      </span>
     </article>
   );
 }

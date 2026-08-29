@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -89,6 +90,31 @@ func (s *Store) LatestSuccessfulSnapshots(ctx context.Context, clusterID string)
 	return items, rows.Err()
 }
 
+// CertificateMonitoringDisabledSince reports whether the applicability chain
+// leading from a certificate event to the current observation contains a
+// successful disabled-TLS observation.  The baseline immediately preceding
+// the event is included so events created from AdGuard's zero certificate time
+// cannot later manufacture a recovery.
+func (s *Store) CertificateMonitoringDisabledSince(ctx context.Context, nodeID string, since time.Time) (bool, error) {
+	var disabled bool
+	err := s.pool.QueryRow(ctx, `WITH relevant AS (
+		(SELECT document_json FROM observed_snapshots
+		 WHERE node_id=$1 AND collection_status='succeeded' AND observed_at <= $2
+		 ORDER BY observed_at DESC,id DESC LIMIT 1)
+		UNION ALL
+		(SELECT document_json FROM observed_snapshots
+		 WHERE node_id=$1 AND collection_status='succeeded' AND observed_at > $2)
+	)
+	SELECT EXISTS (
+		SELECT 1 FROM relevant
+		WHERE COALESCE(document_json #>> '{observedOnly,tls,enabled}', 'false') = 'false'
+	)`, nodeID, since.UTC()).Scan(&disabled)
+	if err != nil {
+		return false, fmt.Errorf("check certificate monitoring applicability: %w", err)
+	}
+	return disabled, nil
+}
+
 func scanSnapshot(row rowScanner) (inventory.Snapshot, error) {
 	var item inventory.Snapshot
 	var document []byte
@@ -103,6 +129,10 @@ func scanSnapshot(row rowScanner) (inventory.Snapshot, error) {
 		var decoded configuration.Document
 		if err := json.Unmarshal(document, &decoded); err != nil {
 			return item, fmt.Errorf("decode snapshot: %w", err)
+		}
+		if item.SchemaVersion == configuration.LegacySchemaVersion || decoded.SchemaVersion == configuration.LegacySchemaVersion {
+			decoded = configuration.ConvertLegacyDocument(decoded)
+			item.SchemaVersion = configuration.SchemaVersion
 		}
 		item.Document = &decoded
 	}
@@ -133,6 +163,11 @@ func (s *Store) CapabilityProfiles(ctx context.Context, clusterID string) ([]inv
 		if err := json.Unmarshal(warnings, &item.Warnings); err != nil {
 			return nil, err
 		}
+		if item.SchemaVersion == configuration.LegacySchemaVersion {
+			item.SchemaVersion = configuration.SchemaVersion
+			item.Compatibility = string(domain.CompatibilityUnsupported)
+			item.Warnings = append(item.Warnings, "This retained v1.0.x capability record requires a fresh schema-2 observation.")
+		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
@@ -147,6 +182,11 @@ func (s *Store) DraftByCluster(ctx context.Context, clusterID string) (inventory
 	}
 	if err := json.Unmarshal(document, &item.Document); err != nil {
 		return item, fmt.Errorf("decode configuration draft: %w", err)
+	}
+	if item.SchemaVersion == configuration.LegacySchemaVersion || item.Document.SchemaVersion == configuration.LegacySchemaVersion {
+		item.Document = configuration.ConvertLegacyDesired(item.Document)
+		item.SchemaVersion = configuration.SchemaVersion
+		item.CanonicalHash = ""
 	}
 	if item.CanonicalHash == "" {
 		_, item.CanonicalHash, err = configuration.MarshalDesired(item.Document)

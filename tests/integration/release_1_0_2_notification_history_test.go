@@ -20,8 +20,12 @@ import (
 func TestRelease102MigratesV101NotificationDeliveriesInPlace(t *testing.T) {
 	store := integrationStore(t)
 	ctx := context.Background()
-	if err := database.RollbackLastMigration(ctx, store.Pool()); err != nil {
-		t.Fatal(err)
+	// Roll back the four v1.1 migrations and v1.0.2 so this fixture is
+	// inserted with the supported v1.0.1 schema, then apply the complete chain.
+	for range 5 {
+		if err := database.RollbackLastMigration(ctx, store.Pool()); err != nil {
+			t.Fatal(err)
+		}
 	}
 	now := time.Now().UTC()
 	const (
@@ -60,7 +64,7 @@ func TestRelease102MigratesV101NotificationDeliveriesInPlace(t *testing.T) {
 	if err := store.Pool().QueryRow(ctx, `SELECT error_summary,http_status FROM notification_deliveries WHERE id=$1`, deliveryID).Scan(&errorSummary, &httpStatus); err != nil {
 		t.Fatal(err)
 	}
-	if version != 15 || errorSummary != "" || httpStatus != nil {
+	if version != 19 || errorSummary != "" || httpStatus != nil {
 		t.Fatalf("version=%d summary=%q status=%v", version, errorSummary, httpStatus)
 	}
 	items, err := store.ListHAHistory(ctx, haoperations.HistoryQuery{ClusterID: clusterID, Limit: 10})
@@ -140,7 +144,7 @@ func TestRelease102DNSTransitionsDeliverWebhookAndAppearInPaginatedHistory(t *te
 	}
 	notifications := haoperations.NewNotificationService(store, cipher, receiver.Client())
 	actor := domain.Actor{UserID: userID, RequestID: "release-1.0.2"}
-	channel, err := notifications.Create(ctx, actor, clusterID, "Operations", receiver.URL+"/private?token=hidden", true)
+	channel, err := notifications.Create(ctx, actor, clusterID, "Operations", receiver.URL+"/private?token=hidden", true, haoperations.RecommendedNotificationCategories())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,10 +275,10 @@ func TestRelease102MultipleWebhookDestinationsRecordMixedResults(t *testing.T) {
 	}
 	notifications := haoperations.NewNotificationService(store, cipher, receiver.Client())
 	actor := domain.Actor{UserID: userID, RequestID: "release-1.0.2-multiple"}
-	if _, err := notifications.Create(ctx, actor, clusterID, "Accepted", receiver.URL+"/accepted?token=hidden", true); err != nil {
+	if _, err := notifications.Create(ctx, actor, clusterID, "Accepted", receiver.URL+"/accepted?token=hidden", true, haoperations.RecommendedNotificationCategories()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := notifications.Create(ctx, actor, clusterID, "Rejected", receiver.URL+"/failed?token=hidden", true); err != nil {
+	if _, err := notifications.Create(ctx, actor, clusterID, "Rejected", receiver.URL+"/failed?token=hidden", true, haoperations.RecommendedNotificationCategories()); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.RecordHAEvent(ctx, haoperations.Event{ID: eventID, ClusterID: clusterID, EventType: "redundancy.degraded", Severity: "warning", Summary: "DNS redundancy degraded", Details: map[string]any{}, OccurredAt: now}); err != nil {

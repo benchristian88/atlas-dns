@@ -21,6 +21,17 @@ require the existing same-origin CSRF token.
   session material. The only accepted role is `administrator`.
 - `POST /api/v1/users/{userId}/password-reset` replaces the Argon2id credential and
   revokes every target session. No credential is returned.
+- `POST /api/v1/auth/password` accepts `currentPassword`, `newPassword`, and an
+  optional `totpCode` that is required when the authenticated user has MFA.
+  It derives the target user and current session from authentication, rate-limits
+  failed current-password checks, replaces the Argon2id credential, retains the
+  current session, revokes other sessions, and records `user.password_changed`.
+  It never accepts a client-supplied target user ID or returns credential data.
+- `GET /api/v1/account/mfa` returns only `enabled` and
+  `recoveryCodesRemaining`. Enrollment start/verify, recovery-code regeneration,
+  and disable use the authenticated user rather than a request target. Every
+  mutation requires CSRF; enrollment start requires current password, while
+  regeneration and disable require current password plus current TOTP.
 - `POST /api/v1/system/backups` accepts `{type, passphrase}` and streams a Standard or
   Full `.atlasdnsbackup`. Passphrases are transient. Archive creation is audited.
 - `POST /api/v1/system/restore-preflight` accepts bounded multipart `archive` and
@@ -28,22 +39,66 @@ require the existing same-origin CSRF token.
   manifest and offline restore plan. Restore execution has no web endpoint.
 - `GET /api/v1/system/update` returns cached controller release status and host-guided
   update instructions; `POST /api/v1/system/update/check` forces a bounded refresh.
-- `GET/PATCH /api/v1/system/settings` exposes the justified persisted release-check
-  setting plus read-only retention and installation facts with optimistic
-  `recordVersion`.
+- `GET/PATCH /api/v1/system/settings` exposes persisted release-check, session,
+  node-health/request, Statistics, Query Log, logging, and Operational History
+  retention settings plus read-only installation facts with
+  optimistic `recordVersion`. PATCH retains omitted monitoring values for
+  compatibility with the earlier release-check-only payload.
+- `DELETE /api/v1/system/operational-history` requires
+  `{ "confirmation": "CLEAR OPERATIONAL HISTORY" }` and returns deleted HA
+  event/delivery counts. It does not delete Audit Log or other durable domains.
+- `GET/PATCH /api/v1/system/notification-policy` reads/updates the complete
+  exact-event allowlist with optimistic `recordVersion` and server-owned groups.
 - `GET /api/v1/system/version` returns application version, commit, build time,
   development state, and current database schema version.
 
 Every response includes `X-Request-ID`. API responses use `Cache-Control: no-store` and standard browser security headers.
 
+## Guided onboarding
+
+All onboarding routes require an administrator session. PATCH/POST also require
+the normal CSRF token. Status derives nodes, observations, capabilities,
+revisions, System Settings, and safe notification counts from their canonical
+services; it never returns credentials or webhook destinations.
+
+```text
+GET   /api/v1/onboarding/status?clusterId={clusterId}
+PATCH /api/v1/clusters/{clusterId}/onboarding
+POST  /api/v1/clusters/{clusterId}/onboarding/finish
+POST  /api/v1/clusters/{clusterId}/nodes/validate
+```
+
+Status returns `setupRequired`, `completed`, `resumeStep`, controller identity,
+topology facts, the first qualifying schema-v2 revision, monitoring settings,
+notification count, and `canFinish`. Progress accepts the current onboarding
+`recordVersion` plus optional `redundancySkipped`, `monitoringReviewed`, and
+`notificationsSkipped` booleans. Finish fails with conflict until the
+server-derived prerequisites are satisfied. After recording completion, Finish
+runs one cluster-scoped node-health, DNS-health, Statistics, and Query Log pass
+concurrently with a 20-second overall limit. Collection failures do not roll
+back completion and remain visible through the normal operational endpoints.
+
+Node candidate validation accepts the normal node-creation payload, applies the
+same SSRF/TLS/credential/status probe without storing it, and adds
+`onboardingCompatibility`. The guided floor is v0.107.78 in the v0.107 API
+generation. Normal node creation probes again before encrypting credentials.
+
 ## Authentication and CSRF
 
-Successful setup or login creates:
+Successful setup, non-MFA login, or completed MFA challenge creates:
 
 - `atlas_dns_session`: opaque, HTTP-only, SameSite=Strict session cookie;
 - `atlas_dns_csrf`: opaque, SameSite=Strict CSRF cookie readable by the UI.
 
 Cookies are marked Secure when `PUBLIC_BASE_URL` uses HTTPS. Authenticated `POST`, `PATCH`, and `DELETE` requests must copy the CSRF cookie into `X-CSRF-Token`. Only HMAC-SHA-256 hashes of both tokens are stored.
+
+For an MFA-enabled account, valid password login returns HTTP 202 with
+`mfaRequired`, an opaque five-minute `mfaChallenge`, and
+`challengeExpiresAt`. It sets no cookies and creates no session. TOTP or recovery
+verification consumes that persisted challenge atomically and then invokes the
+same canonical session creation path. Challenges are single-use, limited to five
+failed factor attempts, excluded from ordinary API authorization, and never
+placed in a URL. API-wide `Cache-Control: no-store` covers all one-time values.
 
 ## Errors
 
@@ -66,13 +121,31 @@ Cookies are marked Secure when `PUBLIC_BASE_URL` uses HTTPS. Authenticated `POST
 GET  /api/v1/setup/status
 POST /api/v1/setup
 POST /api/v1/auth/login
+POST /api/v1/auth/mfa/verify
+POST /api/v1/auth/mfa/recovery
+POST /api/v1/auth/mfa/cancel
 POST /api/v1/auth/logout
 GET  /api/v1/auth/me
+POST /api/v1/auth/password
+GET  /api/v1/account/mfa
+POST /api/v1/account/mfa/enroll/start
+POST /api/v1/account/mfa/enroll/verify
+POST /api/v1/account/mfa/recovery-codes/regenerate
+POST /api/v1/account/mfa/disable
 ```
 
 Setup status reports whether setup is required, the configured public URL, controller time, cookie security mode, and prerequisite checks. Initial setup is serialized in PostgreSQL and cannot be repeated after the first user exists.
 
 Login is rate-limited by source address and normalized account identifier. Login failures do not reveal whether an account exists.
+
+The three `/auth/mfa/*` challenge routes are pre-session routes. Verify accepts
+`{challenge, code}`, recovery accepts `{challenge, recoveryCode}`, and cancel
+accepts `{challenge}`. Cancel consumes the challenge and returns 204. Management
+routes are normal authenticated/CSRF-protected self-service APIs and never accept
+a user ID. Enrollment start returns the seed, standards-compatible `otpauth://`
+URI, and locally rendered data-URL QR only for that active one-time flow.
+Enrollment verify and regeneration each return ten plaintext recovery codes once;
+later status returns only the unused count.
 
 ## Cluster routes
 
@@ -220,11 +293,11 @@ PUT  /api/v1/clusters/{clusterId}/configuration-draft
 POST /api/v1/clusters/{clusterId}/configuration-draft/validate
 ```
 
-Observation performs bounded, authenticated GET requests and stores either an immutable canonical schema-v1/v2 snapshot or an immutable failed attempt with a safe error code. v0.107.52 remains schema v1; v0.107.53 and later patches in the v0.107 API generation use schema v2. v0.107.78 and v0.107.79 are explicitly tested; newer v0.107 patches are provisionally compatible only after the typed endpoints Atlas uses validate. Other API generations report unknown compatibility. Inventory returns the latest attempt for each node, current capability profiles, current schema version, and the optional cluster draft. The `draft` member is omitted when no draft exists. Comparison returns `equal` plus differences grouped by section, field, and `shared_managed`, `node_specific_managed`, `observed_only`, or `unsupported` scope.
+Observation performs bounded, authenticated GET requests and stores either an immutable canonical schema-v2 snapshot or an immutable failed attempt with a safe error code. v0.107.78 and v0.107.79 are explicitly tested; newer v0.107 patches are provisionally compatible only after the typed endpoints Atlas uses validate. Earlier versions are unsupported and other API generations report unknown compatibility; both block managed configuration. Inventory returns the latest attempt for each node, current capability profiles, current schema version, and the optional cluster draft. The `draft` member is omitted when no draft exists. Comparison returns `equal` plus differences grouped by section, field, and `shared_managed`, `node_specific_managed`, `observed_only`, or `unsupported` scope.
 
 Import accepts `snapshotId`, `expectedVersion`, and `confirmed: true`. It rejects failed snapshots, cross-cluster snapshots, missing confirmation, and stale draft versions. The transaction updates the draft and writes `configuration.draft_imported`. It never publishes or deploys configuration.
 
-Draft update accepts `expectedVersion` and a complete schema-v2 desired `document`. It saves canonical mutable intent and returns validation issues. Frozen schema-v1 drafts must be refreshed/imported before editing or publication; historical v1 revisions remain deployable and reconcilable. Validation returns the same fleet feature/listener/DHCP preflight used by publication and deployment.
+Draft update accepts `expectedVersion` and a complete schema-v2 desired `document`. It saves canonical mutable intent and returns validation issues. Retained schema-1 rows are converted to a marked schema-2 read representation and are not deployable or reconcilable; refresh/import and publish a fresh schema-2 revision. Validation returns the same fleet feature/listener/DHCP preflight used by publication and deployment.
 
 The blocked-services catalogue route reads observed metadata through the controller and never mutates desired state. It returns the union of stable service IDs and names, optional group IDs, per-service supported/unsupported node IDs, per-node `available`, `stale`, `error`, or `unsupported` state, and response freshness. Upstream filtering rules and SVG icons are removed at the adapter boundary. Node URLs, credentials, and raw node errors are never returned. Metadata is cached per node version/capability signature for 15 minutes; version/capability changes force refresh, and an expired matching cache entry is exposed as stale only when a refresh fails.
 
@@ -261,7 +334,7 @@ POST /api/v1/drift-events/{driftId}/adopt
 POST /api/v1/nodes/{nodeId}/maintenance
 ```
 
-Publication requires a non-empty summary and the current draft version. Preview returns structured semantic changes from the active revision, ordered affected nodes/effective hashes, capability or listener issues, strategy/failure policy, and whether a restart is required (false for schema v1). Deployment creation returns HTTP 202 and a durable queued resource; per-node task details expose only safe errors and verification snapshot identifiers. Cancellation is a request honored at a safe node boundary. Rollback requires explicit confirmation and creates a deployment of a historical immutable revision. Drift restore creates a targeted deployment; adoption writes the observed shared state and node override into the optimistic draft but still requires publication and normal deployment.
+Publication requires a non-empty summary and the current schema-2 draft version. Preview returns structured semantic changes from the active revision, ordered affected nodes/effective hashes, capability or listener issues, strategy/failure policy, and whether a restart is required. Deployment creation returns HTTP 202 and a durable queued resource; per-node task details expose only safe errors and verification snapshot identifiers. Cancellation is a request honored at a safe node boundary. Rollback requires explicit confirmation and creates a deployment only when the historical revision is deployable schema 2. Drift restore creates a targeted deployment; adoption writes the observed shared state and node override into the optimistic draft but still requires publication and normal deployment.
 
 Lists hide archived records unless `includeArchived=true`. Revision/deployment
 responses include immutable archive metadata and server-derived lifecycle
@@ -281,11 +354,33 @@ boundary is audited; the UI is never authoritative about eligibility.
 ## Audit and version routes
 
 ```text
-GET /api/v1/audit-events?limit=50&offset=0
+GET /api/v1/audit-events?limit=50&cursor={opaque}
+GET /api/v1/audit-events/{auditEventId}
+GET /api/v1/audit-events?clusterId={clusterId}&includeController=true&limit=50&cursor={opaque}
 GET /api/v1/system/version
 ```
 
-Audit pagination is bounded to 100 records per request. Audit metadata excludes secrets.
+Audit list pagination is bounded to 1–100 records (default 50) and ordered by
+`(createdAt DESC, id DESC)`. `nextCursor` is an opaque versioned base64url
+cursor containing the keyset boundary; clients must not inspect or alter it.
+The detail route validates the UUID and returns the same representation used by
+the list. Offset pagination is not supported.
+
+The optional cluster query is the Dashboard Recent Changes audit source. It
+selects that cluster through durable resource relations or recorded
+`clusterId`, excludes every other cluster, and may include an explicit allowlist
+of controller-global authentication, user, System Settings, Operational
+History, backup, controller, and notification-policy actions. Returned events
+are labelled `scope=cluster|controller`; cluster events also carry the selected
+`clusterId`. This query is applied in PostgreSQL before the limit, so a bounded
+global page is never client-filtered as a substitute.
+
+Responses resolve `actorDisplayName` from the current Users record when one is
+available and retain `actorUserId` as immutable evidence; the display name is
+not a historical snapshot. Metadata is sanitized before persistence and again
+when represented, with bounded depth/count/string size and suspicious-key
+redaction for historical or unknown rows. API-wide authorization, `no-store`,
+request IDs, safe errors, and structured JSON escaping apply.
 
 ## DHCP operational commands
 
@@ -428,6 +523,8 @@ GET  /api/v1/clusters/{clusterId}/certificates
 GET  /api/v1/clusters/{clusterId}/versions
 GET  /api/v1/clusters/{clusterId}/upgrades
 GET  /api/v1/clusters/{clusterId}/notification-channels
+GET  /api/v1/system/notification-policy
+PATCH /api/v1/system/notification-policy
 POST /api/v1/clusters/{clusterId}/notification-channels
 PATCH /api/v1/notification-channels/{channelId}
 POST /api/v1/notification-channels/{channelId}/test
@@ -443,11 +540,26 @@ POST /api/v1/nodes/{nodeId}/upgrades
 POST /api/v1/upgrades/{upgradeId}/validate
 ```
 
-Notification create accepts `name`, `enabled`, and an HTTPS `destination`.
-Lists return `destinationSummary` (scheme and host only), `subscribedEvents`,
-state, and created/updated timestamps; they never return the encrypted or clear
-destination. PATCH updates supported metadata and preserves the stored
-destination by default. Destination replacement requires both
+Certificate items use `healthy`, `warning`, `critical`, `expired`,
+`not_applicable`, or `unknown`. `not_applicable` means the latest AdGuard
+observation successfully reports TLS encryption disabled; `notAfter` and
+`daysRemaining` are omitted. `unknown` instead means applicable expiry evidence
+is missing, invalid, or uninterpretable. An expired state is produced only for
+an enabled, AdGuard-valid certificate whose parsed `notAfter` is not in the
+future.
+
+Notification create/update payloads include `subscribedCategories`, a non-empty
+subset of `dns`, `redundancy`, `certificates`, `versions`, `maintenance`, and
+`upgrades`. Existing channels migrate to all categories. Delivery is queued
+only when the event's server-owned category is subscribed. For v1 API
+compatibility, an omitted field selects all categories on create and preserves
+the current categories on update; an explicitly empty array is rejected.
+
+Notification create accepts `name`, `enabled`, an HTTPS `destination`, and the
+selected categories. Lists return `destinationSummary` (scheme and host only),
+`subscribedCategories`, state, and created/updated timestamps; they never return
+the encrypted or clear destination. PATCH updates supported metadata and
+preserves the stored destination by default. Destination replacement requires both
 `replaceDestination: true` and a new `destination`; blank/implicit replacement
 is rejected.
 

@@ -5,7 +5,102 @@ All notable changes to Atlas DNS Controller are documented in this file.
 The stable 1.x line follows Semantic Versioning for documented public
 interfaces.
 
-## 1.0.2 - Unreleased
+## 1.1.0 - Unreleased
+
+### Added
+
+- Added resumable first-run onboarding with automatic incomplete-setup offers,
+  manual review/re-entry, deliberate single-node/notification skips, and a
+  canonical server-derived state shared with Setup Guide.
+- Added pre-storage node candidate validation and a v1.1 guided floor of
+  AdGuard Home v0.107.78, with v0.107.78/v0.107.79 explicit coverage and newer
+  v0.107 capability/API evaluation.
+- Added explicit initial source-of-truth comparison/selection through the
+  existing observation, schema-v2 draft validation, and immutable revision
+  publication path. Publication remains separate from deployment.
+- Added persisted, audited runtime monitoring controls and encrypted webhook
+  category subscriptions with bounded Test Webhook support during onboarding.
+- Added database-authoritative session, node timeout, collector, logging, and
+  Operational History retention settings with immediate worker adoption.
+- Added grouped exact-event notification policy with conservative defaults;
+  channel enablement and encrypted destination controls remain independent.
+- Added confirmed, audited Operational History clearing that preserves Audit
+  Log, revisions, deployments, drift, upgrades, and DNS probe evidence.
+- Added append-only migration `000016_release_1_1_onboarding`; established
+  node+revision clusters are preserved as complete and existing webhooks retain
+  all-category behavior.
+- Added append-only migration `000017_release_1_1_runtime_policy_history`.
+- Added the responsive v1.1 application shell with a collapsible desktop left
+  rail, equivalent mobile drawer, project-owned line icons, bottom-rail account
+  menu, and accessible active/open navigation ancestry.
+- Added My Account with current-password-verified self-service password change
+  and Preferences with browser-local System, Light, and Dark appearance.
+- Added the dedicated HA Controller → Notifications presentation route for the
+  existing encrypted webhook capability.
+- Redesigned Dashboard around evidence-backed DNS Serving, API Reachable, HA,
+  Collection, and Attention cards plus DNS activity, current attention, recent
+  safe changes, compact node state, and top-domain rankings.
+- Added ADR-0034 and canonical navigation, shell, dashboard, responsive, and
+  route-ownership documentation.
+- Added expandable Audit Log evidence with typed known-action presentation,
+  defensive metadata redaction, current actor labels plus immutable UUIDs,
+  canonical resource links, exact deep links, and server-side keyset paging.
+- Added append-only migration `000018_release_1_1_audit_keyset`.
+- Added optional per-user TOTP MFA with five-minute pre-session challenges,
+  locally rendered QR/manual enrollment, ten one-time recovery codes, secure
+  regeneration/disable, and MFA step-up for self-service password changes.
+- Added append-only migration `000019_release_1_1_totp_mfa` with encrypted TOTP
+  envelopes, one-way recovery-code hashes, and transient concurrency-safe
+  challenge state.
+- Added read-only Users 2FA status and host/container recovery through
+  `atlas-dns-admin reset-mfa --email <local-login>`; no browser administrator
+  bypass or mandatory policy was added.
+
+### Changed
+
+- Raised the managed AdGuard Home floor to v0.107.78 and removed active
+  schema-1/older-adapter paths. Retained v1.0.x schema-1 rows are exposed only
+  through a one-way, non-deployable schema-2 read conversion.
+
+- Setup Guide is now reference/follow-up guidance backed by the same canonical
+  onboarding status instead of maintaining a second definition of setup.
+- Collector scheduling adopts persisted node-health, Statistics, Query Log
+  collection/cadence, and Query Log retention changes without restart.
+- Moved Statistics, Query Log, and Operational Status into the Monitoring
+  navigation group while retaining every stable route.
+- Kept Settings and Filters exclusive to managed AdGuard Home configuration;
+  Atlas controller behavior now has explicit HA Controller or Administration
+  ownership. Setup Guide is a bottom-rail help/reference utility.
+- Standardized all canonical authenticated pages, including account and
+  preferences, on the Dashboard's wide content frame.
+- Removed the global top utility bar, cluster selector, shell scope, revision,
+  health, freshness, notification, and theme controls. Canonical feature pages
+  retain their owning information and Statistics owns node/cluster traffic scope.
+- Dashboard is cluster-wide for operational and traffic evidence and
+  builds Recent Changes from selected-cluster plus labelled Controller events,
+  with durable-ID de-duplication, exact drill-down, and scoped partial warnings.
+- Standardized Revisions, Deployments, Drift, Query Log, and Audit Log inline
+  disclosures on accessible `+`/`−` controls and improved About page hierarchy.
+- Standard and Full backups retain encrypted MFA state and recovery hashes while
+  excluding sessions and transient MFA challenges.
+
+### Fixed
+
+- Fixed onboarding and System Settings monitoring saves reflecting read-only
+  presentation fields into the strict update API payload, and made a normal
+  monitoring save record the selected cluster's reviewed milestone.
+- Fixed HA DNS summaries, Dashboard node evidence, and maintenance preflight
+  expiring successful probes before a configured long health interval elapsed;
+  explicit probe failures now retain precedence over age-based staleness.
+- Completed onboarding is not revoked by a transient node health failure; live
+  topology evidence remains visible for remediation without trapping admins.
+- Preserved explicit unavailable and partial-source states on Dashboard instead
+  of presenting missing operational data as zero.
+- Added regression coverage for route/menu mapping, active and nested
+  navigation, collapsed and mobile shells, keyboard behavior, Dashboard
+  loading/error/empty/success states, and structural accessibility.
+
+## 1.0.2 - Released 2026-08-22
 
 ### Added
 
@@ -68,7 +163,7 @@ interfaces.
   bounded delivery diagnostics and the delivery/event history query index. The
   released `000001`–`000014` baseline remains unchanged.
 
-## 1.0.1 - Unreleased
+## 1.0.1 - Released 2026-08-16
 
 ### Fixed
 

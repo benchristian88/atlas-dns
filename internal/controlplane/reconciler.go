@@ -59,6 +59,10 @@ func (r *Reconciler) RunOnce(ctx context.Context) error {
 				_ = r.repository.UpdateNodeConvergence(ctx, node.ID, "maintenance", r.now().UTC())
 				continue
 			}
+			if node.CompatibilityStatus != domain.CompatibilitySupported || configuration.IsLegacyConverted(revision.Document.Unsupported) {
+				_ = r.repository.UpdateNodeConvergence(ctx, node.ID, "unsupported", r.now().UTC())
+				continue
+			}
 			if err := r.evaluateNode(ctx, cluster, revision, node); err != nil {
 				r.logger.Error("node reconciliation failed", "cluster_id", cluster.ID, "node_id", node.ID, "error", err)
 			}

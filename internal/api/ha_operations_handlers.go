@@ -226,21 +226,60 @@ func (s *Server) handleNotificationChannels(response http.ResponseWriter, reques
 	}
 	writeJSON(response, http.StatusOK, map[string]any{"items": value})
 }
+
+func (s *Server) handleNotificationPolicy(response http.ResponseWriter, request *http.Request) {
+	if s.notifications == nil {
+		s.writeError(response, request, domain.NewError(domain.ErrorNotFound, "notification settings are unavailable"))
+		return
+	}
+	value, err := s.notifications.Policy(request.Context())
+	if err != nil {
+		s.writeError(response, request, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, value)
+}
+
+func (s *Server) handleUpdateNotificationPolicy(response http.ResponseWriter, request *http.Request) {
+	if s.notifications == nil {
+		s.writeError(response, request, domain.NewError(domain.ErrorNotFound, "notification settings are unavailable"))
+		return
+	}
+	var input struct {
+		EnabledEventTypes []string `json:"enabledEventTypes"`
+		RecordVersion     int      `json:"recordVersion"`
+	}
+	if err := decodeJSON(response, request, &input); err != nil {
+		s.writeError(response, request, err)
+		return
+	}
+	value, err := s.notifications.UpdatePolicy(request.Context(), actor(request.Context()), input.EnabledEventTypes, input.RecordVersion)
+	if err != nil {
+		s.writeError(response, request, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, value)
+}
 func (s *Server) handleCreateNotificationChannel(response http.ResponseWriter, request *http.Request) {
 	if s.notifications == nil {
 		s.writeError(response, request, domain.NewError(domain.ErrorNotFound, "notification settings are unavailable"))
 		return
 	}
 	var input struct {
-		Name        string `json:"name"`
-		Destination string `json:"destination"`
-		Enabled     bool   `json:"enabled"`
+		Name                 string    `json:"name"`
+		Destination          string    `json:"destination"`
+		Enabled              bool      `json:"enabled"`
+		SubscribedCategories *[]string `json:"subscribedCategories"`
 	}
 	if err := decodeJSON(response, request, &input); err != nil {
 		s.writeError(response, request, err)
 		return
 	}
-	value, err := s.notifications.Create(request.Context(), actor(request.Context()), request.PathValue("clusterId"), input.Name, input.Destination, input.Enabled)
+	categories := haoperations.RecommendedNotificationCategories()
+	if input.SubscribedCategories != nil {
+		categories = *input.SubscribedCategories
+	}
+	value, err := s.notifications.Create(request.Context(), actor(request.Context()), request.PathValue("clusterId"), input.Name, input.Destination, input.Enabled, categories)
 	if err != nil {
 		s.writeError(response, request, err)
 		return
@@ -253,11 +292,12 @@ func (s *Server) handleUpdateNotificationChannel(response http.ResponseWriter, r
 		return
 	}
 	var input struct {
-		Name               string  `json:"name"`
-		Destination        *string `json:"destination"`
-		ReplaceDestination bool    `json:"replaceDestination"`
-		Enabled            bool    `json:"enabled"`
-		RecordVersion      int     `json:"recordVersion"`
+		Name                 string    `json:"name"`
+		Destination          *string   `json:"destination"`
+		ReplaceDestination   bool      `json:"replaceDestination"`
+		Enabled              bool      `json:"enabled"`
+		RecordVersion        int       `json:"recordVersion"`
+		SubscribedCategories *[]string `json:"subscribedCategories"`
 	}
 	if err := decodeJSON(response, request, &input); err != nil {
 		s.writeError(response, request, err)
@@ -275,7 +315,11 @@ func (s *Server) handleUpdateNotificationChannel(response http.ResponseWriter, r
 	if !input.ReplaceDestination {
 		destination = nil
 	}
-	value, err := s.notifications.Update(request.Context(), actor(request.Context()), request.PathValue("channelId"), input.Name, destination, input.Enabled, input.RecordVersion)
+	var categories []string
+	if input.SubscribedCategories != nil {
+		categories = *input.SubscribedCategories
+	}
+	value, err := s.notifications.Update(request.Context(), actor(request.Context()), request.PathValue("channelId"), input.Name, destination, input.Enabled, input.RecordVersion, categories)
 	if err != nil {
 		s.writeError(response, request, err)
 		return

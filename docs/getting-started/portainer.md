@@ -7,11 +7,11 @@ Docker Compose CLI. There is no Portainer-specific image and no source build.
 
 1. In Portainer, open **Stacks → Add stack → Git repository**.
 2. Use `https://github.com/benchristian88/atlas-dns.git`.
-3. Select the reviewed release tag, such as `v1.0.1`, and Compose path
+3. Select the reviewed release tag, such as `v1.1.0`, and Compose path
    `compose.yaml`.
 4. Add every value from `atlas-dns.env.example` in Portainer's environment
    editor. Generate unique `POSTGRES_PASSWORD`, `SESSION_SECRET`, and
-   `CREDENTIAL_ENCRYPTION_KEY` values and set `ATLAS_DNS_VERSION=1.0.1`.
+   `CREDENTIAL_ENCRYPTION_KEY` values and set `ATLAS_DNS_VERSION=1.1.0`.
 5. Deploy the stack and wait for both PostgreSQL and Atlas DNS Controller to be
    healthy.
 
@@ -40,6 +40,7 @@ Confirm the image digest/version in About and verify readiness, nodes, and
 collectors. Database rollback follows the same forward-only boundary as the
 [Docker guide](docker.md).
 
-For 1.0.0 to 1.0.1, change both the Git reference and image variable to the
-1.0.1 release. Do not delete or recreate `postgres-data`, `atlas-dns-work`, the
-stack environment, or secrets. The patch uses the unchanged v1.0.0 schema.
+For v1.0.x to v1.1.0, preserve the stack environment through the first startup
+so deprecated runtime values seed PostgreSQL once. Verify System Settings, then
+remove only the deprecated runtime entries. Do not delete or recreate
+`postgres-data`, `atlas-dns-work`, or secrets.

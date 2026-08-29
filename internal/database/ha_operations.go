@@ -140,10 +140,6 @@ func (s *Store) RecordHAEvent(ctx context.Context, value haoperations.Event) err
 	if err := insertHAEvent(ctx, tx, value); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM ha_operational_events WHERE id IN
-		(SELECT id FROM ha_operational_events WHERE occurred_at < $1 ORDER BY occurred_at,id LIMIT 10000)`, value.OccurredAt.Add(-365*24*time.Hour)); err != nil {
-		return fmt.Errorf("clean HA operational events: %w", err)
-	}
 	return tx.Commit(ctx)
 }
 
@@ -176,7 +172,12 @@ func insertHAEvent(ctx context.Context, tx pgx.Tx, value haoperations.Event) err
 	if err != nil {
 		return fmt.Errorf("insert HA event: %w", err)
 	}
-	rows, err := tx.Query(ctx, `SELECT id FROM notification_channels WHERE cluster_id=$1 AND enabled`, value.ClusterID)
+	category := haoperations.NotificationCategoryForEvent(value.EventType)
+	var policyEnabled bool
+	if err := tx.QueryRow(ctx, `SELECT $1=ANY(enabled_event_types) FROM notification_policy WHERE singleton`, value.EventType).Scan(&policyEnabled); err != nil {
+		return fmt.Errorf("read notification policy: %w", err)
+	}
+	rows, err := tx.Query(ctx, `SELECT id FROM notification_channels WHERE cluster_id=$1 AND enabled AND $2=ANY(subscribed_categories)`, value.ClusterID, category)
 	if err != nil {
 		return fmt.Errorf("list event notification channels: %w", err)
 	}
@@ -202,17 +203,14 @@ func insertHAEvent(ctx context.Context, tx pgx.Tx, value haoperations.Event) err
 		status := "pending"
 		var next *time.Time
 		at := value.OccurredAt
-		if value.EventType == "dns.failed" && value.NodeID != nil {
-			var maintenance bool
+		maintenance := false
+		if policyEnabled && value.EventType == "dns.failed" && value.NodeID != nil {
 			if err := tx.QueryRow(ctx, `SELECT maintenance_mode FROM nodes WHERE id=$1`, *value.NodeID).Scan(&maintenance); err != nil {
 				return err
 			}
-			if maintenance {
-				status = "suppressed"
-			} else {
-				next = &at
-			}
-		} else {
+		}
+		status, queued := notificationDeliveryDisposition(policyEnabled, value.EventType, maintenance)
+		if queued {
 			next = &at
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO notification_deliveries
@@ -226,6 +224,13 @@ func insertHAEvent(ctx context.Context, tx pgx.Tx, value haoperations.Event) err
 		}
 	}
 	return nil
+}
+
+func notificationDeliveryDisposition(policyEnabled bool, eventType string, maintenance bool) (string, bool) {
+	if !policyEnabled || (eventType == "dns.failed" && maintenance) {
+		return "suppressed", false
+	}
+	return "pending", true
 }
 
 func (s *Store) ListHAEvents(ctx context.Context, clusterID, nodeID string, limit int) ([]haoperations.Event, error) {

@@ -11,6 +11,7 @@ not part of the operator documentation set.
 - [Portainer Stack installation](getting-started/portainer.md)
 - [Debian 13 and systemd installation](getting-started/native-systemd.md)
 - [Manual release archive installation](getting-started/manual-release.md)
+- [Guided first-run onboarding](getting-started/onboarding.md)
 - [User guide](user-guide/overview.md)
 - [Administration guide](administration/administration.md)
 
@@ -21,6 +22,8 @@ not part of the operator documentation set.
 - [Backup format](operations/backup-format.md)
 - [Compatibility matrix](operations/compatibility-matrix.md)
 - [Upgrade and migration policy](operations/upgrade-policy.md)
+- [Release 1.1.0 upgrade notes](operations/release-1.1.0.md)
+- [Runtime settings and environment ownership](reference/runtime-environment.md)
 - [Release 1.0 readiness record](operations/release-1.0-readiness.md)
 - [Support and deprecation policy](product/support-and-deprecation-policy.md)
 
@@ -32,6 +35,7 @@ not part of the operator documentation set.
 - [Configuration model](architecture/configuration-model.md)
 - [Controller API](api/controller-api.md) and [node API boundary](api/node-api.md)
 - [Database schema](database/schema.md)
+- [v1.1 page-responsibility audit follow-up](frontend/page-responsibility-audit-follow-up-1.1.md)
 - [Architecture decisions](decisions/README.md)
 
 ## Develop and contribute

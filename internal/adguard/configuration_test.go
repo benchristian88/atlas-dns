@@ -19,22 +19,6 @@ import (
 	"github.com/benchristian88/atlas-dns/internal/operations"
 )
 
-func TestVersionFixturesSuppressVolatileFields(t *testing.T) {
-	documents := make([]configuration.Document, 0, 2)
-	for _, version := range []string{"v0.107.52", "v0.107.61"} {
-		var status statusResponse
-		readFixture(t, filepath.Join("testdata", version, "status.json"), &status)
-		var dns dnsInfoResponse
-		readFixture(t, filepath.Join("testdata", version, "dns_info.json"), &dns)
-		var filtering filterStatusResponse
-		readFixture(t, filepath.Join("testdata", version, "filtering_status.json"), &filtering)
-		documents = append(documents, configurationDocument(version, status, dns, filtering))
-	}
-	if differences := configuration.Diff(documents[0], documents[1]); len(differences) != 0 {
-		t.Fatalf("equivalent fixtures differ: %#v", differences)
-	}
-}
-
 func TestReadBlocklistsPreservesVolatileMetadataOutsideConfiguration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/control/filtering/status" {
@@ -109,12 +93,25 @@ func TestApplyConfigurationUsesSupportedEndpointsAndPreservesWhitelistFilters(t 
 			}})
 			return
 		}
-		if request.Method != http.MethodPost {
+		if request.Method == http.MethodGet {
+			switch request.URL.Path {
+			case "/control/dns_info", "/control/rewrite/settings", "/control/querylog/config", "/control/stats/config":
+				_, _ = response.Write([]byte(`{}`))
+			case "/control/clients":
+				_, _ = response.Write([]byte(`{"clients":[]}`))
+			case "/control/rewrite/list":
+				_, _ = response.Write([]byte(`[]`))
+			default:
+				http.NotFound(response, request)
+			}
+			return
+		}
+		if request.Method != http.MethodPost && request.Method != http.MethodPut {
 			http.Error(response, "unexpected method", http.StatusMethodNotAllowed)
 			return
 		}
 		var body map[string]any
-		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
 			t.Errorf("decode request: %v", err)
 		}
 		requests[request.URL.Path] = append(requests[request.URL.Path], body)
@@ -123,9 +120,9 @@ func TestApplyConfigurationUsesSupportedEndpointsAndPreservesWhitelistFilters(t 
 	defer server.Close()
 
 	adapter := NewConfigurationReader(NewProbe(2 * time.Second))
-	desired := configuration.Document{SchemaVersion: 1, Shared: configuration.Shared{
+	desired := configuration.Document{SchemaVersion: configuration.SchemaVersion, Shared: configuration.Shared{
 		DNS:       configuration.DNS{UpstreamDNS: []string{"1.1.1.1"}},
-		Filtering: configuration.Filtering{Enabled: true, UpdateInterval: 24, FilterURLs: []string{"https://example.test/wanted.txt"}, UserRules: []string{"||ads.test^"}},
+		Filtering: configuration.Filtering{Enabled: true, UpdateInterval: 24, FilterURLs: []string{"https://example.test/wanted.txt"}, WhitelistURLs: []string{"https://example.test/allow.txt"}, UserRules: []string{"||ads.test^"}},
 	}}
 	err := adapter.ApplyConfiguration(context.Background(), domain.NodeProbeRequest{BaseURL: server.URL, CertificatePolicy: domain.CertificateInsecureHTTP, Credentials: domain.NodeCredentials{Username: "admin", Password: "secret"}}, desired)
 	if err != nil {
@@ -196,33 +193,6 @@ func TestAllowlistReconciliationUsesWhitelistFlagAndPreservesBlocklists(t *testi
 	}
 }
 
-func TestReadConfigurationKeepsV010752OnFrozenSchemaV1(t *testing.T) {
-	requests := []string{}
-	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		requests = append(requests, request.URL.Path)
-		response.Header().Set("Content-Type", "application/json")
-		switch request.URL.Path {
-		case "/control/status":
-			_, _ = response.Write([]byte(`{"version":"v0.107.52","running":true,"dns_addresses":["0.0.0.0"],"dns_port":53,"protection_enabled":true,"protection_disabled_duration":0}`))
-		case "/control/dns_info":
-			_, _ = response.Write([]byte(`{"upstream_dns":["1.1.1.1"],"protection_enabled":true,"protection_disabled_until":null}`))
-		case "/control/filtering/status":
-			_, _ = response.Write([]byte(`{"enabled":true,"interval":24,"filters":[],"user_rules":[]}`))
-		default:
-			http.NotFound(response, request)
-		}
-	}))
-	defer server.Close()
-	adapter := NewConfigurationReader(NewProbe(2 * time.Second))
-	document, profile, err := adapter.ReadConfiguration(context.Background(), probeRequest(server.URL), "v0.107.52")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if document.SchemaVersion != configuration.LegacySchemaVersion || profile.SchemaVersion != configuration.LegacySchemaVersion || !profile.Features["querylog_clear"] || !profile.Features["stats_reset"] || profile.Features["query_log"] || profile.Features["statistics"] || len(requests) != 3 {
-		t.Fatalf("legacy inventory document=%#v profile=%#v requests=%#v", document, profile, requests)
-	}
-}
-
 func TestReadConfigurationV2SupportsTestedMixedAndProvisionallyCompatiblePatches(t *testing.T) {
 	responses := map[string]string{
 		"/control/status":               `{"version":"v0.107.78","running":true,"dns_addresses":["0.0.0.0"],"dns_port":53,"protection_enabled":true,"protection_disabled_duration":0}`,
@@ -273,6 +243,18 @@ func TestReadConfigurationV2SupportsTestedMixedAndProvisionallyCompatiblePatches
 	}
 }
 
+func TestReadConfigurationRejectsVersionBelowManagedFloorWithRequiredMessage(t *testing.T) {
+	reader := NewConfigurationReader(NewProbe(time.Second))
+	_, _, err := reader.ReadConfiguration(context.Background(), domain.NodeProbeRequest{}, "v0.107.77")
+	domainError, ok := err.(*domain.Error)
+	if !ok || domainError.Kind != domain.ErrorCapability {
+		t.Fatalf("error = %#v", err)
+	}
+	if !strings.Contains(err.Error(), "Minimum supported version: 0.107.78") || !strings.Contains(err.Error(), "Detected version: v0.107.77") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestCompatibilityFixturesNormalizeProtectionSemanticsAndAdditiveFields(t *testing.T) {
 	for _, version := range []string{"v0.107.78", "v0.107.79"} {
 		var status statusResponse
@@ -291,6 +273,17 @@ func TestCompatibilityFixturesNormalizeProtectionSemanticsAndAdditiveFields(t *t
 		}
 		if version == "v0.107.79" && (document.Shared.DNS.ProtectionEnabled || document.ObservedOnly.ProtectionDisabledUntil != "2026-08-19T00:01:00Z") {
 			t.Fatalf("unexpected .79 paused protection state: %#v", document)
+		}
+	}
+}
+
+func TestTLSStatusFixturesPreserveDisabledApplicabilityAcrossTestedVersions(t *testing.T) {
+	for _, version := range []string{"v0.107.78", "v0.107.79"} {
+		var response tlsStatusResponse
+		readFixture(t, filepath.Join("testdata", version, "tls_status.json"), &response)
+		tls := configurationTLSStatus(response)
+		if tls.Enabled || tls.ValidCertificate || tls.NotAfter != "0001-01-01T00:00:00Z" {
+			t.Fatalf("%s disabled TLS contract was not preserved: %#v", version, tls)
 		}
 	}
 }
@@ -827,14 +820,6 @@ func TestReadBlockedServicesCatalogueSupportsUngroupedAndGroupedContracts(t *tes
 		wantGroups          int
 		wantGroupID         string
 	}{
-		{
-			name: "frozen schema catalogue", version: "v0.107.52",
-			body: `{"blocked_services":[{"id":"youtube","name":"YouTube","rules":["||youtube.com^"],"icon_svg":"PHN2Zy8+"}]}`,
-		},
-		{
-			name: "pre-group catalogue", version: "v0.107.61",
-			body: `{"blocked_services":[{"id":"youtube","name":"YouTube","rules":["||youtube.com^"],"icon_svg":"PHN2Zy8+"}]}`,
-		},
 		{
 			name: "grouped catalogue", version: "v0.107.78",
 			body:       `{"blocked_services":[{"id":"youtube","name":"YouTube","rules":["||youtube.com^"],"icon_svg":"PHN2Zy8+","group_id":"streaming"}],"groups":[{"id":"streaming"}]}`,

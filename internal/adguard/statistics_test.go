@@ -12,8 +12,7 @@ import (
 
 func TestSupportsRecentStatisticsBoundaries(t *testing.T) {
 	for version, want := range map[string]bool{
-		"v0.107.71": false,
-		"v0.107.72": true,
+		"v0.107.77": false,
 		"v0.107.78": true,
 		"v0.107.79": true,
 		"v0.107.80": true,

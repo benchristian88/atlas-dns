@@ -15,10 +15,26 @@ import (
 type statisticsStoreFake struct {
 	attempt   telemetry.PollAttempt
 	snapshots []telemetry.Snapshot
+	records   []domain.NodeRecord
 }
 
 func (s *statisticsStoreFake) PollableNodes(context.Context) ([]domain.NodeRecord, error) {
-	return nil, nil
+	return s.records, nil
+}
+
+func TestStatisticsPollerImmediateCollectionIsClusterScoped(t *testing.T) {
+	store := &statisticsStoreFake{records: []domain.NodeRecord{
+		{Node: domain.Node{ID: "node-one", ClusterID: "cluster-one", Name: "Primary", Version: "v0.107.78"}},
+		{Node: domain.Node{ID: "node-two", ClusterID: "cluster-two", Name: "Other", Version: "v0.107.78"}},
+	}}
+	reader := &statisticsReaderFake{config: telemetry.SourceConfig{Enabled: true, Retention: 24 * time.Hour}}
+	poller := NewStatisticsPoller(store, decrypterFake{}, reader, time.Hour, time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := poller.PollClusterNow(context.Background(), "cluster-one"); err != nil {
+		t.Fatal(err)
+	}
+	if reader.configReads != 1 || store.attempt.NodeID != "node-one" {
+		t.Fatalf("config reads=%d attempt node=%q", reader.configReads, store.attempt.NodeID)
+	}
 }
 func (s *statisticsStoreFake) RecordStatisticsPoll(_ context.Context, attempt telemetry.PollAttempt, snapshots []telemetry.Snapshot) error {
 	s.attempt, s.snapshots = attempt, snapshots
@@ -87,7 +103,7 @@ func TestStatisticsPollerDoesNotCallUnsupportedNode(t *testing.T) {
 	store := &statisticsStoreFake{}
 	reader := &statisticsReaderFake{config: telemetry.SourceConfig{Enabled: true, Retention: 30 * 24 * time.Hour}}
 	poller := NewStatisticsPoller(store, decrypterFake{}, reader, time.Hour, time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	poller.pollNode(context.Background(), domain.NodeRecord{Node: domain.Node{ID: "22222222-2222-4222-8222-222222222222", ClusterID: "11111111-1111-4111-8111-111111111111", Version: "v0.107.71"}})
+	poller.pollNode(context.Background(), domain.NodeRecord{Node: domain.Node{ID: "22222222-2222-4222-8222-222222222222", ClusterID: "11111111-1111-4111-8111-111111111111", Version: "v0.107.77"}})
 	if store.attempt.Status != "unsupported" || store.attempt.RangeErrors[telemetry.Range24Hours] != "STATISTICS_EXACT_RANGE_UNSUPPORTED" {
 		t.Fatalf("attempt = %+v", store.attempt)
 	}

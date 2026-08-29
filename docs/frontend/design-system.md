@@ -8,9 +8,9 @@ The design should feel familiar to AdGuard Home users while remaining an origina
 
 The application uses:
 
-- Horizontal desktop navigation.
-- Responsive mobile navigation.
-- A persistent cluster and node context row.
+- A persistent, collapsible desktop left rail.
+- A responsive mobile navigation drawer with the same hierarchy.
+- No global top utility bar; context and controls live on their owning pages.
 - Semantic light and dark themes.
 - Shared form, table, dialog, status, and feedback components.
 - Clear separation between Save Draft, Publish Revision, Deploy, Verify, and Reconcile.
@@ -66,21 +66,27 @@ Saving a form must never imply that node configuration has already changed.
 
 ## Application shell
 
-### Desktop header
+### Desktop left rail
 
-Use horizontal primary navigation.
+Use left-hand primary navigation.
 
 ```text
 Dashboard
-Statistics
+Monitoring
 Settings
 Filters
-Query Log
 HA Controller
-Setup Guide
+Administration
 ```
 
-Dropdown menus:
+Nested groups:
+
+```text
+Monitoring
+├── Statistics
+├── Query Log
+└── Operational Status
+```
 
 ```text
 Settings
@@ -103,57 +109,64 @@ Filters
 ```text
 HA Controller
 ├── Nodes
+├── HA Operations
+├── Notifications
 ├── Configuration Control
 ├── Revisions
 ├── Deployments
 └── Drift
 ```
 
-Lower-frequency administration belongs in the user or system menu:
+Administration contains:
 
 - Users
 - Audit Log
 - System Settings
 - Backups
+- Updates
 - About
-- Sign Out
 
-The compact theme icon button sits immediately before the desktop administration
-menu and opens explicit Light, Dark, and System choices. Atlas theme-specific lockup assets provide the visual
-brand foundation; phone layouts use the approved symbol-only asset rather than
+Setup Guide is a utility item near the bottom of the rail. It is reference/help,
+not first-run onboarding. The signed-in account menu is the final rail item and
+opens My Account, Preferences, and Sign out. Settings and
+Filters contain only AdGuard Home configuration; Notifications remains an
+Atlas HA Controller function. Do not add an Integrations destination.
+
+Preferences contains only explicit System, Light, and Dark choices. Atlas
+theme-specific lockup assets provide the visual brand foundation; collapsed
+rail and drawer layouts may use the approved symbol-only asset rather than
 compressing the lockup.
 
-### Context row
+### Page-owned context
 
-The context row appears below the main header.
+The application has no global top utility bar. Main content begins with the
+page's own PageHeader/content. Ownership is:
 
-It contains:
+- Current cluster is read-only page context where useful; cluster switching is
+  not exposed in v1.1.
+- Dashboard is cluster-wide; Statistics owns traffic scope and range.
+- Revision, health, deployment, notification, and freshness evidence stays on
+  canonical feature pages.
+- Preferences owns appearance; the rail account menu owns identity and sign out.
 
-- Cluster selector.
-- Scope selector.
-- Active revision.
-- Cluster health.
-- Active deployment indicator.
-
-Example:
-
-```text
-[Home DNS ▾] [Entire Cluster ▾] Revision 24  ● Healthy
-```
+Atlas retains cluster-scoped domain models, IDs, persistence, and APIs for
+future multi-cluster workflows despite hiding cluster selection in v1.1.
 
 ### Mobile
 
 Below the desktop breakpoint:
 
-- Replace horizontal navigation with a hamburger menu.
-- Use a full-height navigation drawer.
+- Replace the left rail with a hamburger-triggered full-height navigation drawer.
+- Place Atlas branding and the hamburger in a minimal sticky application-shell
+  header above page-owned headings and content.
 - Preserve the same navigation hierarchy.
-- Show Settings, Filters, and HA Controller as expandable groups.
-- Keep cluster and scope context visible or accessible through a context sheet.
+- Show Monitoring, Settings, Filters, HA Controller, and Administration as
+  expandable groups.
+- Keep page-specific controls inside their owning page.
 - Do not invent a separate mobile-only information architecture.
 - Keep the authenticated shell within the layout viewport on first render.
   Document-level horizontal scrolling or clipping is not a responsive strategy;
-  wide tables and the context row own their deliberate contained scrolling.
+  wide tables own their deliberate contained scrolling.
 - Respect iOS safe-area insets in browser and standalone modes while preserving
   normal browser zoom.
 
@@ -393,8 +406,8 @@ Common values:
 
 ### Layout dimensions
 
-- Main header: approximately 64px.
-- Context row: approximately 44–52px.
+- Expanded desktop rail: 240px; collapsed rail: 72px.
+- Mobile drawer: up to 360px and no more than 88vw.
 - Desktop page padding: 24px.
 - Mobile page padding: 16px.
 - Control radius: 6px.
@@ -451,10 +464,8 @@ Use for:
 
 ### Standard
 
-Use for:
-
-- Setup Guide.
-- All System administration routes.
+Available for bounded embedded content and focused compositions, but no
+canonical authenticated application route currently uses this width.
 
 ### Wide
 
@@ -469,16 +480,20 @@ Use for:
 - Revisions.
 - Deployments.
 - Drift.
+- Setup Guide.
+- All System administration routes.
 
 ### Full
 
 Reserved for a future route whose content demonstrably requires the complete
 available desktop width. No current canonical route uses Full.
 
-Dashboard, Statistics, and Query Log share the Wide primary-application
-measure. Filters are one Wide family. All System administration pages,
-including Audit Log and Operational Status, use Standard consistently. Mobile
-always uses the available inline size regardless of the desktop maximum.
+Primary application routes share the Dashboard's Wide
+primary-application measure. This keeps Monitoring, Settings, Filters, HA
+Controller, Administration, and Setup Guide aligned as operators move between
+sections. Account routes use the same Wide measure so transitions into
+self-service pages do not change the application frame. Mobile always uses the
+available inline size regardless of the desktop maximum.
 
 ### Canonical route assignment
 
@@ -489,31 +504,27 @@ always uses the available inline size regardless of the desktop maximum.
 | `/settings/general`, `/settings/dns`, `/settings/encryption`, `/settings/clients`, `/settings/dhcp` | Wide | Primary configuration forms, capability context, and structured tables. |
 | `/filters/blocklists`, `/filters/allowlists`, `/filters/rewrites`, `/filters/blocked-services`, `/filters/custom-rules` | Wide | One coherent Filters family with tables, catalogues, and editors. |
 | `/query-log` | Wide | Matches Dashboard while its investigation table scrolls locally when required. |
-| `/ha/nodes`, `/ha/nodes/{nodeId}`, `/ha/operations`, `/ha/configuration`, `/ha/revisions`, `/ha/deployments`, `/ha/drift` | Wide | Operational tables, comparisons, grids, and lifecycle controls. |
-| `/setup-guide` | Standard | Linear onboarding checklist. |
-| `/system/users`, `/system/audit`, `/system/operational-status`, `/system/settings`, `/system/backups`, `/system/updates`, `/system/about` | Standard | One coherent administration measure; dense tables remain locally scrollable. |
+| `/ha/nodes`, `/ha/nodes/{nodeId}`, `/ha/operations`, `/ha/notifications`, `/ha/configuration`, `/ha/revisions`, `/ha/deployments`, `/ha/drift` | Wide | Operational tables, comparisons, grids, and lifecycle controls. |
+| `/setup-guide` | Wide | Aligns reference/help with the primary application frame. |
+| `/system/users`, `/system/audit`, `/system/operational-status`, `/system/settings`, `/system/backups`, `/system/updates`, `/system/about` | Wide | Aligns Administration and Monitoring with Dashboard; dense tables remain locally scrollable. |
+| `/account`, `/account/preferences` | Wide | Self-service identity, credential, and appearance forms aligned with the rest of the application. |
 
 ---
 
 ## Navigation styling
 
 - Keep top-level labels compact.
-- Use a subtle active underline, text treatment, or background.
+- Use an Atlas Blue active edge, text treatment, and soft background.
 - Avoid large filled navigation tabs.
-- Dropdowns use the semantic popup surface.
-- Dropdowns use restrained shadows.
 - Active child routes mark the parent menu active.
-- Menus must remain inside the viewport.
+- Active child routes keep their parent group open.
 - Desktop and mobile navigation use the same labels and hierarchy.
 - Navigation must be keyboard accessible.
-- Desktop dropdowns use one controlled open-menu state. Mouse hover opens a
-  menu, moving between trigger and popover retains it, and leaving both closes
-  it after a 180ms travel delay. Click/touch toggles the disclosure; Escape,
-  focus departure, outside pointer activation, or selecting a destination
-  closes it. Opening a peer closes the previous menu.
-- Arrow keys, Home, and End move among open menu items. Escape restores focus
-  to the disclosure trigger. Mobile groups are controlled peer disclosures and
-  never depend on hover.
+- Desktop groups use native disclosure buttons. Enter/Space toggles; Arrow Down
+  or Arrow Right opens and focuses the first child. Collapsed controls retain
+  accessible labels and title tooltips.
+- Mobile groups are controlled peer disclosures, never depend on hover, and
+  the drawer restores focus to its trigger when dismissed.
 
 ---
 
@@ -658,7 +669,16 @@ Table rules:
 - Operational record details use an adjacent expandable table row with a real
   disclosure button, `aria-expanded`, and `aria-controls`. Only one row is open
   per table. Revisions, Deployments, and Drift persist the selected ID in the
-  URL and scroll a valid deep link into view once after loading.
+  URL and scroll a valid deep link into view once after loading. Equivalent
+  Revisions, Deployments, Drift, Query Log, and Audit Log controls display `+`
+  when collapsed and `−` when expanded; the icon is hidden from the accessible
+  name and every button has a descriptive label.
+- Audit Log uses the same adjacent expanded-row and query-selection pattern.
+  Its compact row is Time, human Action, Resource, current Actor label, and a
+  labelled disclosure. Request ID, immutable actor UUID, raw action, canonical
+  resource link, timestamp, and typed/bounded metadata remain in the detail.
+  Cursor pages use the shared Pagination control; an exact deep link may pin a
+  directly fetched older event above the stable current page.
 - Very large secondary data, such as a complete immutable revision document,
   stays behind an independently operable collapsed disclosure inside the
   inline detail.
@@ -693,30 +713,46 @@ and destructive hierarchy is preserved when the row wraps.
 
 ### Dashboard information hierarchy
 
-The Dashboard answers, in order: what the operator manages, whether controller
-subsystems are operating, what DNS is doing, and the state of each node.
+The Dashboard answers, in order: whether DNS, APIs, HA, and collection are
+healthy; what needs attention; what DNS is doing; what changed; and the state
+of each node.
 
-- The top summary is Managed nodes, Healthy nodes, Stale nodes, and Controller
-  role. Healthy nodes is the sole compact node-health fraction.
-- Controller health contains API, HA Redundancy, Statistics, and Query Log
-  state. Active DNS probe counts remain on Operational Status and HA
-  Operations rather than being repeated as another Dashboard fraction.
+- The five primary evidence cards are DNS Serving, API Reachable, HA Status,
+  Collection, and Attention.
+- Attention composes existing Operational Status, HA, drift, deployment,
+  certificate, and update evidence. It does not create a second alert engine.
 - DNS activity uses the canonical 24-hour Statistics report for Queries,
   Blocked percentage, Safety Interventions, and Average Processing. Coverage
   diagnostics remain on Statistics and Operational Status.
-- The controller and DNS panels use the same header, description, 2-by-2
-  shared `SummaryTileGrid`, and wrapping action footer. Grid layout, not a
-  fixed card height, aligns their action areas. Operational Status Core
-  Services reuses the same semantic tile primitive inside the standard divided
-  panel anatomy.
+- Dashboard header, health, HA, collection, attention, node,
+  revision/deployment, drift, Recent Changes, DNS activity, and top-domain
+  rankings remain explicitly cluster-wide. Statistics is the only surface that
+  owns the Entire Cluster/individual-node traffic selector. The page header says
+  `Cluster: <name>` and never implies node-scoped health semantics.
+- Recent Changes composes safe revision, deployment, and database-scoped audit
+  summaries for the selected cluster, plus controller-global administration
+  and security events labelled `Controller`. Events from other clusters are
+  excluded by the server query before its bound is applied.
+- A revision/deployment domain row wins over an audit twin only when action,
+  resource type, and resource UUID deterministically match. Safe current actor
+  attribution may enrich the domain row. After de-duplication, actual timestamp
+  orders the list with a stable ID tie-break; source priority never reorders it.
+- Audit-only Recent Changes links include the exact `auditEventId`. Dashboard
+  labels remain concise and never render audit metadata. A failed revision,
+  deployment, or audit source leaves other items visible with a scoped partial
+  warning.
+- Nodes shows supported DNS, API, version, last-seen, update, and management
+  fields. It does not invent a primary/standby role.
+- Top queried and blocked domains reuse Statistics rankings.
 - Unknown data is not rendered as zero. Loading, unavailable, refresh-error,
   and partial-report copy remains explicit while the panels stay discoverable.
 
-The HA Controller Nodes inventory summary is the five-tile variant of the
-shared convergence surface. It uses five equal `minmax(0, 1fr)` columns above
-the existing 1100px desktop breakpoint, three columns below that breakpoint,
-and one column at the 620px phone breakpoint. The shared four-tile convergence
-summary remains unchanged for Drift and other consumers.
+The HA Controller Nodes inventory summary uses the five-card compact health
+surface shared with Operational Status, HA Operations, and Node Detail. The
+cards retain fleet health, degraded, unreachable, incompatible, and last
+observation evidence while reflowing from five columns to three, two, and one.
+The shared four-tile convergence summary remains unchanged for Drift and other
+consumers.
 
 ---
 
@@ -724,19 +760,26 @@ summary remains unchanged for Drift and other consumers.
 
 ### Application shell
 
-- AppShell
-- AppHeader
+- ApplicationShell
+- SidebarNavigation
+- SidebarLink
 - PrimaryNavigation
-- NavigationDropdown
-- MobileNavigationDrawer
-- ContextBar
-- ClusterSelector
-- ScopeSelector
-- ActiveRevisionIndicator
-- ActiveDeploymentIndicator
+- NavigationGroup
+- MobileGroup
+- AccountMenu
+- ThemeProvider
+- ThemeControl
+- AtlasBrand
+- Icon
 - PageContainer
 - PageHeader
 - NotFoundPage
+
+The shell is the left rail/mobile drawer and has no global utility top bar.
+Branding is in the rail, the account menu is its final item, and controls or
+context belong to the relevant page. The UI exposes only the current cluster in
+v1.1, but cluster-scoped backend/domain capability remains part of the
+architecture.
 
 ### Settings and forms
 
@@ -777,6 +820,7 @@ summary remains unchanged for Drift and other consumers.
 - NodeStatusCard
 - RevisionBadge
 - DriftBadge
+- HealthSummaryCard
 - MetricCard
 - SummaryTileGrid
 - ConvergenceSummary
@@ -932,7 +976,7 @@ The UI must:
 
 - Target WCAG AA contrast.
 - Use visible keyboard focus.
-- Make dropdowns and navigation keyboard accessible.
+- Make disclosures, drawers, account menus, and navigation keyboard accessible.
 - Use native controls or accessible equivalents.
 - Trap and return focus in dialogs.
 - Move focus to page title after route navigation.

@@ -253,7 +253,7 @@ export function RevisionsPage({ cluster }: { cluster: Cluster }) {
             aria-label={`${expanded ? "Hide" : "View"} revision ${revision.revisionNumber} details`}
             onClick={() => toggle(revision.id)}
           >
-            <span aria-hidden="true">{expanded ? "⌃" : "⌄"}</span>
+            <span aria-hidden="true">{expanded ? "−" : "+"}</span>
           </button>
         );
       },
@@ -740,6 +740,3 @@ function shortID(value: string): string {
 function formatTime(value?: string): string {
   return value ? new Date(value).toLocaleString() : "—";
 }
-
-// Compatibility for low-risk downstream imports while the route and UI use Revisions.
-export const HistoryPage = RevisionsPage;

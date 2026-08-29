@@ -32,7 +32,7 @@ func (f *blocklistReaderFake) ReadAllowlists(_ context.Context, request domain.N
 
 func TestBlocklistPresentationKeepsNodeMetadataSeparateAndPartial(t *testing.T) {
 	nodeA, recordA, profileA := catalogueNode("22222222-2222-4222-8222-222222222222", "Primary", "v0.107.78", "http://primary.test")
-	nodeB, recordB, profileB := catalogueNode("33333333-3333-4333-8333-333333333333", "Secondary", "v0.107.61", "http://secondary.test")
+	nodeB, recordB, profileB := catalogueNode("33333333-3333-4333-8333-333333333333", "Secondary", "v0.107.78", "http://secondary.test")
 	profileA.Features["filtering"], profileB.Features["filtering"] = true, true
 	repository := &fakeRepository{
 		nodes: []domain.Node{nodeA, nodeB}, profiles: []CapabilityProfile{profileA, profileB},

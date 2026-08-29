@@ -5,6 +5,8 @@
 
   --atlas-header-height: 64px;
   --atlas-context-height: 48px;
+  --atlas-sidebar-width: 244px;
+  --atlas-sidebar-collapsed-width: 72px;
 
   --atlas-space-1: 4px;
   --atlas-space-2: 8px;

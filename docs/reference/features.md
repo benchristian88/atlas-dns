@@ -27,6 +27,9 @@ records.
   DNS service, desired-state convergence, and collector health.
 - Coordinates maintenance entry/return with remaining-capacity, active DHCP,
   deployment, drift, TLS, version, and collection checks.
+- Keeps existing-node tests and maintenance decisions on exact Node Detail;
+  Nodes remains inventory/create/edit/delete/candidate validation and Drift
+  remains divergence/reconciliation evidence.
 - Detects direct managed changes as drift and supports Manual, Alert, and
   Enforce reconciliation policies.
 - Provides node lifecycle detail and cluster HA event history without carrying
@@ -55,15 +58,26 @@ records.
   endpoint summaries, edit/pause/delete/test lifecycle, delivery evidence, and
   retained historical delivery identity after channel deletion. Delivery/Test
   outcomes appear in cursor-paginated Operational History with safe failure
-  diagnostics.
+  diagnostics; channels subscribe to explicit DNS, redundancy, certificate,
+  version, maintenance, and upgrade categories. A separate grouped exact-event
+  policy controls meaningful transitions without turning suppressed events into
+  delivery failures.
+- Keeps notification policy/channel mutation solely on Notifications while HA
+  Operations preserves delivery/test evidence and renders independent source
+  failures without blanking healthy panels.
 
 ## Administration
 
 - Bootstraps the first local administrator and supports multiple local
   administrator accounts.
+- Offers resumable guided onboarding based on canonical node, observation,
+  capability, revision, monitoring, and notification state. It requires an
+  explicit initial configuration source and publishes through the normal
+  schema-v2 immutable revision path.
 - Creates, disables/re-enables, and resets administrator credentials while
   preventing self-disable and loss of the final enabled administrator.
-- Provides state-derived Setup Guide, System Settings, About/build metadata,
+- Provides canonical-status Setup Guide, persisted/audited session, monitoring,
+  collector, logging, and Operational History System Settings, About/build metadata,
   update awareness, Backup & Restore, and audit views.
 - Supports System, Light, and Dark themes and accessible responsive navigation.
 
