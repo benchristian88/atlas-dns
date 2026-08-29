@@ -66,6 +66,15 @@ type DNSProbeResult struct {
 	AddressFamily string    `json:"addressFamily,omitempty"`
 	ErrorCode     string    `json:"errorCode,omitempty"`
 	ProbedAt      time.Time `json:"probedAt"`
+
+	// Confirmation diagnostics remain process-local. Durable probe rows retain
+	// the existing schema; confirmed transition events and structured logs copy
+	// only the bounded, non-sensitive evidence they need.
+	dnsProbeAttempts            int
+	dnsProbeElapsed             time.Duration
+	dnsProbeRecoveredAfterRetry bool
+	dnsProbePriorErrorCode      string
+	dnsProbePriorProtocols      []string
 }
 
 type Event struct {

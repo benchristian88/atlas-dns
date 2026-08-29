@@ -7,10 +7,27 @@ controller in the DNS path or owning node package execution.
 ## Active DNS and capacity
 
 Node API health and active DNS health are separate. A worker sends a bounded DNS
-query to each enabled non-maintenance node every 30 seconds using the node URL
-host and observed DNS port by default. Operators can configure host, port, query
-name/type, expected RCODE, and UDP/TCP. Each network operation has a two-second
-bound.
+query to each enabled non-maintenance node on the persisted node-health cadence
+(30 seconds by default) using the node URL host and observed DNS port by default.
+Operators can configure host, port, query name/type, expected RCODE, and UDP/TCP.
+Each network operation has a two-second bound.
+
+A healthy logical probe returns immediately. A failed logical probe is confirmed
+twice in the same health pass, after 250 ms and then after a further 500 ms. Each
+attempt runs the complete configured protocol set; cancellation interrupts the
+confirmation waits. Timeout, unreachable, unexpected-RCODE, and generic probe
+failures are confirmable. A canceled context or an unclassified local query
+construction/configuration failure is not retried. Only the final confirmed
+result is persisted or allowed to create DNS, redundancy, and notification
+transitions.
+
+With both UDP and TCP enabled, the healthy path remains two wire exchanges. The
+two required transports run concurrently within each logical attempt. A
+confirmed failure is bounded at six wire exchanges and approximately 6.75
+seconds in the worst case (three two-second attempt windows and 750 ms cumulative
+backoff). Connection refusal and other immediate network errors complete sooner.
+The freshness window remains separate: it tolerates missing successful samples
+but never overrides an explicit confirmed failure.
 
 Latest results and 30 days of probe evidence are durable; only transitions
 create HA events. Operational History defaults to 90 days and is configurable

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"sort"
@@ -65,6 +66,7 @@ type Service struct {
 	apiProbe      domain.NodeStatusProbe
 	credentials   CredentialDecrypter
 	dnsProbe      DNSProber
+	logger        *slog.Logger
 	now           func() time.Time
 	warningDays   int
 	criticalDays  int
@@ -75,7 +77,13 @@ type Service struct {
 }
 
 func NewService(repository Repository, maintenance MaintenanceManager, observer Observer, apiProbe domain.NodeStatusProbe, credentials CredentialDecrypter, dnsProbe DNSProber) *Service {
-	return &Service{repository: repository, maintenance: maintenance, observer: observer, apiProbe: apiProbe, credentials: credentials, dnsProbe: dnsProbe, now: time.Now, warningDays: 30, criticalDays: 7, compatibility: func(string) domain.Compatibility { return domain.CompatibilityUnknown }}
+	return &Service{repository: repository, maintenance: maintenance, observer: observer, apiProbe: apiProbe, credentials: credentials, dnsProbe: dnsProbe, logger: slog.Default(), now: time.Now, warningDays: 30, criticalDays: 7, compatibility: func(string) domain.Compatibility { return domain.CompatibilityUnknown }}
+}
+
+func (s *Service) SetLogger(logger *slog.Logger) {
+	if logger != nil {
+		s.logger = logger
+	}
 }
 
 func (s *Service) SetVersionCompatibility(check func(string) domain.Compatibility) {
@@ -203,6 +211,13 @@ func (s *Service) ProbeNode(ctx context.Context, nodeID string) (DNSProbeResult,
 		return DNSProbeResult{}, domain.NewError(domain.ErrorValidation, "DNS probe target must be remotely reachable from the controller")
 	}
 	result, probeErr := s.dnsProbe.Probe(ctx, DNSProbeRequest{Host: host, Port: settings.DNSProbePort, Name: settings.DNSProbeName, Type: settings.DNSProbeType, ExpectedRCode: settings.ExpectedRCode, UDP: settings.ProbeUDP, TCP: settings.ProbeTCP})
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return result, ctxErr
+	}
+	if errors.Is(probeErr, context.Canceled) || errors.Is(probeErr, context.DeadlineExceeded) {
+		return result, probeErr
+	}
+	s.logDNSProbeDiagnostics(nodeID, result)
 	id, idErr := domain.NewID()
 	if idErr != nil {
 		return DNSProbeResult{}, idErr
@@ -215,7 +230,15 @@ func (s *Service) ProbeNode(ctx context.Context, nodeID string) (DNSProbeResult,
 		if result.Status != "healthy" {
 			eventType, severity, summary = "dns.failed", "critical", "DNS service probe failed"
 		}
-		transitionValue, eventErr := s.newEvent(record.Node.ClusterID, &nodeID, eventType, severity, summary, map[string]any{"errorCode": result.ErrorCode}, result.ProbedAt)
+		details := map[string]any{
+			"errorCode":         result.ErrorCode,
+			"dnsProbeAttempts":  dnsProbeAttempts(result),
+			"dnsProbeElapsedMs": result.dnsProbeElapsed.Milliseconds(),
+		}
+		if protocols := failedDNSProbeProtocols(result); len(protocols) > 0 {
+			details["failedProtocols"] = protocols
+		}
+		transitionValue, eventErr := s.newEvent(record.Node.ClusterID, &nodeID, eventType, severity, summary, details, result.ProbedAt)
 		if eventErr != nil {
 			return DNSProbeResult{}, eventErr
 		}
@@ -225,6 +248,47 @@ func (s *Service) ProbeNode(ctx context.Context, nodeID string) (DNSProbeResult,
 		return DNSProbeResult{}, err
 	}
 	return result, probeErr
+}
+
+func (s *Service) logDNSProbeDiagnostics(nodeID string, result DNSProbeResult) {
+	if result.dnsProbeRecoveredAfterRetry {
+		s.logger.Debug("DNS probe recovered during confirmation",
+			"node_id", nodeID,
+			"dns_probe_attempts", dnsProbeAttempts(result),
+			"elapsed_ms", result.dnsProbeElapsed.Milliseconds(),
+			"recovered_after_confirmation", true,
+			"prior_error_code", result.dnsProbePriorErrorCode,
+			"prior_failed_protocols", result.dnsProbePriorProtocols,
+		)
+		return
+	}
+	if result.Status != "healthy" {
+		s.logger.Debug("DNS probe failure confirmed",
+			"node_id", nodeID,
+			"dns_probe_attempts", dnsProbeAttempts(result),
+			"elapsed_ms", result.dnsProbeElapsed.Milliseconds(),
+			"error_code", result.ErrorCode,
+			"failed_protocols", failedDNSProbeProtocols(result),
+		)
+	}
+}
+
+func dnsProbeAttempts(result DNSProbeResult) int {
+	if result.dnsProbeAttempts > 0 {
+		return result.dnsProbeAttempts
+	}
+	return 1
+}
+
+func failedDNSProbeProtocols(result DNSProbeResult) []string {
+	protocols := []string{}
+	if result.UDPStatus == "failed" {
+		protocols = append(protocols, "udp")
+	}
+	if result.TCPStatus == "failed" {
+		protocols = append(protocols, "tcp")
+	}
+	return protocols
 }
 
 func (s *Service) PollAll(ctx context.Context) error {
