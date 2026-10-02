@@ -3,6 +3,10 @@
 Recorded 3 October 2026 (Pacific/Auckland). This records repository evidence,
 not publication or real-node/container release qualification.
 
+The initial compatibility checks below used Go 1.27.0. The subsequent
+[Go 1.27.1 maintenance validation](#go-1271-toolchain-update) records the updated
+compiler and rerun gates separately.
+
 ## Root causes and resulting behavior
 
 The adapter and Query Log duplicated numeric version parsing and restricted
@@ -166,3 +170,75 @@ endpoint/schema/capability review and independent regression qualification.
 - `internal/adguard/testdata/v1.0.0-b.1/*.json` (16 endpoint/data fixtures)
 - `internal/adguard/testdata/v1.0.0/*.json` (16 endpoint/data fixtures)
 - `docs/engineering/release-1.1.1-implementation.md` (this report)
+
+## Go 1.27.1 toolchain update
+
+The follow-up maintenance/security/runtime change keeps `go 1.27.0` as the
+module minimum and adds `toolchain go1.27.1`, following the official
+[toolchain conventions](https://go.dev/doc/toolchain). This is a patch compiler,
+standard-library and runtime update, with no new language features. Both CI
+workflows use exact `go-version: 1.27.1`, and the Docker builder pins
+`golang:1.27.1-bookworm`. Makefile, Compose and release scripts have no separate
+Go version pin; they inherit the module-aware command/builder. No development
+container or other toolchain override was found. Historical audit evidence and
+AdGuard product versions such as `v1.27.12` were intentionally left unchanged.
+
+Changed files for this follow-up: `go.mod`, `Dockerfile`, both `.github/workflows`
+files, `CHANGELOG.md`, local development/release-process docs, v1.1.1 release
+notes and this report. CI now also builds the production Dockerfile, starts its
+image against the disposable PostgreSQL service, waits at most 30 attempts for
+readiness/health, and removes the test container on exit. Static workflow
+validation passed; actual execution remains pending CI.
+
+`go version` returned `go1.27.1 darwin/arm64`. `go mod tidy` produced no changes
+relative to the already-added toolchain directive, and `go.sum` is byte-for-byte
+unchanged. The only module diff is the two-line toolchain declaration; no
+required dependency version or checksum changed. `go mod verify` returned
+`all modules verified`.
+
+All Go checks below used `GOCACHE=/tmp/atlas-dns-go-cache`. Formatting additionally
+used the selected 1.27.1 toolchain's `bin` directory at the front of `PATH`, so
+`make fmt-check` ran its patched `gofmt` as well as the frontend formatter.
+
+| Command/check | Result under Go 1.27.1 |
+|---|---|
+| `go version` | PASS; `go1.27.1 darwin/arm64` |
+| `go mod tidy` | PASS; no additional module/checksum changes |
+| `go mod verify` | PASS; all modules verified |
+| `go test ./...` | PASS; database cases skip without explicit DB environment |
+| `go vet ./...` | PASS |
+| `make test` | PASS; full Go suite and 54 frontend files / 310 tests |
+| `make test-race` | PASS; Go race suite |
+| `TEST_DATABASE_URL='postgres://atlas_test@127.0.0.1:56111/atlas_dns_test?sslmode=disable' make test-integration` | PASS; actual PostgreSQL 17.11 suite |
+| `make lint` | PASS; Go vet and frontend Biome |
+| `make fmt-check` | PASS |
+| `make docs-check` | PASS |
+| `npm --prefix web run typecheck` | PASS |
+| `npm --prefix web run test:assets` | PASS |
+| `make VERSION=1.1.1 build` | PASS; four native commands and frontend |
+| `go version -m bin/atlas-dns` | PASS; compiler/runtime metadata says `go1.27.1` |
+| Native production startup against fresh `atlas_dns_go1271_startup` database | PASS; fresh migrations, `/ready` 200, `/health` reports `status: ok` / `version: 1.1.1`, frontend 200; process stopped afterwards |
+| `ATLAS_DNS_VERSION=1.1.1-rc.go1271 scripts/release-artifacts.sh` | PASS; candidate Linux amd64 and arm64 archives; sandbox module stat-cache warnings did not prevent successful builds |
+| `shasum -a 256 -c checksums.txt` in the candidate output directory | PASS; all artifacts valid |
+| `go version -m` on each extracted archive binary | PASS; all eight binaries report `go1.27.1` |
+| `/tmp/atlas-dns-go1271-tools/actionlint -color .github/workflows/ci.yml .github/workflows/release.yml` | PASS |
+| `/tmp/atlas-dns-111-tools/govulncheck ./...` | PASS; no reachable vulnerabilities; same four uncalled required-module advisories |
+| `npm --prefix web audit --omit=dev` | PASS; zero production vulnerabilities |
+| `bash -n scripts/*.sh` and `git diff --check` | PASS |
+| Official Docker registry manifest for `golang:1.27.1-bookworm` | PASS; Linux amd64 and arm64 present; metadata verification only |
+| `docker build --build-arg VERSION=1.1.1 --tag atlas-dns:1.1.1-go1.27.1 .` | BLOCKED; shell exit 127, `docker: command not found` |
+
+The disposable PostgreSQL server was stopped after these checks. The native
+binaries were rebuilt with stable `VERSION=1.1.1` after candidate artifact
+assembly.
+
+The production Docker image was not built or started locally. No Docker CLI,
+Docker Desktop/Colima/Podman installation, or active local Docker socket is
+available; the leftover desktop context points at a missing socket. A native
+production startup proves the Go 1.27.1 application starts, but does not count
+as container qualification. The new CI image startup gate must pass on a
+Docker-equipped host before this requirement can be marked complete.
+
+Artifacts are local unpublished candidate outputs under
+`dist/release/1.1.1-rc.go1271`; no tag or image was published. Real-device,
+container and supported installation qualification remain external gates.

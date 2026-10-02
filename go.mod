@@ -2,6 +2,8 @@ module github.com/benchristian88/atlas-dns
 
 go 1.27.0
 
+toolchain go1.27.1
+
 require (
 	filippo.io/age v1.3.1
 	github.com/jackc/pgx/v5 v5.9.2

@@ -7,6 +7,13 @@ interfaces.
 
 ## 1.1.1 - Unreleased
 
+### Maintenance
+
+- Updated the preferred Go compiler/runtime to Go 1.27.1, including exact CI
+  and Docker builder pins, as a maintenance/security/runtime patch update.
+  The module retains its Go 1.27.0 minimum with `toolchain go1.27.1`; no new
+  language features or dependency upgrades are introduced.
+
 ### Fixed
 
 - Nodes with DNS-over-HTTPS, DNS-over-TLS, or DNS-over-QUIC no longer fail

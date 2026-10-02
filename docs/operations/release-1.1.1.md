@@ -4,6 +4,22 @@ This focused compatibility/correctness patch follows v1.1.0. It adds no database
 migration, public Atlas endpoint change, or canonical configuration schema
 change. The controller remains outside the live DNS request path.
 
+## Maintenance / runtime update
+
+The preferred build compiler/runtime is now Go 1.27.1. This maintenance/security
+runtime update is independent of the AdGuard compatibility fixes. Go 1.27.1
+contains compiler/runtime and standard-library corrections; see the official
+[Go release history](https://go.dev/doc/devel/release#go1.27.1).
+
+The module retains `go 1.27.0` as its minimum and adds `toolchain go1.27.1`.
+This selects the patched toolchain for development under normal Go automatic
+selection without changing the language family or introducing new language
+features. CI uses `go-version: 1.27.1`; the Docker builder uses
+`golang:1.27.1-bookworm`. Native build/release scripts inherit the module's
+selected toolchain. Older historical audit records retain their recorded
+versions. Module cleanup and verification results are recorded in the
+[implementation report](../engineering/release-1.1.1-implementation.md).
+
 ## Fixed
 
 AdGuard Home nodes using DNS-over-HTTPS, DNS-over-TLS, or DNS-over-QUIC can now

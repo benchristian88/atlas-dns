@@ -12,6 +12,11 @@ release candidate and `vX.Y.Z` / `X.Y.Z` for a final release. For the current
 release, development builds report `1.1.1-dev`, candidates use
 `v1.1.1-rc.N`, and the final release is `v1.1.1`.
 
+The preferred Go compiler/runtime for 1.1.1 is 1.27.1: CI and the Docker builder
+pin it, while `go.mod` keeps its `go 1.27.0` minimum and declares
+`toolchain go1.27.1`. Native scripts inherit module-aware toolchain selection.
+Check `go version` and `go version -m` on release binaries during qualification.
+
 ## Candidate gate
 
 1. Select a semantic candidate version such as `X.Y.Z-rc.1` and freeze scope.
