@@ -12,6 +12,12 @@ Release 0.4 broadens the authoritative model beyond schema v1 DNS and blocklist 
 
 TLS status responses can contain certificate and private-key material. The controller needs useful TLS inventory without allowing those secrets into snapshots, revisions, API responses, logs, or browser state.
 
+In v1.1.1, product version is explicitly separate from API generation. Stable
+v0.107.78 and later compatible 0.x and valid v1.x use the `legacy_control`
+adapter provisionally beyond the release-tested patches, subject to the same
+typed endpoint and semantic validation. Future majors (2.x+) remain unknown.
+See the [v1.1.1 compatibility notes](../operations/release-1.1.1.md).
+
 ## Decision
 
 - Introduce canonical configuration schema v2 and allow both versions in PostgreSQL. Never rewrite schema-v1 snapshots, drafts, or revisions.

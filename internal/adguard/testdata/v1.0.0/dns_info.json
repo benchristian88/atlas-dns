@@ -1,0 +1,1 @@
+{"upstream_dns":["1.1.1.1"],"protection_enabled":true,"protection_disabled_until":null,"cache_size":4096,"cache_enabled":false,"upstream_timeout":12,"upstream_mode":"parallel"}

@@ -132,9 +132,11 @@ who intentionally build locally use `compose.dev.yaml`.
 
 ## Supported baseline
 
-- AdGuard Home v0.107.78 and later patches in the v0.107 API generation.
-  v0.107.78 and v0.107.79 are release-tested;
-  newer v0.107 patches are provisionally compatible after contract validation.
+- AdGuard Home v0.107.78 and later compatible 0.x releases, plus all valid
+  v1.x versions, using the legacy `/control/*` API generation.
+  v0.107.78 and v0.107.79 are release-tested; later versions are provisionally
+  compatible subject to normal typed endpoint and semantic validation.
+  Future major versions (2.x+) and malformed versions remain unknown.
 - Earlier AdGuard Home versions are unsupported and blocked before managed
   configuration reads or writes.
 - PostgreSQL 17.
@@ -162,7 +164,8 @@ passphrase. Restore is offline into a new empty database. See [backup and restor
 Release 1.0.0 is the stable database baseline for supported 1.x upgrades. The
 1.0.1 patch is schema-neutral; 1.0.2 appends the notification-history migration;
 1.1 appends onboarding plus runtime settings, notification policy, and history
-retention state. See the [1.1 upgrade notes](docs/operations/release-1.1.0.md).
+retention state. See the [1.1 upgrade notes](docs/operations/release-1.1.0.md)
+and [1.1.1 compatibility fixes](docs/operations/release-1.1.1.md).
 Database migrations are ordered, checksum-verified, append-only, and
 forward-only unless a release explicitly documents otherwise.
 

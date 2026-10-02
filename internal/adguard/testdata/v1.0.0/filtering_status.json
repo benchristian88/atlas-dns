@@ -1,0 +1,1 @@
+{"enabled":true,"interval":24,"filters":[],"whitelist_filters":[{"enabled":true,"url":"https://allow.test/list.txt","name":"allow"}],"user_rules":["||ads.test^"]}

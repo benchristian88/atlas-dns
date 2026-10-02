@@ -80,8 +80,9 @@ back completion and remain visible through the normal operational endpoints.
 
 Node candidate validation accepts the normal node-creation payload, applies the
 same SSRF/TLS/credential/status probe without storing it, and adds
-`onboardingCompatibility`. The guided floor is v0.107.78 in the v0.107 API
-generation. Normal node creation probes again before encrypting credentials.
+`onboardingCompatibility`. The guided floor is stable v0.107.78 for compatible
+0.x, with valid v1.x also eligible through the legacy `/control` API generation.
+Normal node creation probes again before encrypting credentials.
 
 ## Authentication and CSRF
 
@@ -293,7 +294,7 @@ PUT  /api/v1/clusters/{clusterId}/configuration-draft
 POST /api/v1/clusters/{clusterId}/configuration-draft/validate
 ```
 
-Observation performs bounded, authenticated GET requests and stores either an immutable canonical schema-v2 snapshot or an immutable failed attempt with a safe error code. v0.107.78 and v0.107.79 are explicitly tested; newer v0.107 patches are provisionally compatible only after the typed endpoints Atlas uses validate. Earlier versions are unsupported and other API generations report unknown compatibility; both block managed configuration. Inventory returns the latest attempt for each node, current capability profiles, current schema version, and the optional cluster draft. The `draft` member is omitted when no draft exists. Comparison returns `equal` plus differences grouped by section, field, and `shared_managed`, `node_specific_managed`, `observed_only`, or `unsupported` scope.
+Observation performs bounded, authenticated GET requests and stores either an immutable canonical schema-v2 snapshot or an immutable failed attempt with a safe error code. v0.107.78 and v0.107.79 are release-tested; later compatible 0.x and valid v1.x use the legacy `/control` adapter provisionally after typed endpoint validation. Earlier versions are unsupported; malformed versions and future majors (2.x+) remain unknown. Both block managed configuration. Status may include DoH/DoT/DoQ endpoint URIs, but only canonical bare IPs enter node-specific plain listener bind hosts. Inventory returns the latest attempt for each node, current capability profiles, current schema version, and the optional cluster draft. The `draft` member is omitted when no draft exists. Comparison returns `equal` plus differences grouped by section, field, and `shared_managed`, `node_specific_managed`, `observed_only`, or `unsupported` scope.
 
 Import accepts `snapshotId`, `expectedVersion`, and `confirmed: true`. It rejects failed snapshots, cross-cluster snapshots, missing confirmation, and stale draft versions. The transaction updates the draft and writes `configuration.draft_imported`. It never publishes or deploys configuration.
 

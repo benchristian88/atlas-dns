@@ -7,11 +7,11 @@ Docker Compose CLI. There is no Portainer-specific image and no source build.
 
 1. In Portainer, open **Stacks → Add stack → Git repository**.
 2. Use `https://github.com/benchristian88/atlas-dns.git`.
-3. Select the reviewed release tag, such as `v1.1.0`, and Compose path
+3. Select the reviewed release tag, such as `v1.1.1`, and Compose path
    `compose.yaml`.
 4. Add every value from `atlas-dns.env.example` in Portainer's environment
    editor. Generate unique `POSTGRES_PASSWORD`, `SESSION_SECRET`, and
-   `CREDENTIAL_ENCRYPTION_KEY` values and set `ATLAS_DNS_VERSION=1.1.0`.
+   `CREDENTIAL_ENCRYPTION_KEY` values and set `ATLAS_DNS_VERSION=1.1.1`.
 5. Deploy the stack and wait for both PostgreSQL and Atlas DNS Controller to be
    healthy.
 

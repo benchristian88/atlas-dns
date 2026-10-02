@@ -23,10 +23,12 @@ backup archives/passphrases, private Query Log data, or raw node responses.
   [compatibility matrix](../operations/compatibility-matrix.md) are release
   commitments. Best-effort and unsupported environments carry no compatibility
   promise.
-- AdGuard Home v0.107 patches newer than the latest release-tested patch are
-  provisionally compatible: Atlas attempts its normal typed capability checks
-  and permits operations only when those contracts validate. Other API
-  generations are unknown and affected managed writes remain blocked.
+- AdGuard Home stable v0.107.78 and later compatible 0.x releases and valid
+  v1.x versions use Atlas's legacy `/control` adapter. Versions beyond the
+  release-tested v0.107.78/v0.107.79 patches are provisionally compatible:
+  normal typed endpoint and semantic validation remain mandatory. Future
+  majors (2.x+) and malformed versions are unknown and managed writes remain
+  blocked. AdGuard's draft `/api/v1` API is not used.
 
 ## Upgrade and deprecation policy
 

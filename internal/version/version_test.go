@@ -8,7 +8,7 @@ import (
 func TestBuildVersionMetadata(t *testing.T) {
 	want := os.Getenv("WANT_BUILD_VERSION")
 	if want == "" {
-		want = "1.1.0-dev"
+		want = "1.1.1-dev"
 	}
 	if Version != want {
 		t.Fatalf("Version = %q, want %q", Version, want)

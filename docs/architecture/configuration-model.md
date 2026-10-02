@@ -64,11 +64,14 @@ Release 0.2 froze the per-node observed `Document` shape. Release 0.3 added a di
 
 Release 0.4 introduced schema v2. Shared v2 state adds protection, rate limiting, blocking response behavior, EDNS Client Subnet, DNSSEC, cache and resolver modes; blocklist and allowlist URLs; persistent-client identity/policy/schedules/upstream cache; rewrites; blocked-service schedules; Safe Browsing, parental control, Safe Search; and node-local query-log/statistics policy. Node overrides add DHCP configuration and static leases. Redacted TLS status and dynamic DHCP leases are observed-only. TLS mutation is listed as unsupported.
 
-Release 1.1 supports schema v2 only and requires v0.107.78 or later in the
-v0.107 API generation. v0.107.78 and v0.107.79 are explicitly
-release-tested; a newer v0.107 patch is provisionally compatible only when all
-typed endpoint and semantic checks used by the observation succeed. Other API
-generations remain unknown. All managed capabilities required by the v2 adapter
+Release 1.1 supports schema v2 only. From 1.1.1, the legacy `/control` API
+adapter accepts stable v0.107.78 and later compatible 0.x and valid v1.x product
+versions. v0.107.78/v0.107.79 remain release-tested; later versions are
+provisionally compatible only when the same typed endpoints and semantic checks
+validate. Future major versions (2.x+) and malformed versions remain unknown.
+Encrypted endpoint URIs from status are informational, while only canonical
+bare IPs enter node-specific plain listener `bindHosts`. No schema expansion or
+TLS mutation is introduced. All managed capabilities required by the v2 adapter
 are present at the minimum floor. The database retains historical schema-1
 documents and hashes unchanged, while read APIs convert them into a marked,
 non-deployable schema-2 representation. A fresh import/publication is required

@@ -22,6 +22,7 @@ not part of the operator documentation set.
 - [Backup format](operations/backup-format.md)
 - [Compatibility matrix](operations/compatibility-matrix.md)
 - [Upgrade and migration policy](operations/upgrade-policy.md)
+- [Release 1.1.1 compatibility fixes](operations/release-1.1.1.md)
 - [Release 1.1.0 upgrade notes](operations/release-1.1.0.md)
 - [Runtime settings and environment ownership](reference/runtime-environment.md)
 - [Release 1.0 readiness record](operations/release-1.0-readiness.md)

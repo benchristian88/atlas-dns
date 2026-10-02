@@ -42,7 +42,7 @@ func TestProbeStatus(t *testing.T) {
 }
 
 func TestProbeAcceptsSupportedStatusFixtures(t *testing.T) {
-	for _, version := range []string{"v0.107.78", "v0.107.79"} {
+	for _, version := range []string{"v0.107.78", "v0.107.79", "v1.0.0-b.1", "v1.0.0"} {
 		version := version
 		t.Run(version, func(t *testing.T) {
 			body, err := os.ReadFile(filepath.Join("testdata", version, "status.json"))
@@ -160,8 +160,8 @@ func TestVersionCompatibility(t *testing.T) {
 		"v0.107.79": domain.CompatibilitySupported,
 		"v0.107.80": domain.CompatibilitySupported,
 		"v0.106.3":  domain.CompatibilityUnsupported,
-		"v0.108.0":  domain.CompatibilityUnknown,
-		"v1.0.0":    domain.CompatibilityUnknown,
+		"v0.108.0":  domain.CompatibilitySupported,
+		"v1.0.0":    domain.CompatibilitySupported,
 		"invalid":   domain.CompatibilityUnknown,
 	} {
 		if got := VersionCompatibility(version); got != want {
@@ -178,15 +178,15 @@ func TestConfigurationCompatibilityBoundaries(t *testing.T) {
 		"v0.107.78": domain.CompatibilitySupported,
 		"v0.107.79": domain.CompatibilitySupported,
 		"v0.107.80": domain.CompatibilitySupported,
-		"v0.108.0":  domain.CompatibilityUnknown,
+		"v0.108.0":  domain.CompatibilitySupported,
 		"invalid":   domain.CompatibilityUnknown,
 	} {
 		if got := ConfigurationCompatibility(version); got != want {
 			t.Errorf("ConfigurationCompatibility(%q) = %q, want %q", version, got, want)
 		}
 	}
-	if IsProvisionallyCompatible("v0.107.79") || !IsProvisionallyCompatible("v0.107.80") || IsProvisionallyCompatible("v0.108.0") {
-		t.Fatal("provisional compatibility must be limited to newer patches in the 0.107 API generation")
+	if IsProvisionallyCompatible("v0.107.79") || !IsProvisionallyCompatible("v0.107.80") || !IsProvisionallyCompatible("v0.108.0") || !IsProvisionallyCompatible("v1.0.0") || IsProvisionallyCompatible("v2.0.0") {
+		t.Fatal("provisional compatibility must include later products using the legacy control API")
 	}
 }
 
@@ -197,7 +197,7 @@ func TestOnboardingCompatibilityBoundaries(t *testing.T) {
 		"v0.107.78": domain.CompatibilitySupported,
 		"v0.107.79": domain.CompatibilitySupported,
 		"v0.107.80": domain.CompatibilitySupported,
-		"v0.108.0":  domain.CompatibilityUnknown,
+		"v0.108.0":  domain.CompatibilitySupported,
 		"invalid":   domain.CompatibilityUnknown,
 	} {
 		if got := OnboardingCompatibility(version); got != want {

@@ -2,7 +2,7 @@
 
 ## Query Log reads
 
-For AdGuard Home v0.107.78 and later patches in the v0.107 API generation,
+For stable AdGuard Home v0.107.78 and later compatible 0.x releases and valid v1.x,
 Atlas DNS Controller reads
 `GET /control/querylog` with `limit` (maximum 500), empty `search`,
 `response_status=all`, and the previous response's `oldest` value as
@@ -59,16 +59,21 @@ There is no option that skips TLS certificate or hostname verification. Node req
 
 ## Compatibility
 
-The minimum managed version is v0.107.78. v0.107.78 and v0.107.79 are the
-latest explicitly release-tested patches. A newer patch in the same v0.107 API
-generation is provisionally compatible: Atlas runs the same typed endpoint and
-semantic checks, and enables only capabilities that validate. A different,
-malformed, or unversioned API generation is unknown rather than unsupported.
+The minimum managed version is stable v0.107.78. Compatible later 0.x and all
+valid v1.x product versions, including prereleases, use the known
+`legacy_control` API generation. The central `internal/adguardcompat` policy
+validates semantic versions (optional `v`, prerelease and build metadata), keeps
+prereleases of the stable minimum below it, and leaves malformed or future-major
+(2.x+) versions unknown. There is no maximum 1.x minor/patch. v0.107.78 and
+v0.107.79 remain release-tested; later versions are provisionally compatible and
+must pass normal typed endpoint and semantic checks. AdGuard's draft `/api/v1`
+adapter is not implemented.
 
-The adapter also reads `GET /control/dns_info` and
-`GET /control/filtering/status`. Contract fixtures cover v0.107.78 and
-v0.107.79; a synthetic v0.107.80 fixture verifies provisional additive-field
-handling.
+Contract fixtures cover the existing legacy versions and representative
+synthetic v1 beta/stable status, DNS, filtering, clients, rewrites, blocked
+services, Query Log/Statistics policy and TLS responses. The full-flow regression
+also exercises observation, snapshot and audited import; this is not real-node
+release qualification.
 
 ## Configuration contract
 
@@ -78,12 +83,12 @@ Configuration compatibility begins at v0.107.78 and uses schema v2 only. The ada
 |---|---:|---|
 | Earlier than v0.107.78 | Unsupported | Status remains identifiable, but onboarding, configuration inventory, and deployment are blocked with the required-version message |
 | v0.107.78–v0.107.79 | 2 | Supported and explicitly release-tested |
-| Newer v0.107 patch | 2 | Provisionally compatible after complete typed observation; a failed required contract blocks writes |
-| Other API generation | Unknown | Inventory/deployment blocked pending explicit review |
+| Later compatible 0.x or valid v1.x | 2 | Provisionally compatible after complete typed observation; a failed required contract blocks writes |
+| Future major (2.x+) or malformed version | Unknown | Inventory/deployment blocked pending explicit review |
 
-The committed compatibility boundary is contract-tested at v0.107.77,
-v0.107.78, and v0.107.79, including additive-field fixtures and a
-hypothetical newer compatible v0.107 patch. A node can report DHCP unavailable
+The compatibility boundary is contract-tested at the legacy minimum, higher
+0.x, v1 alpha/beta/RC/stable/later minor releases, and unknown future majors.
+A node can report DHCP unavailable
 (including platforms where AdGuard Home returns its documented not-implemented
 status); the capability remains false and DHCP cannot enter that node's desired
 override.
@@ -121,15 +126,26 @@ AdGuard `error` strings and response bodies are never returned, logged, or
 stored. Although AdGuard exposes this read-only check as POST, the controller
 does not treat it as a configuration mutation.
 
+## Listener identity
+
+`/control/status.dns_addresses` may mix bare IPs and `https://`, `tls://` or
+`quic://` endpoints. The adapter trims and parses entries, requires a valid DNS
+port and at least one plain IP, and rejects malformed or unknown metadata.
+Only canonical bare IPs enter `NodeSpecific.BindHosts`; encrypted URIs are
+informational and never fetched, stored as bind hosts, or made editable.
+Existing protection semantics remain mandatory. The extraction preserves source
+order; normal canonicalization still sorts/deduplicates bind hosts. TLS mutation
+remains inventory-only and no schema/database expansion is introduced.
+
 ## Statistics contract
 
 The adapter reads `GET /control/stats/config` and
-`GET /control/stats?recent={milliseconds}` for supported v0.107.78+ patches in
-the v0.107 API generation. v0.107.78 and v0.107.79 are explicitly tested. It requests whole-hour fixed ranges
-for 24 hours, 7 days, and 30 days only when they do not exceed that node's
-configured interval. Earlier configuration-compatible versions retain their
-configuration capabilities but report `statistics_exact_range: false` and are
-not approximated. A fixed range beyond node retention maps to
+`GET /control/stats?recent={milliseconds}` for eligible versions of the legacy
+control API, including later compatible 0.x and valid v1.x. It requests
+whole-hour fixed ranges for 24 hours, 7 days, and 30 days only when they do not
+exceed that node's configured interval. Versions below stable v0.107.78 are
+unsupported; unknown versions do not claim exact-range support. No range is
+approximated. A fixed range beyond node retention maps to
 `STATISTICS_RANGE_EXCEEDS_NODE_RETENTION` without making the eligible collector
 pass fail.
 

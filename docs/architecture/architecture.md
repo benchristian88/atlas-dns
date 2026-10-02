@@ -54,12 +54,15 @@ after release and timestamps are UTC.
 ### AdGuard Home adapter
 
 The adapter makes bounded, version-aware calls to native AdGuard Home
-administration APIs. It maps the supported v0.107 API generation to explicit capabilities,
-normalizes managed configuration, and discards credentials, TLS private
-material, node response bodies, and unsafe URL detail before domain persistence
-or logging. A newer v0.107 patch is provisionally compatible only after the
-typed endpoints Atlas uses pass semantic validation. Other unknown API
-generations remain observable but are blocked from managed write operations.
+administration APIs. The small `internal/adguardcompat` policy distinguishes
+AdGuard product versions from the `legacy_control` API generation: compatible
+0.x from stable v0.107.78 and valid 1.x use `/control/*`. It is shared by the
+adapter and Query Log without an import cycle. Eligibility never replaces typed
+endpoint and semantic validation. The adapter normalizes managed configuration
+and discards credentials, TLS private material, raw response bodies, and unsafe
+URL detail before persistence or logging. Unknown future majors and malformed
+versions are blocked from managed operations. A future `api_v1` adapter needs
+explicit review; this release does not implement it.
 
 The standard topology is agentless. Statistics and Query Log use native APIs.
 A local Query Log forwarder is not part of the current runtime and would require

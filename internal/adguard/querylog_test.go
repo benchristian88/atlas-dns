@@ -71,7 +71,7 @@ func TestReadQueryLogUsesStableSourceCursorWithoutOffset(t *testing.T) {
 }
 
 func TestReadQueryLogCompatibilityFixtures(t *testing.T) {
-	for _, version := range []string{"v0.107.78", "v0.107.79"} {
+	for _, version := range []string{"v0.107.78", "v0.107.79", "v1.0.0-b.1", "v1.0.0"} {
 		version := version
 		t.Run(version, func(t *testing.T) {
 			body, err := os.ReadFile(filepath.Join("testdata", version, "querylog.json"))

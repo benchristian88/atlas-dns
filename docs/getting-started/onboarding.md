@@ -32,11 +32,11 @@ operational issues but do not trap the administrator back in first-run setup.
 
 ## Node compatibility
 
-Guided onboarding requires AdGuard Home v0.107.78 or later in the v0.107 API
-generation. v0.107.78 and v0.107.79 are explicitly tested. Newer v0.107 patches
-must pass the same typed endpoint, semantic, capability, and schema checks.
-Older already-managed nodes retain the broader Atlas compatibility contract;
-the stricter floor applies to establishing a new v1.1 installation.
+Guided onboarding requires stable AdGuard Home v0.107.78 or later compatible
+0.x, or a valid v1.x version using the legacy `/control` API generation.
+All eligible versions must pass the same typed endpoint, semantic, capability,
+and schema checks. Future majors (2.x+) and malformed versions remain unknown;
+older versions remain unsupported for managed operation.
 
 Node candidate validation applies the normal URL/SSRF, TLS trust, credential,
 bounded-response, and status validation before credentials are encrypted and
