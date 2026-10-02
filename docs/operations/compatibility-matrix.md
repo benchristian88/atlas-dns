@@ -41,3 +41,13 @@ v0.107.79 are release-tested; representative v1 beta/stable fixtures add
 contract regression coverage, not real-device qualification. There is no upper
 minor/patch limit within 1.x. Future major (2.x+) or malformed versions remain
 unknown and fail closed. The unfinished AdGuard `/api/v1` API is not used.
+
+For Atlas v1.1.1, live validation on AdGuard Home v0.107.79 confirmed observation
+and configuration import with plain DNS on port 53 and DoH/DoT/DoQ enabled.
+The node used HTTPS hostname management with a valid wildcard TLS certificate,
+while a second node used a direct IP-based management address; both were
+simultaneously healthy and manageable in the same controller.
+`NodeSpecific.BindHosts` retained only plain listener addresses and excluded
+encrypted endpoint URIs from `/control/status.dns_addresses`. See the
+[sanitised live validation evidence](release-1.1.1.md#live-encrypted-dns-validation).
+This real-world test used v0.107.79, not AdGuard Home v1.x.

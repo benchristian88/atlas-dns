@@ -35,6 +35,19 @@ interfaces.
 - No database migration, canonical schema expansion, or AdGuard `/api/v1`
   migration. TLS configuration remains inventory-only.
 
+### Validation
+
+- Verified the encrypted-DNS observation/import fix against a live AdGuard
+  Home v0.107.79 node with plain DNS on port 53, DNS-over-HTTPS, DNS-over-TLS,
+  and DNS-over-QUIC enabled.
+- Verified HTTPS hostname management with a valid wildcard TLS certificate
+  alongside a second node using a direct IP-based management address; both
+  nodes remained simultaneously healthy and manageable in the same controller.
+- Verified configuration observation/import succeeds and `NodeSpecific.BindHosts`
+  retains only plain DNS listener addresses, excluding DoH/DoT/DoQ endpoint URIs.
+  This live validation used v0.107.79, not AdGuard Home v1.x; see the
+  [sanitised validation evidence](docs/operations/release-1.1.1.md#live-encrypted-dns-validation).
+
 ## 1.1.0
 
 ### Added

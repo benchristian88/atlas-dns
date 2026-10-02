@@ -100,8 +100,10 @@ The v1.1.1 candidate inherits the v1.1 database/runtime and security boundaries.
 The `v1.1.0 → v1.1.1` update adds no migrations and keeps canonical schema v2.
 Run the standard repository gates and verify plain/encrypted listener observation
 and import, v1 prerelease/stable compatibility, Query Log and exact Statistics,
-invalid-response rejection, and unknown future-major failure. Real AdGuard
-nodes and packaged/container installations remain external release gates.
+invalid-response rejection, and unknown future-major failure. Live v0.107.79
+encrypted-DNS observation/import and simultaneous HTTPS/IP-managed node
+operation are validated. Real AdGuard v1 beta/stable nodes and packaged/container
+installations remain external release gates.
 See [v1.1.1 release notes](../operations/release-1.1.1.md).
 
 ## v1.1.0 qualification baseline

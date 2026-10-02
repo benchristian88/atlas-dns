@@ -1,7 +1,8 @@
 # Atlas DNS Controller 1.1.1 implementation and validation
 
-Recorded 3 October 2026 (Pacific/Auckland). This records repository evidence,
-not publication or real-node/container release qualification.
+Recorded 3 October 2026 (Pacific/Auckland). This records repository evidence
+and completed live v0.107.79 encrypted-DNS validation, not publication or
+container release qualification.
 
 The initial compatibility checks below used Go 1.27.0. The subsequent
 [Go 1.27.1 maintenance validation](#go-1271-toolchain-update) records the updated
@@ -67,6 +68,24 @@ data. They are synthetic fixtures checked against the official
 [tagged v1 beta contract](https://github.com/AdguardTeam/AdGuardHome/blob/v1.0.0-b.1/openapi/openapi.yaml),
 not captured stable-v1/real-device qualification.
 
+## Live encrypted-DNS validation
+
+Operator validation on a real AdGuard Home v0.107.79 node confirmed successful
+observation and configuration import/read with plain DNS on port 53 and
+DoH/DoT/DoQ enabled. Atlas used the node's HTTPS hostname for management with
+a valid wildcard TLS certificate. A second AdGuard node used a direct IP-based
+management address; both remained simultaneously healthy and manageable from
+the same controller.
+
+The live `/control/status.dns_addresses` array contained plain listener addresses
+and encrypted endpoint URIs. The resulting `NodeSpecific.BindHosts` retained
+only the plain IPv4/IPv6 addresses, including scoped link-local IPv6, and
+excluded all DoH/DoT/DoQ URIs. The
+[release notes](../operations/release-1.1.1.md#live-encrypted-dns-validation)
+record representative input and output arrays with lab hostnames and
+non-loopback IPs sanitised. This confirms the listener fix in a real deployment;
+it is v0.107.79 evidence, not live AdGuard Home v1.x or draft `/api/v1` qualification.
+
 ## Exact verification commands and results
 
 Environment: Go 1.27.0, Node.js 24.19.0, PostgreSQL 17.11 (Homebrew), macOS arm64.
@@ -109,8 +128,8 @@ after the final integration pass.
 
 Docker is unavailable (`docker --version` returned command not found), so Compose
 configuration/build and container installation were not validated. Real AdGuard
-nodes, Debian/systemd installs, container/GHCR publication and external browser
-qualification remain manual release gates. The frontend build emits its existing
+v1 beta/stable nodes, Debian/systemd installs, container/GHCR publication and
+external browser qualification remain manual release gates. The frontend build emits its existing
 chunk-size warning; this patch does not change frontend behavior or bundling.
 Uncalled module advisories remain follow-up dependency review, not a new
 compatibility feature.
@@ -240,5 +259,6 @@ as container qualification. The new CI image startup gate must pass on a
 Docker-equipped host before this requirement can be marked complete.
 
 Artifacts are local unpublished candidate outputs under
-`dist/release/1.1.1-rc.go1271`; no tag or image was published. Real-device,
-container and supported installation qualification remain external gates.
+`dist/release/1.1.1-rc.go1271`; no tag or image was published. Beyond the completed
+live v0.107.79 encrypted-DNS validation, real AdGuard v1 beta/stable, container
+and supported installation qualification remain external gates.

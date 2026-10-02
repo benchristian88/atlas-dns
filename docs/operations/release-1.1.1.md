@@ -56,6 +56,56 @@ Product version and API generation are distinct in `internal/adguardcompat`:
 Auth, TLS trust, redirect restrictions, timeouts and response bounds remain
 active. The unfinished AdGuard `/api/v1` API is not used or implemented.
 
+## Live encrypted-DNS validation
+
+The encrypted-DNS listener fix was verified in a real deployment using AdGuard
+Home **v0.107.79** with:
+
+- Plain DNS enabled on port 53, plus DNS-over-HTTPS, DNS-over-TLS, and
+  DNS-over-QUIC enabled.
+- HTTPS management enabled using a valid wildcard TLS certificate; Atlas
+  connected using the node's HTTPS hostname.
+- A second AdGuard Home node connected using a direct IP-based management
+  address. Both nodes were simultaneously healthy and manageable from the
+  same Atlas DNS Controller.
+
+The live `/control/status` response mixed plain DNS listener addresses with
+encrypted DNS endpoint URIs in `dns_addresses`. This representative array
+replaces lab hostnames and non-loopback IPs with neutral examples, retaining
+IPv4, IPv6, scoped link-local IPv6, and encrypted endpoint URI shapes:
+
+```json
+[
+  "127.0.0.1",
+  "::1",
+  "192.0.2.10",
+  "2001:db8::10",
+  "fe80::1%eth0",
+  "https://adguard-test.example.com/dns-query",
+  "tls://adguard-test.example.com:853",
+  "quic://adguard-test.example.com:853"
+]
+```
+
+Atlas successfully observed the node and imported/read its configuration.
+The resulting `NodeSpecific.BindHosts` contained only the plain DNS bind
+addresses, with all DoH/DoT/DoQ URI entries excluded (using the same sanitisation):
+
+```json
+[
+  "127.0.0.1",
+  "192.0.2.10",
+  "::1",
+  "2001:db8::10",
+  "fe80::1%eth0"
+]
+```
+
+Atlas continued operating correctly with the second IP-managed node throughout
+this validation. This confirms the encrypted-DNS listener issue is fixed in
+a real deployment scenario. The live test used v0.107.79; it does not qualify
+AdGuard Home v1.x on real devices or the draft `/api/v1` API.
+
 ## Upgrade
 
 Create/preflight a backup, then update from v1.1.0 using the documented native
@@ -77,9 +127,10 @@ adapter → observation → snapshot → audited import path with storage faked.
 The v1 fixtures are representative synthetic responses based on the reviewed
 tagged upstream contract; they do not claim real-device release qualification.
 
-Before publication, exercise real AdGuard v1 beta/stable and legacy encrypted
-listeners, packaged install/upgrade and container workflows using the
-[release process](../development/release-process.md). A future AdGuard API
+The live v0.107.79 encrypted-listener observation/import and simultaneous
+HTTPS/IP management validation is recorded above. Before publication, exercise
+real AdGuard v1 beta/stable, packaged install/upgrade and container workflows
+using the [release process](../development/release-process.md). A future AdGuard API
 generation requires contract review and a separate adapter decision.
 
 Repository commands, results and scope are recorded in the
