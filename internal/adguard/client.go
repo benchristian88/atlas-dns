@@ -15,18 +15,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/benchristian88/atlas-dns/internal/adguardcompat"
 	"github.com/benchristian88/atlas-dns/internal/domain"
 	"github.com/benchristian88/atlas-dns/internal/systemsettings"
 )
 
 const maxResponseBytes = 1 << 20
-
-const (
-	minimumSupportedMajor = 0
-	minimumSupportedMinor = 107
-	minimumSupportedPatch = 78
-	latestTestedPatch     = 79
-)
 
 type Probe struct {
 	timeout  time.Duration
@@ -214,58 +208,16 @@ func OnboardingCompatibility(version string) domain.Compatibility {
 }
 
 func ConfigurationCompatibility(version string) domain.Compatibility {
-	major, minor, patch, ok := configurationVersion(version)
-	if !ok {
-		return domain.CompatibilityUnknown
-	}
-	if major == minimumSupportedMajor && minor == minimumSupportedMinor && patch >= minimumSupportedPatch {
-		return domain.CompatibilitySupported
-	}
-	if major == minimumSupportedMajor && (minor < minimumSupportedMinor || (minor == minimumSupportedMinor && patch < minimumSupportedPatch)) {
-		return domain.CompatibilityUnsupported
-	}
-	return domain.CompatibilityUnknown
+	return adguardcompat.Compatibility(version)
 }
 
-// IsProvisionallyCompatible reports versions in the supported API generation
-// that are newer than Atlas's latest explicitly contract-tested patch.  Such
-// nodes must still pass normal typed endpoint and semantic validation.
 func IsProvisionallyCompatible(version string) bool {
-	major, minor, patch, ok := configurationVersion(version)
-	return ok && major == minimumSupportedMajor && minor == minimumSupportedMinor && patch > latestTestedPatch
+	return adguardcompat.IsProvisionallyCompatible(version)
 }
 
-// IsAdGuard107Generation reports whether version belongs to the API generation
-// Atlas can reason about using its explicit patch capability boundaries.
-func IsAdGuard107Generation(version string) bool {
-	major, minor, _, ok := configurationVersion(version)
-	return ok && major == minimumSupportedMajor && minor == minimumSupportedMinor
-}
-
-func configurationVersion(version string) (major, minor, patch int, ok bool) {
-	value := strings.TrimPrefix(strings.TrimSpace(version), "v")
-	parts := strings.Split(value, ".")
-	if len(parts) < 3 {
-		return 0, 0, 0, false
-	}
-	parsedMajor, majorErr := strconv.Atoi(parts[0])
-	parsedMinor, minorErr := strconv.Atoi(parts[1])
-	parsedPatch, patchErr := strconv.Atoi(parts[2])
-	if majorErr != nil || minorErr != nil || patchErr != nil {
-		return 0, 0, 0, false
-	}
-	return parsedMajor, parsedMinor, parsedPatch, true
-}
-
-// SupportsRecentStatistics reports whether the tested AdGuard Home API can
-// return an exact caller-selected recent window. Earlier supported versions
-// expose statistics, but not the range control required for honest 24h/7d/30d
-// aggregation.
+// SupportsRecentStatistics preserves the managed minimum while allowing later
+// products using the legacy control API to inherit exact recent ranges.
 func SupportsRecentStatistics(version string) bool {
-	return supportsConfigurationPatch(version, minimumSupportedPatch)
-}
-
-func supportsConfigurationPatch(version string, minimum int) bool {
-	major, minor, patch, ok := configurationVersion(version)
-	return ok && major == minimumSupportedMajor && minor == minimumSupportedMinor && patch >= minimum
+	return adguardcompat.Generation(version) == adguardcompat.APIGenerationLegacyControl &&
+		adguardcompat.Compatibility(version) == domain.CompatibilitySupported
 }

@@ -4,9 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"math"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/benchristian88/atlas-dns/internal/adguardcompat"
+	"github.com/benchristian88/atlas-dns/internal/domain"
 )
 
 const (
@@ -176,32 +178,14 @@ func ValidStatus(value string) bool {
 }
 
 func SupportsVersion(version string) bool {
-	value := strings.TrimPrefix(strings.TrimSpace(version), "v")
-	parts := strings.Split(value, ".")
-	if len(parts) < 3 {
-		return false
-	}
-	major, majorErr := strconv.Atoi(parts[0])
-	minor, minorErr := strconv.Atoi(parts[1])
-	patch, patchErr := strconv.Atoi(parts[2])
-	return majorErr == nil && minorErr == nil && patchErr == nil && major == 0 && minor == 107 && patch >= 78
+	return adguardcompat.Generation(version) == adguardcompat.APIGenerationLegacyControl &&
+		adguardcompat.Compatibility(version) == domain.CompatibilitySupported
 }
 
-// VersionBelowMinimum distinguishes evidence of an unsupported old contract
-// from a malformed or different API generation whose capability is unknown.
+// VersionBelowMinimum distinguishes an unsupported old contract from an
+// unparseable product version or unknown API generation.
 func VersionBelowMinimum(version string) bool {
-	value := strings.TrimPrefix(strings.TrimSpace(version), "v")
-	parts := strings.Split(value, ".")
-	if len(parts) < 3 {
-		return false
-	}
-	major, majorErr := strconv.Atoi(parts[0])
-	minor, minorErr := strconv.Atoi(parts[1])
-	patch, patchErr := strconv.Atoi(parts[2])
-	if majorErr != nil || minorErr != nil || patchErr != nil || major != 0 {
-		return false
-	}
-	return minor < 107 || (minor == 107 && patch < 78)
+	return adguardcompat.Compatibility(version) == domain.CompatibilityUnsupported
 }
 
 func normalizeDomain(value string) string {

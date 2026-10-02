@@ -147,7 +147,7 @@ func TestQueryLogPollerFailureRetainsCheckpointAndExistingEvents(t *testing.T) {
 
 func TestQueryLogPollerSupportsMixedTestedPatchesAndClassifiesMissingEndpoint(t *testing.T) {
 	now := time.Date(2026, 8, 19, 3, 0, 0, 0, time.UTC)
-	for _, version := range []string{"v0.107.78", "v0.107.79", "v0.107.80"} {
+	for _, version := range []string{"v0.107.78", "v0.107.79", "v0.107.80", "v0.108.0-b.91", "v1.0.0-b.1", "v1.0.0", "v1.8.0"} {
 		store := &queryLogStoreFake{}
 		reader := &queryLogReaderFake{config: querylog.SourceConfig{Enabled: true}}
 		poller := queryLogPollerForTest(store, reader, now)
@@ -173,7 +173,7 @@ func TestQueryLogPollerDoesNotCallUnknownAPIGeneration(t *testing.T) {
 	reader := &queryLogReaderFake{}
 	poller := queryLogPollerForTest(store, reader, time.Now())
 	record := queryLogNode()
-	record.Node.Version = "v0.108.0"
+	record.Node.Version = "v2.0.0"
 	poller.pollNode(context.Background(), record)
 	if store.attempts[0].Status != "failed" || store.attempts[0].ErrorCode != "QUERY_LOG_CAPABILITY_UNKNOWN" || len(reader.cursors) != 0 {
 		t.Fatalf("unknown generation attempt = %+v cursors=%v", store.attempts[0], reader.cursors)

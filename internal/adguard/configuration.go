@@ -370,7 +370,7 @@ func (r *ConfigurationReader) ReadConfiguration(ctx context.Context, request dom
 		return configuration.Document{}, profile, domain.NewError(domain.ErrorCapability, fmt.Sprintf("Unsupported AdGuard Home version. Minimum supported version: 0.107.78. Detected version: %s", version))
 	}
 	if IsProvisionallyCompatible(version) {
-		profile.Warnings = append(profile.Warnings, "This newer AdGuard Home 0.107 patch is provisionally compatible; Atlas validated the APIs it uses, but this patch has not been explicitly release-tested.")
+		profile.Warnings = append(profile.Warnings, "This AdGuard Home version is provisionally compatible with the legacy /control API; Atlas validates the APIs it uses, but this version has not been explicitly release-tested.")
 	}
 	profile.Features["querylog_clear"] = true
 	profile.Features["stats_reset"] = true
@@ -622,12 +622,59 @@ func validateListenerStatus(status statusResponse) error {
 		*status.ProtectionDisabledDurationMS < 0 || (*status.ProtectionEnabled && *status.ProtectionDisabledDurationMS > 0) {
 		return domain.NewError(domain.ErrorNodeResponse, "the node returned an invalid DNS listener configuration")
 	}
+	plainAddressSeen := false
 	for _, address := range status.DNSAddresses {
-		if _, err := netip.ParseAddr(strings.TrimSpace(address)); err != nil {
+		address = strings.TrimSpace(address)
+		if _, err := netip.ParseAddr(address); err == nil {
+			plainAddressSeen = true
+		} else if !isEncryptedDNSEndpoint(address) {
 			return domain.NewError(domain.ErrorNodeResponse, "the node returned an invalid DNS listener configuration")
 		}
 	}
+	if !plainAddressSeen {
+		return domain.NewError(domain.ErrorNodeResponse, "the node returned an invalid DNS listener configuration")
+	}
 	return nil
+}
+
+// plainDNSBindHosts extracts only plain listener identity. Encrypted endpoint
+// URIs in status are informational and are never bind hosts or fetch targets.
+func plainDNSBindHosts(addresses []string) []string {
+	hosts := make([]string, 0, len(addresses))
+	for _, address := range addresses {
+		if ip, err := netip.ParseAddr(strings.TrimSpace(address)); err == nil {
+			hosts = append(hosts, ip.String())
+		}
+	}
+	return hosts
+}
+
+func isEncryptedDNSEndpoint(address string) bool {
+	endpoint, err := url.Parse(address)
+	if err != nil || endpoint.Host == "" || endpoint.Hostname() == "" || endpoint.User != nil || endpoint.Opaque != "" {
+		return false
+	}
+	switch strings.ToLower(endpoint.Scheme) {
+	case "https", "tls", "quic":
+	default:
+		return false
+	}
+	if strings.HasSuffix(endpoint.Host, ":") {
+		return false
+	}
+	if port := endpoint.Port(); port != "" {
+		number, err := strconv.Atoi(port)
+		if err != nil || number < 1 || number > 65535 {
+			return false
+		}
+	}
+	// Bracketed IPv6 is valid URI authority; malformed brackets and unbracketed
+	// multi-colon hosts must not be accepted as arbitrary endpoint metadata.
+	if strings.ContainsAny(endpoint.Hostname(), ":[]") || strings.HasPrefix(endpoint.Host, "[") {
+		ip, err := netip.ParseAddr(endpoint.Hostname())
+		return err == nil && ip.Is6() && strings.HasPrefix(endpoint.Host, "[")
+	}
+	return true
 }
 
 func validateDNSProtection(dns dnsInfoResponse) error {
@@ -671,7 +718,7 @@ func configurationDocument(version string, status statusResponse, dns dnsInfoRes
 			CacheTTLMin: dns.CacheTTLMin, CacheTTLMax: dns.CacheTTLMax, CacheOptimistic: dns.CacheOptimistic, UpstreamMode: dns.UpstreamMode,
 			UsePrivateReverse: dns.UsePrivateReverse, ResolveClients: dns.ResolveClients, UpstreamTimeout: valueOrDefault(dns.UpstreamTimeout, 0),
 		}, Filtering: configuration.Filtering{Enabled: enabled, UpdateInterval: filtering.Interval, FilterURLs: filterURLs, WhitelistURLs: whitelistURLs, UserRules: filtering.UserRules}},
-		NodeSpecific: configuration.NodeSpecific{BindHosts: status.DNSAddresses, DNSPort: status.DNSPort},
+		NodeSpecific: configuration.NodeSpecific{BindHosts: plainDNSBindHosts(status.DNSAddresses), DNSPort: status.DNSPort},
 		ObservedOnly: configuration.ObservedOnly{ProductVersion: version, ProtectionDisabledUntil: protectionDisabledUntil(dns.ProtectionDisabledUntil)},
 		Unsupported:  []configuration.Unsupported{{Section: "tls_mutation", Reason: "TLS is inventory-only until controller secret references are implemented"}},
 	}

@@ -1,0 +1,1 @@
+{"version":"v1.0.0-b.1","running":true,"dns_addresses":["192.168.1.100","https://server.localdomain/dns-query","tls://server.localdomain:853","quic://server.localdomain:853"],"dns_port":53,"protection_enabled":true,"protection_disabled_duration":0,"http_port":3000,"language":"en"}

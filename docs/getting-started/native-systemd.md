@@ -19,8 +19,8 @@ Go, Node.js, npm, Make, Git, and a repository checkout are not required.
 
 ```bash
 mkdir atlas-dns-install && cd atlas-dns-install
-curl -fsSLO https://github.com/benchristian88/atlas-dns/releases/download/v1.1.0/install-systemd.sh
-curl -fsSLO https://github.com/benchristian88/atlas-dns/releases/download/v1.1.0/checksums.txt
+curl -fsSLO https://github.com/benchristian88/atlas-dns/releases/download/v1.1.1/install-systemd.sh
+curl -fsSLO https://github.com/benchristian88/atlas-dns/releases/download/v1.1.1/checksums.txt
 grep ' install-systemd.sh$' checksums.txt | sha256sum --check
 chmod 0755 install-systemd.sh
 ```
@@ -28,7 +28,7 @@ chmod 0755 install-systemd.sh
 Review the verified script, then run it with an exact version:
 
 ```bash
-sudo ATLAS_DNS_VERSION=1.1.0 \
+sudo ATLAS_DNS_VERSION=1.1.1 \
   PUBLIC_BASE_URL=https://controller.example.test \
   ./install-systemd.sh
 ```

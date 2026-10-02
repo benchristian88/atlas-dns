@@ -2,10 +2,18 @@
 
 ## Prerequisites
 
-- Go 1.27.
+- Go 1.27.1 (the preferred project toolchain).
 - Node.js 22 and npm.
 - `make` and `rg`.
 - PostgreSQL 17 when running database integration tests or the controller.
+
+The module retains `go 1.27.0` as its minimum version and declares
+`toolchain go1.27.1` for local development/builds. With the normal
+`GOTOOLCHAIN=auto`, an older Go installation selects/downloads Go 1.27.1.
+Docker and CI pin that patch explicitly. Makefile and release scripts invoke the
+module-aware `go` command, so no separate version pin is needed. Confirm the
+selected compiler with `go version`; no new language features are introduced.
+See [Go toolchain selection](https://go.dev/doc/toolchain).
 
 ## Build and unit tests
 

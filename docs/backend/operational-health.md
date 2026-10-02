@@ -51,8 +51,8 @@ and overall controller summary.
 `Unsupported` requires evidence: a version below the capability floor or an
 endpoint that returns its documented not-found/not-implemented response.
 Unknown API generations and reachability, authentication, TLS, timeout, or
-response-validation failures remain unknown/failed. A newer compatible v0.107
-patch is not made unsupported solely by its version number.
+response-validation failures remain unknown/failed. A later compatible 0.x or valid v1.x
+version is not made unsupported solely by its minor or patch number.
 
 ## Worker and retry behavior
 
