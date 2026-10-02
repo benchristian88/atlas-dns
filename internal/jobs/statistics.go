@@ -167,7 +167,7 @@ func (p *StatisticsPoller) pollNode(ctx context.Context, record domain.NodeRecor
 		return
 	}
 	if !adguard.SupportsRecentStatistics(record.Node.Version) {
-		if adguard.IsAdGuard107Generation(record.Node.Version) {
+		if adguard.ConfigurationCompatibility(record.Node.Version) == domain.CompatibilityUnsupported {
 			attempt.Status, attempt.ErrorCode = "unsupported", "STATISTICS_EXACT_RANGE_UNSUPPORTED"
 		} else {
 			attempt.Status, attempt.ErrorCode = "failed", "STATISTICS_CAPABILITY_UNKNOWN"

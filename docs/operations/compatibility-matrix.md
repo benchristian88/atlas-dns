@@ -8,8 +8,8 @@ a compatibility commitment. **Unsupported** must not be advertised as working.
 |---|---|---|---|
 | AdGuard Home | Earlier than v0.107.78 | Unsupported | Status can be identified, but onboarding, configuration inventory, and every managed write are blocked. |
 | AdGuard Home | v0.107.78 and v0.107.79 | Tested and supported | Schema v2; node observation, Query Log, Statistics, TLS applicability, configuration adapters, and rolling mixed-patch operation are contract-tested. |
-| AdGuard Home | Newer v0.107 patch | Provisionally compatible | Atlas attempts normal typed capability/API validation and operates when it succeeds; capability-specific incompatibility fails safely. |
-| AdGuard Home | Other newer API generations | Unknown | Inventory and managed writes are blocked pending review; unknown is not reported as unsupported evidence. |
+| AdGuard Home | Later compatible 0.x and valid v1.x, including prereleases | Provisionally compatible | Atlas attempts normal typed capability/API validation and operates when it succeeds; capability-specific incompatibility fails safely. |
+| AdGuard Home | Future major (2.x+) or malformed version | Unknown | Inventory and managed writes are blocked pending review; unknown is not reported as unsupported evidence. |
 | PostgreSQL | 17 | Tested and supported | Matching PostgreSQL 17 `pg_dump`/`pg_restore` required. |
 | PostgreSQL | Other majors | Unsupported | No schema or backup claim. |
 | Native | Debian 13 with systemd, amd64/arm64 | Supported release target; RC gate pending | Prebuilt release archive; no build toolchain. Do not mark 1.0 final until clean-host evidence is recorded. |
@@ -23,6 +23,7 @@ a compatibility commitment. **Unsupported** must not be advertised as working.
 | Upgrade | 1.0.0 → 1.0.1 | Supported, schema-neutral | Preserve environment/volumes; the v1.0.0 migration ledger is accepted unchanged. |
 | Upgrade | 1.0.1 → 1.0.2 | Supported, forward migration | Back up first; startup applies `000015` for notification delivery diagnostics/history indexing. |
 | Upgrade | 1.0.2 → 1.1.0 | Supported, forward migration | Back up first; startup applies `000016` through `000019`, imports legacy runtime values once, retains immutable schema-1 records through a non-deployable read conversion, preserves webhook channels, adds stable Audit Log keyset paging, and adds optional per-user MFA state. |
+| Upgrade | 1.1.0 → 1.1.1 | Supported, schema-neutral | No new migrations or canonical schema changes; refresh/import encrypted-DNS nodes after updating. |
 | Upgrade | Any pre-1.0 installation → 1.0 | Unsupported in place | Destroy/rebuild and fresh Atlas installation. |
 | Backup | Atlas backup format v1 within compatible 1.x schema | Supported | Newer application/schema inputs fail closed. |
 | Backup | Pre-1.0 `.aghhabackup`/`AGHHABACKUP` | Unsupported | Not interpreted as Atlas backup v1. |
@@ -32,6 +33,11 @@ a compatibility commitment. **Unsupported** must not be advertised as working.
 This matrix describes Atlas DNS Controller compatibility, not endorsement or
 support by AdGuard Software, Docker, Portainer, PostgreSQL, or browser vendors.
 
-v0.107.78 and v0.107.79 are explicitly tested. Newer v0.107 patches are
-provisionally compatible after typed capability/API validation. Other API
-generations remain unknown and fail closed.
+Atlas uses AdGuard Home's legacy `/control` API generation. It accepts stable
+v0.107.78 and later compatible 0.x releases and all syntactically valid v1.x
+versions, subject to normal API response and capability validation. A prerelease
+of the minimum `v0.107.78` remains below that stable minimum. v0.107.78 and
+v0.107.79 are release-tested; representative v1 beta/stable fixtures add
+contract regression coverage, not real-device qualification. There is no upper
+minor/patch limit within 1.x. Future major (2.x+) or malformed versions remain
+unknown and fail closed. The unfinished AdGuard `/api/v1` API is not used.

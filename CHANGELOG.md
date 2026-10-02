@@ -5,7 +5,30 @@ All notable changes to Atlas DNS Controller are documented in this file.
 The stable 1.x line follows Semantic Versioning for documented public
 interfaces.
 
-## 1.1.0 - Unreleased
+## 1.1.1 - Unreleased
+
+### Fixed
+
+- Nodes with DNS-over-HTTPS, DNS-over-TLS, or DNS-over-QUIC no longer fail
+  observation/import when `/control/status.dns_addresses` includes encrypted
+  endpoint URIs. Only canonical bare IPs enter node-specific `bindHosts`;
+  malformed entries and responses without plain listener identity still fail.
+
+### Compatibility
+
+- Added the AdGuard Home v1.x generation and later compatible 0.x releases
+  while retaining the existing `/control/*` adapter. Valid v1 minor/patch
+  increases require no new Atlas release solely for version recognition.
+- Centralized semantic-version and API-generation classification, including
+  prereleases/build metadata. Versions below stable v0.107.78 are unsupported;
+  future major versions (2.x+) and malformed versions remain unknown.
+- Query Log and exact recent Statistics share the central compatibility policy
+  instead of restricting capabilities to `0.107.x`. Normal endpoint, schema,
+  semantic, authentication, TLS, and size validation remain mandatory.
+- No database migration, canonical schema expansion, or AdGuard `/api/v1`
+  migration. TLS configuration remains inventory-only.
+
+## 1.1.0
 
 ### Added
 

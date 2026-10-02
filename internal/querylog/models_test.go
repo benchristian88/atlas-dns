@@ -33,9 +33,33 @@ func TestNormalizePreservesDNSRootQuestion(t *testing.T) {
 }
 
 func TestSupportsVersionBoundaries(t *testing.T) {
-	for version, want := range map[string]bool{"v0.107.77": false, "v0.107.78": true, "v0.107.79": true, "v0.107.80": true, "v0.108.0": false} {
-		if got := SupportsVersion(version); got != want {
-			t.Errorf("SupportsVersion(%q) = %v, want %v", version, got, want)
-		}
+	for _, test := range []struct {
+		version                 string
+		supported, belowMinimum bool
+	}{
+		{"v0.106.3", false, true},
+		{"v0.107.77", false, true},
+		{"v0.107.78-rc.1", false, true},
+		{"v0.107.78", true, false},
+		{"v0.107.79", true, false},
+		{"v0.107.80", true, false},
+		{"v0.108.0-b.90", true, false},
+		{"v0.108.0-b.91", true, false},
+		{"v0.108.0", true, false},
+		{"v1.0.0-b.1", true, false},
+		{"v1.0.0", true, false},
+		{"v1.8.0", true, false},
+		{"v2.0.0", false, false},
+		{"garbage", false, false},
+		{"", false, false},
+	} {
+		t.Run(test.version, func(t *testing.T) {
+			if got := SupportsVersion(test.version); got != test.supported {
+				t.Errorf("SupportsVersion(%q) = %v, want %v", test.version, got, test.supported)
+			}
+			if got := VersionBelowMinimum(test.version); got != test.belowMinimum {
+				t.Errorf("VersionBelowMinimum(%q) = %v, want %v", test.version, got, test.belowMinimum)
+			}
+		})
 	}
 }

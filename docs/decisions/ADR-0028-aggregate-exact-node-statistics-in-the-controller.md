@@ -4,6 +4,12 @@
 
 Accepted.
 
+In v1.1.1, product version is explicitly separate from API generation. Stable
+v0.107.78 and later compatible 0.x and valid v1.x use the `legacy_control`
+adapter provisionally beyond the release-tested patches, subject to the same
+typed endpoint and semantic validation. Future majors (2.x+) remain unknown.
+See the [v1.1.1 compatibility notes](../operations/release-1.1.1.md).
+
 ## Context
 
 Each AdGuard Home node owns its live DNS counters and serves DNS independently.

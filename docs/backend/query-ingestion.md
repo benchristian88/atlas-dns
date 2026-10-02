@@ -7,9 +7,10 @@ outside the DNS request path.
 
 ## Supported source contract
 
-Atlas DNS Controller accepts AdGuard Home v0.107.78 and later patches in the
-v0.107 API generation. v0.107.78 and v0.107.79 are explicitly tested; newer
-v0.107 patches use the same bounded typed contract provisionally. It
+Atlas DNS Controller accepts stable AdGuard Home v0.107.78 and later compatible
+0.x releases and valid v1.x versions through the legacy `/control` API generation.
+The central compatibility policy also keeps future majors and malformed versions
+unknown. Later versions use the same bounded typed contract provisionally. It
 reads `GET /control/querylog` newest-first with a maximum page size of 500,
 using the response `oldest` timestamp as the next request's `older_than`
 cursor. The first request omits `older_than`; `search` is empty and

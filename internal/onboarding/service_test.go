@@ -124,7 +124,7 @@ func TestFreshInstallAndNoNodeResumeFromCanonicalFacts(t *testing.T) {
 }
 
 func TestUnsupportedOldNodeIsBlockedAndSupportedBaselineResumes(t *testing.T) {
-	for _, version := range []string{"v0.107.78", "v0.107.79", "v0.107.80"} {
+	for _, version := range []string{"v0.107.78", "v0.107.79", "v0.107.80", "v0.108.0-b.91", "v1.0.0-b.1", "v1.0.0", "v1.8.0"} {
 		t.Run(version, func(t *testing.T) {
 			repository := &onboardingRepositoryFake{clusters: []domain.Cluster{{ID: testClusterID}}}
 			node, snapshot, profile := readyNode(version)

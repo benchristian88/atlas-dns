@@ -9,8 +9,8 @@ documentation, and release engineering enter the candidate.
 Release tags include the `v` prefix, while build versions and release output
 directories do not. The reusable forms are `vX.Y.Z-rc.N` / `X.Y.Z-rc.N` for a
 release candidate and `vX.Y.Z` / `X.Y.Z` for a final release. For the current
-release, development builds report `1.1.0-dev`, candidates use
-`v1.1.0-rc.N`, and the final release is `v1.1.0`.
+release, development builds report `1.1.1-dev`, candidates use
+`v1.1.1-rc.N`, and the final release is `v1.1.1`.
 
 ## Candidate gate
 
@@ -89,7 +89,17 @@ GitHub may require the repository owner to make the first GHCR package public
 and confirm its repository association. That one-time setting is an explicit
 external gate; anonymous pull must be retested afterwards.
 
-## Current v1.1 qualification
+## Current v1.1.1 qualification
+
+The v1.1.1 candidate inherits the v1.1 database/runtime and security boundaries.
+The `v1.1.0 → v1.1.1` update adds no migrations and keeps canonical schema v2.
+Run the standard repository gates and verify plain/encrypted listener observation
+and import, v1 prerelease/stable compatibility, Query Log and exact Statistics,
+invalid-response rejection, and unknown future-major failure. Real AdGuard
+nodes and packaged/container installations remain external release gates.
+See [v1.1.1 release notes](../operations/release-1.1.1.md).
+
+## v1.1.0 qualification baseline
 
 Before final `v1.1.0`, the candidate evidence must include repository regression
 and PostgreSQL-backed integration; a fresh database migration through `000019`;

@@ -11,10 +11,10 @@ runs at the database-backed Statistics poll interval (default one hour). Up to f
 concurrently. A node's eligible range reads are sequential and bounded by
 the configured node request timeout; the next pass starts only after the current pass ends.
 
-Eligible nodes are enabled, outside maintenance, and report v0.107.78 or later
-in the v0.107 API generation with exact `recent` statistics support. v0.107.78
-and v0.107.79 are explicitly tested; newer v0.107 patches must pass the same
-typed response validation. Before
+Eligible nodes are enabled, outside maintenance, and report stable v0.107.78 or
+later compatible 0.x or valid v1.x with legacy `/control` exact `recent` support.
+The central compatibility policy preserves the minimum and rejects unknown
+future majors. Later versions must pass the same typed response validation. Before
 requesting data, the worker reads that node's current `stats/config` interval.
 It requests only the fixed `24h`, `7d`, and `30d` ranges that fit within the
 node-local retention boundary; AdGuard Home rejects a `recent` value greater

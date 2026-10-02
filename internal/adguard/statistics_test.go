@@ -12,12 +12,19 @@ import (
 
 func TestSupportsRecentStatisticsBoundaries(t *testing.T) {
 	for version, want := range map[string]bool{
-		"v0.107.77": false,
-		"v0.107.78": true,
-		"v0.107.79": true,
-		"v0.107.80": true,
-		"v0.108.0":  false,
-		"invalid":   false,
+		"v0.107.77":      false,
+		"v0.107.78":      true,
+		"v0.107.79":      true,
+		"v0.107.80":      true,
+		"v0.108.0":       true,
+		"v0.108.0-b.91":  true,
+		"v1.0.0-b.1":     true,
+		"v1.0.0":         true,
+		"v1.8.0":         true,
+		"v2.0.0":         false,
+		"v0.106.3":       false,
+		"v0.107.78-rc.1": false,
+		"invalid":        false,
 	} {
 		if got := SupportsRecentStatistics(version); got != want {
 			t.Errorf("SupportsRecentStatistics(%q) = %v, want %v", version, got, want)
@@ -26,7 +33,7 @@ func TestSupportsRecentStatisticsBoundaries(t *testing.T) {
 }
 
 func TestReadStatisticsCompatibilityFixtures(t *testing.T) {
-	for _, version := range []string{"v0.107.78", "v0.107.79"} {
+	for _, version := range []string{"v0.107.78", "v0.107.79", "v1.0.0-b.1", "v1.0.0"} {
 		version := version
 		t.Run(version, func(t *testing.T) {
 			body, err := os.ReadFile(filepath.Join("testdata", version, "stats.json"))
