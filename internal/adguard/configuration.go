@@ -625,7 +625,7 @@ func validateListenerStatus(status statusResponse) error {
 	plainAddressSeen := false
 	for _, address := range status.DNSAddresses {
 		address = strings.TrimSpace(address)
-		if _, err := netip.ParseAddr(address); err == nil {
+		if _, ok := plainListenerAddr(address, status.DNSPort); ok {
 			plainAddressSeen = true
 		} else if !isEncryptedDNSEndpoint(address) {
 			return domain.NewError(domain.ErrorNodeResponse, "the node returned an invalid DNS listener configuration")
@@ -642,11 +642,25 @@ func validateListenerStatus(status statusResponse) error {
 func plainDNSBindHosts(addresses []string) []string {
 	hosts := make([]string, 0, len(addresses))
 	for _, address := range addresses {
-		if ip, err := netip.ParseAddr(strings.TrimSpace(address)); err == nil {
+		if ip, ok := plainListenerAddr(strings.TrimSpace(address), 0); ok {
 			hosts = append(hosts, ip.String())
 		}
 	}
 	return hosts
+}
+
+// plainListenerAddr accepts a plain listener as AdGuard Home reports it: a bare
+// address when dns.port is 53, or host:port (IPv6 bracketed) otherwise. A port
+// is required to equal dnsPort when dnsPort is non-zero.
+func plainListenerAddr(address string, dnsPort int) (netip.Addr, bool) {
+	if ip, err := netip.ParseAddr(address); err == nil {
+		return ip, true
+	}
+	addrPort, err := netip.ParseAddrPort(address)
+	if err != nil || (dnsPort != 0 && int(addrPort.Port()) != dnsPort) {
+		return netip.Addr{}, false
+	}
+	return addrPort.Addr(), true
 }
 
 func isEncryptedDNSEndpoint(address string) bool {
