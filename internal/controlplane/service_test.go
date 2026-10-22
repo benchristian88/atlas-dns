@@ -359,3 +359,41 @@ func TestPublicationPreflightIncludesNodeAttributedBlockedServiceCompatibility(t
 		t.Fatalf("node-attributed issue missing: %#v", preview.Issues)
 	}
 }
+
+func TestPreviewAcceptsWildcardListenerWithChangedObservedAddresses(t *testing.T) {
+	const (
+		clusterID = "11111111-1111-4111-8111-111111111111"
+		nodeID    = "44444444-4444-4444-8444-444444444444"
+	)
+	features := map[string]bool{}
+	for _, feature := range []string{"dns", "filtering", "clients", "rewrites", "blocked_services", "safety", "query_log", "statistics", "tls", "rewrite_toggle"} {
+		features[feature] = true
+	}
+	observed := configuration.Document{SchemaVersion: configuration.SchemaVersion, NodeSpecific: configuration.NodeSpecific{BindHosts: []string{"10.244.4.137", "127.0.0.1", "::1"}, DNSPort: 5353}}
+	preview := func(bindHosts []string) Preview {
+		revision := configuration.DesiredDocument{
+			SchemaVersion: configuration.SchemaVersion,
+			NodeOverrides: map[string]configuration.NodeSpecific{nodeID: {BindHosts: bindHosts, DNSPort: 5353}},
+		}
+		repository := &draftRepositoryFake{
+			nodes:     []domain.Node{{ID: nodeID, ClusterID: clusterID, Name: "Cluster", Enabled: true}},
+			snapshots: []inventory.Snapshot{{NodeID: nodeID, Document: &observed, CollectionStatus: "succeeded"}},
+			profiles:  []inventory.CapabilityProfile{{NodeID: nodeID, Compatibility: string(domain.CompatibilitySupported), Features: features}},
+		}
+		result, err := NewService(repository).previewDocument(context.Background(), clusterID, "revision", revision, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+
+	stale := preview([]string{"10.244.6.35", "127.0.0.1", "::1"})
+	if stale.Valid || len(stale.Nodes) != 1 || stale.Nodes[0].Valid || !strings.Contains(stale.Nodes[0].Warning, "DNS bind hosts or port differ") {
+		t.Fatalf("explicit stale listener unexpectedly valid: %#v", stale)
+	}
+
+	wildcard := preview([]string{"0.0.0.0"})
+	if !wildcard.Valid || len(wildcard.Issues) != 0 || len(wildcard.Nodes) != 1 || !wildcard.Nodes[0].Valid {
+		t.Fatalf("wildcard listener did not preview: %#v", wildcard)
+	}
+}

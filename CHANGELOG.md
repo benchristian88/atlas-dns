@@ -16,6 +16,12 @@ interfaces.
 
 ### Fixed
 
+- A node whose listener override binds to an unspecified address (`0.0.0.0` or
+  `::`) now validates, deploys and converges whatever concrete addresses it
+  reports, as long as the port matches. AdGuard Home enumerates interface
+  addresses for such a bind, and those change on every container start or WAN
+  renumbering, which previously failed validation with "DNS bind hosts or port
+  differ" and left `enforce` reconciliation unable to run.
 - Nodes with DNS-over-HTTPS, DNS-over-TLS, or DNS-over-QUIC no longer fail
   observation/import when `/control/status.dns_addresses` includes encrypted
   endpoint URIs. Only canonical bare IPs enter node-specific `bindHosts`;

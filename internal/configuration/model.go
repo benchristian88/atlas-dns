@@ -458,6 +458,38 @@ func Diff(left, right Document) []Difference {
 	return diffs
 }
 
+// DiffObserved compares a desired document against a node's observed
+// configuration. It is Diff, except that a desired listener bound to an
+// unspecified address (0.0.0.0 or ::) accepts whatever concrete addresses the
+// node reports on that port. AdGuard Home enumerates its interface addresses
+// when it binds to an unspecified address, and those addresses change on every
+// start of a container or whenever a WAN interface is renumbered, so they are
+// not a stable identity for such a node. An observation with no addresses at
+// all is still reported.
+func DiffObserved(desired, observed Document) []Difference {
+	diffs := Diff(desired, observed)
+	if !hasUnspecifiedAddress(desired.NodeSpecific.BindHosts) || len(observed.NodeSpecific.BindHosts) == 0 {
+		return diffs
+	}
+	result := make([]Difference, 0, len(diffs))
+	for _, difference := range diffs {
+		if difference.Scope == NodeManaged && difference.Section == "DNS" && difference.Field == "Bind hosts" {
+			continue
+		}
+		result = append(result, difference)
+	}
+	return result
+}
+
+func hasUnspecifiedAddress(hosts []string) bool {
+	for _, host := range hosts {
+		if addr, err := netip.ParseAddr(host); err == nil && addr.IsUnspecified() {
+			return true
+		}
+	}
+	return false
+}
+
 func DiffDesired(left, right DesiredDocument) []Difference {
 	left, right = CanonicaliseDesired(left), CanonicaliseDesired(right)
 	diffs := Diff(Document{Shared: left.Shared, Unsupported: left.Unsupported}, Document{Shared: right.Shared, Unsupported: right.Unsupported})

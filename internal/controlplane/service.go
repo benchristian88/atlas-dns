@@ -634,7 +634,7 @@ func (s *Service) previewDocument(ctx context.Context, clusterID, revisionID str
 
 func nodeSpecificDifferences(desired, observed configuration.Document) []configuration.Difference {
 	result := []configuration.Difference{}
-	for _, difference := range configuration.Diff(desired, observed) {
+	for _, difference := range configuration.DiffObserved(desired, observed) {
 		if difference.Scope == configuration.NodeManaged {
 			result = append(result, difference)
 		}
@@ -644,7 +644,7 @@ func nodeSpecificDifferences(desired, observed configuration.Document) []configu
 
 func managedDifferences(desired, observed configuration.Document) []configuration.Difference {
 	result := []configuration.Difference{}
-	for _, difference := range configuration.Diff(desired, observed) {
+	for _, difference := range configuration.DiffObserved(desired, observed) {
 		if difference.Scope == configuration.SharedManaged || difference.Scope == configuration.NodeManaged {
 			result = append(result, difference)
 		}
